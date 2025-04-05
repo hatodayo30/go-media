@@ -1,62 +1,60 @@
-// internal/interfaces/api/router.go
 package api
 
 import (
-	"net/http"
+	"media-platform/internal/infrastructure/persistence"
+	"media-platform/internal/usecase"
 
 	"github.com/gin-gonic/gin"
 )
 
-// Ginルーターを使用するように変更
-func NewRouter(userHandler *UserHandler) *gin.Engine {
-	// Ginのデフォルト設定（ロガーとリカバリーミドルウェア付き）
-	r := gin.Default()
+// SetupRouter はAPIルーターを設定します
+func SetupRouter(router *gin.Engine, db persistence.DBConn, jwtConfig *JWTConfig) {
+	// ミドルウェアの設定
+	authMiddleware := jwtConfig.AuthMiddleware()
+	adminMiddleware := RoleMiddleware([]string{"admin"})
 
-	// グローバルミドルウェア
-	r.Use(gin.Recovery())
+	// ユーザーAPI（既存）
+	userRepo := persistence.NewUserRepository(db.GetDB())
+	userUseCase := usecase.NewUserUseCase(userRepo)
+	userHandler := NewUserHandler(userUseCase)
 
-	// バージョン付きAPIグループ
-	v1 := r.Group("/api/v1")
+	userRoutes := router.Group("/api/users")
 	{
-		// ヘルスチェックエンドポイント
-		v1.GET("/health", func(c *gin.Context) {
-			c.JSON(http.StatusOK, gin.H{
-				"status": "ok",
-			})
+		userRoutes.POST("/register", userHandler.Register)
+		userRoutes.POST("/login", userHandler.Login)
+
+		// 認証が必要なエンドポイント
+		userRoutes.GET("/me", authMiddleware, userHandler.GetCurrentUser)
+		userRoutes.PUT("/me", authMiddleware, userHandler.UpdateUser)
+
+		// 管理者のみのエンドポイント
+		userRoutes.GET("", authMiddleware, adminMiddleware, userHandler.GetAllUsers)
+		userRoutes.GET("/:id", authMiddleware, adminMiddleware, userHandler.GetUserByID)
+		userRoutes.PUT("/:id", authMiddleware, adminMiddleware, userHandler.UpdateUserByAdmin)
+		userRoutes.DELETE("/:id", authMiddleware, adminMiddleware, userHandler.DeleteUser)
+	}
+
+	// カテゴリAPI（新規追加）
+	categoryRepo := persistence.NewCategoryRepository(db.GetDB())
+	categoryUseCase := usecase.NewCategoryUseCase(categoryRepo)
+	categoryHandler := NewCategoryHandler(categoryUseCase)
+
+	categoryRoutes := router.Group("/api/categories")
+	{
+		// 認証不要のエンドポイント
+		categoryRoutes.GET("", categoryHandler.GetAllCategories)
+		categoryRoutes.GET("/:id", categoryHandler.GetCategoryByID)
+
+		// 管理者のみのエンドポイント
+		categoryRoutes.POST("", authMiddleware, adminMiddleware, categoryHandler.CreateCategory)
+		categoryRoutes.PUT("/:id", authMiddleware, adminMiddleware, categoryHandler.UpdateCategory)
+		categoryRoutes.DELETE("/:id", authMiddleware, adminMiddleware, categoryHandler.DeleteCategory)
+	}
+
+	// ヘルスチェックエンドポイント
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status": "ok",
 		})
-
-		// ユーザー関連エンドポイント
-		users := v1.Group("/users")
-		{
-			users.GET("", userHandler.GetUsers)
-			users.POST("", userHandler.CreateUser)
-			users.GET("/:id", userHandler.GetUser)
-			users.PUT("/:id", userHandler.UpdateUser)
-			users.DELETE("/:id", userHandler.DeleteUser)
-		}
-
-		// 認証関連エンドポイント
-		auth := v1.Group("/auth")
-		{
-			auth.POST("/login", userHandler.Login)
-		}
-	}
-
-	return r
-}
-
-// カスタムミドルウェアの例
-func LoggingMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// リクエスト前の処理
-		// logger.Infof("Method: %s, Path: %s, RemoteAddr: %s",
-		//     c.Request.Method,
-		//     c.Request.URL.Path,
-		//     c.ClientIP())
-
-		c.Next() // 次のミドルウェアに進む
-
-		// リクエスト後の処理
-		// ステータスコードやレスポンス時間などのログ出力が可能
-	}
+	})
 }
