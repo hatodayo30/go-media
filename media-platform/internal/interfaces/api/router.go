@@ -51,6 +51,28 @@ func SetupRouter(router *gin.Engine, db persistence.DBConn, jwtConfig *JWTConfig
 		categoryRoutes.DELETE("/:id", authMiddleware, adminMiddleware, categoryHandler.DeleteCategory)
 	}
 
+	//コンテンツAPI
+	contentRepo := persistence.NewContentRepository(db.GetDB())
+	contentUseCase := usecase.NewContentUseCase(contentRepo, categoryRepo, userRepo)
+	contentHandler := NewContentHandler(contentUseCase)
+
+	contentRoutes := router.Group("/api/contents")
+
+	// 認証不要のエンドポイント（読み取り系）
+	contentRoutes.GET("", contentHandler.GetContents)                                // すべてのコンテンツ取得（フィルタ可能）
+	contentRoutes.GET("/published", contentHandler.GetPublishedContents)             // 公開済みコンテンツのみ取得
+	contentRoutes.GET("/trending", contentHandler.GetTrendingContents)               // 人気のコンテンツ取得
+	contentRoutes.GET("/search", contentHandler.SearchContents)                      // コンテンツ検索
+	contentRoutes.GET("/author/:authorId", contentHandler.GetContentsByAuthor)       // 著者別コンテンツ取得
+	contentRoutes.GET("/category/:categoryId", contentHandler.GetContentsByCategory) // カテゴリ別コンテンツ取得
+	contentRoutes.GET("/:id", contentHandler.GetContentByID)                         // 特定のコンテンツ取得
+
+	// 認証が必要なエンドポイント（書き込み系）
+	contentRoutes.POST("", authMiddleware, contentHandler.CreateContent)                   // コンテンツ作成
+	contentRoutes.PUT("/:id", authMiddleware, contentHandler.UpdateContent)                // コンテンツ更新
+	contentRoutes.PATCH("/:id/status", authMiddleware, contentHandler.UpdateContentStatus) // ステータス更新
+	contentRoutes.DELETE("/:id", authMiddleware, contentHandler.DeleteContent)             // コンテンツ削除
+
 	// ヘルスチェックエンドポイント
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{

@@ -7,6 +7,8 @@ import (
 	"media-platform/internal/domain/model"
 	"media-platform/internal/usecase"
 
+	domainErrors "media-platform/internal/domain/errors"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -36,8 +38,8 @@ func (h *UserHandler) Register(c *gin.Context) {
 
 	user, err := h.userUseCase.Register(c.Request.Context(), &req)
 	if err != nil {
-		// ValidationErrorかどうかをチェック
-		if _, ok := err.(*model.ValidationError); ok {
+		// ValidationError か判断
+		if _, ok := err.(*domainErrors.ValidationError); ok {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"status": "error",
 				"error":  err.Error(),
@@ -105,7 +107,7 @@ func (h *UserHandler) GetCurrentUser(c *gin.Context) {
 
 	// トークンから取得したユーザーIDでユーザー情報を取得
 	claims := userClaims.(map[string]interface{})
-	userID := uint(claims["user_id"].(float64))
+	userID := int64(claims["user_id"].(float64))
 
 	user, err := h.userUseCase.GetCurrentUser(c.Request.Context(), userID)
 	if err != nil {
@@ -127,7 +129,7 @@ func (h *UserHandler) GetCurrentUser(c *gin.Context) {
 // GetUserByID は指定したIDのユーザー情報を取得するハンドラです
 func (h *UserHandler) GetUserByID(c *gin.Context) {
 	idStr := c.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 32)
+	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status": "error",
@@ -136,7 +138,7 @@ func (h *UserHandler) GetUserByID(c *gin.Context) {
 		return
 	}
 
-	user, err := h.userUseCase.GetUserByID(c.Request.Context(), uint(id))
+	user, err := h.userUseCase.GetUserByID(c.Request.Context(), id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"status": "error",
@@ -204,7 +206,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 
 	// トークンから取得したユーザーIDでユーザー情報を取得
 	claims := userClaims.(map[string]interface{})
-	userID := uint(claims["user_id"].(float64))
+	userID := int64(claims["user_id"].(float64))
 
 	var req model.UpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -217,8 +219,8 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 
 	user, err := h.userUseCase.UpdateUser(c.Request.Context(), userID, &req)
 	if err != nil {
-		// ValidationErrorかどうかをチェック
-		if _, ok := err.(*model.ValidationError); ok {
+		// ValidationError か判断
+		if _, ok := err.(*domainErrors.ValidationError); ok {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"status": "error",
 				"error":  err.Error(),
@@ -249,7 +251,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 // UpdateUserByAdmin は管理者がユーザー情報を更新するハンドラです
 func (h *UserHandler) UpdateUserByAdmin(c *gin.Context) {
 	idStr := c.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 32)
+	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status": "error",
@@ -267,10 +269,10 @@ func (h *UserHandler) UpdateUserByAdmin(c *gin.Context) {
 		return
 	}
 
-	user, err := h.userUseCase.UpdateUserByAdmin(c.Request.Context(), uint(id), &req)
+	user, err := h.userUseCase.UpdateUserByAdmin(c.Request.Context(), id, &req)
 	if err != nil {
 		// ValidationErrorかどうかをチェック
-		if _, ok := err.(*model.ValidationError); ok {
+		if _, ok := err.(*domainErrors.ValidationError); ok {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"status": "error",
 				"error":  err.Error(),
@@ -301,7 +303,7 @@ func (h *UserHandler) UpdateUserByAdmin(c *gin.Context) {
 // DeleteUser はユーザーを削除するハンドラです
 func (h *UserHandler) DeleteUser(c *gin.Context) {
 	idStr := c.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 32)
+	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status": "error",
@@ -310,7 +312,7 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 		return
 	}
 
-	err = h.userUseCase.DeleteUser(c.Request.Context(), uint(id))
+	err = h.userUseCase.DeleteUser(c.Request.Context(), id)
 	if err != nil {
 		statusCode := http.StatusInternalServerError
 		if err.Error() == "ユーザーが見つかりません" {

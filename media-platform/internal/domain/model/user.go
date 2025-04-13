@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	domainErrors "media-platform/internal/domain/errors"
 	"regexp"
 	"strings"
 	"time"
@@ -22,32 +23,32 @@ type User struct {
 
 // Validate はユーザーエンティティのドメインルールを検証します
 func (u *User) Validate() error {
-	var errors []string
+	var errorMessages []string
 
 	// ユーザー名のバリデーション
 	if err := u.validateUsername(); err != nil {
-		errors = append(errors, err.Error())
+		errorMessages = append(errorMessages, err.Error())
 	}
 
 	// メールアドレスのバリデーション
 	if err := u.validateEmail(); err != nil {
-		errors = append(errors, err.Error())
+		errorMessages = append(errorMessages, err.Error())
 	}
 
 	// ロールのバリデーション
 	if err := u.validateRole(); err != nil {
-		errors = append(errors, err.Error())
+		errorMessages = append(errorMessages, err.Error())
 	}
 
 	// パスワードは新規作成時や変更時のみ検証（空の場合はスキップ）
 	if u.Password != "" {
 		if err := u.validatePassword(); err != nil {
-			errors = append(errors, err.Error())
+			errorMessages = append(errorMessages, err.Error())
 		}
 	}
 
-	if len(errors) > 0 {
-		return NewValidationError(strings.Join(errors, ", "))
+	if len(errorMessages) > 0 {
+		return domainErrors.NewValidationError(strings.Join(errorMessages, ", "))
 	}
 
 	return nil
@@ -218,21 +219,4 @@ type UpdateUserRequest struct {
 type LoginRequest struct {
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required"`
-}
-
-// ValidationError はバリデーションエラーを表す構造体です
-type ValidationError struct {
-	Message string
-}
-
-// NewValidationError は新しいValidationErrorを作成します
-func NewValidationError(message string) *ValidationError {
-	return &ValidationError{
-		Message: message,
-	}
-}
-
-// Error はエラーインターフェースを満たすためのメソッドです
-func (e *ValidationError) Error() string {
-	return e.Message
 }

@@ -9,6 +9,8 @@ import (
 	"media-platform/internal/domain/model"
 	"media-platform/internal/domain/repository"
 
+	domainErrors "media-platform/internal/domain/errors"
+
 	"github.com/golang-jwt/jwt/v4"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -58,7 +60,7 @@ func (u *UserUseCase) Register(ctx context.Context, req *model.CreateUserRequest
 
 	// ドメインルールのバリデーション
 	if err := user.Validate(); err != nil {
-		return nil, err
+		return nil, domainErrors.NewValidationError(err.Error())
 	}
 
 	// ユーザーの保存
@@ -96,7 +98,7 @@ func (u *UserUseCase) Login(ctx context.Context, req *model.LoginRequest) (strin
 }
 
 // GetUserByID は指定したIDのユーザーを取得します
-func (u *UserUseCase) GetUserByID(ctx context.Context, id uint) (*model.UserResponse, error) {
+func (u *UserUseCase) GetUserByID(ctx context.Context, id int64) (*model.UserResponse, error) {
 	user, err := u.userRepo.Find(ctx, id)
 	if err != nil {
 		return nil, err
@@ -124,7 +126,7 @@ func (u *UserUseCase) GetAllUsers(ctx context.Context, limit, offset int) ([]*mo
 }
 
 // UpdateUser はユーザー情報を更新します
-func (u *UserUseCase) UpdateUser(ctx context.Context, id uint, req *model.UpdateUserRequest) (*model.UserResponse, error) {
+func (u *UserUseCase) UpdateUser(ctx context.Context, id int64, req *model.UpdateUserRequest) (*model.UserResponse, error) {
 	// ユーザーの取得
 	user, err := u.userRepo.Find(ctx, id)
 	if err != nil {
@@ -137,7 +139,7 @@ func (u *UserUseCase) UpdateUser(ctx context.Context, id uint, req *model.Update
 	// フィールドの更新
 	if req.Username != "" && req.Username != user.Username {
 		if err := user.SetUsername(req.Username); err != nil {
-			return nil, err
+			return nil, domainErrors.NewValidationError(err.Error())
 		}
 	}
 
@@ -147,18 +149,18 @@ func (u *UserUseCase) UpdateUser(ctx context.Context, id uint, req *model.Update
 		if err != nil {
 			return nil, err
 		}
-		if existingUser != nil && existingUser.ID != user.ID {
+		if existingUser != nil && existingUser.ID != id {
 			return nil, errors.New("このメールアドレスは既に使用されています")
 		}
 
 		if err := user.SetEmail(req.Email); err != nil {
-			return nil, err
+			return nil, domainErrors.NewValidationError(err.Error())
 		}
 	}
 
 	if req.Password != "" {
 		if err := user.SetPassword(req.Password); err != nil {
-			return nil, err
+			return nil, domainErrors.NewValidationError(err.Error())
 		}
 
 		// パスワードのハッシュ化
@@ -179,7 +181,7 @@ func (u *UserUseCase) UpdateUser(ctx context.Context, id uint, req *model.Update
 
 	// ドメインルールのバリデーション
 	if err := user.Validate(); err != nil {
-		return nil, err
+		return nil, domainErrors.NewValidationError(err.Error())
 	}
 
 	// ユーザーの更新
@@ -191,13 +193,13 @@ func (u *UserUseCase) UpdateUser(ctx context.Context, id uint, req *model.Update
 }
 
 // UpdateUserByAdmin は管理者がユーザー情報を更新します
-func (u *UserUseCase) UpdateUserByAdmin(ctx context.Context, id uint, req *model.UpdateUserRequest) (*model.UserResponse, error) {
+func (u *UserUseCase) UpdateUserByAdmin(ctx context.Context, id int64, req *model.UpdateUserRequest) (*model.UserResponse, error) {
 	// 管理者による更新は基本的に一般ユーザーの更新と同じロジック
 	return u.UpdateUser(ctx, id, req)
 }
 
 // DeleteUser はユーザーを削除します
-func (u *UserUseCase) DeleteUser(ctx context.Context, id uint) error {
+func (u *UserUseCase) DeleteUser(ctx context.Context, id int64) error {
 	// ユーザーの存在確認
 	user, err := u.userRepo.Find(ctx, id)
 	if err != nil {
@@ -212,7 +214,7 @@ func (u *UserUseCase) DeleteUser(ctx context.Context, id uint) error {
 }
 
 // GetCurrentUser は現在ログイン中のユーザー情報を取得します
-func (u *UserUseCase) GetCurrentUser(ctx context.Context, id uint) (*model.UserResponse, error) {
+func (u *UserUseCase) GetCurrentUser(ctx context.Context, id int64) (*model.UserResponse, error) {
 	return u.GetUserByID(ctx, id)
 }
 

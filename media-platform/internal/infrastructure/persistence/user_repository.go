@@ -21,7 +21,7 @@ func NewUserRepository(db *sql.DB) repository.UserRepository {
 }
 
 // IDによるユーザー検索
-func (r *userRepository) Find(ctx context.Context, id uint) (*model.User, error) {
+func (r *userRepository) Find(ctx context.Context, id int64) (*model.User, error) {
 	query := `
 		SELECT id, username, email, password, bio, avatar, role, created_at, updated_at
 		FROM users
@@ -186,7 +186,7 @@ func (r *userRepository) Update(ctx context.Context, user *model.User) error {
 }
 
 // ユーザーの削除
-func (r *userRepository) Delete(ctx context.Context, id uint) error {
+func (r *userRepository) Delete(ctx context.Context, id int64) error {
 	query := `DELETE FROM users WHERE id = $1`
 
 	result, err := r.db.ExecContext(ctx, query, id)
