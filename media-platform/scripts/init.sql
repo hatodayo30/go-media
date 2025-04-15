@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS comments (
 CREATE INDEX idx_comments_user_id ON comments(user_id);
 CREATE INDEX idx_comments_content_id ON comments(content_id);
 CREATE INDEX idx_comments_parent_id ON comments(parent_id);
+CREATE INDEX idx_comments_created_at ON comments(created_at);
 
 -- 評価テーブル
 CREATE TABLE IF NOT EXISTS ratings (

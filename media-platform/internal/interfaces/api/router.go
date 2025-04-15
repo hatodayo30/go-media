@@ -73,6 +73,23 @@ func SetupRouter(router *gin.Engine, db persistence.DBConn, jwtConfig *JWTConfig
 	contentRoutes.PATCH("/:id/status", authMiddleware, contentHandler.UpdateContentStatus) // ステータス更新
 	contentRoutes.DELETE("/:id", authMiddleware, contentHandler.DeleteContent)             // コンテンツ削除
 
+	// コメントAPI（新規追加）
+	commentRepo := persistence.NewCommentRepository(db.GetDB())
+	commentUseCase := usecase.NewCommentUseCase(commentRepo, contentRepo, userRepo)
+	commentHandler := NewCommentHandler(commentUseCase)
+
+	commentRoutes := router.Group("/api/comments")
+	{
+		// 認証不要のエンドポイント
+		commentRoutes.GET("/:id", commentHandler.GetCommentByID)           // 特定のコメント取得
+		commentRoutes.GET("/:parentId/replies", commentHandler.GetReplies) // コメント返信取得
+
+		// 認証が必要なエンドポイント
+		commentRoutes.POST("", authMiddleware, commentHandler.CreateComment)       // コメント作成
+		commentRoutes.PUT("/:id", authMiddleware, commentHandler.UpdateComment)    // コメント編集
+		commentRoutes.DELETE("/:id", authMiddleware, commentHandler.DeleteComment) // コメント削除
+	}
+
 	// ヘルスチェックエンドポイント
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
