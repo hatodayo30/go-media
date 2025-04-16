@@ -81,8 +81,8 @@ func SetupRouter(router *gin.Engine, db persistence.DBConn, jwtConfig *JWTConfig
 	commentRoutes := router.Group("/api/comments")
 	{
 		// 認証不要のエンドポイント
-		commentRoutes.GET("/:id", commentHandler.GetCommentByID)           // 特定のコメント取得
-		commentRoutes.GET("/:parentId/replies", commentHandler.GetReplies) // コメント返信取得
+		commentRoutes.GET("/parent/:parentId/replies", commentHandler.GetReplies) // コメント返信取得
+		commentRoutes.GET("/:id", commentHandler.GetCommentByID)                  // 特定のコメント取得
 
 		// 認証が必要なエンドポイント
 		commentRoutes.POST("", authMiddleware, commentHandler.CreateComment)       // コメント作成
