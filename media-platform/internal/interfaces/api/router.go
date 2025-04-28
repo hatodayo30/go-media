@@ -90,6 +90,18 @@ func SetupRouter(router *gin.Engine, db persistence.DBConn, jwtConfig *JWTConfig
 		commentRoutes.DELETE("/:id", authMiddleware, commentHandler.DeleteComment) // コメント削除
 	}
 
+	// 評価API
+	ratingRepo := persistence.NewRatingRepository(db.GetDB())
+	ratingUseCase := usecase.NewRatingUseCase(ratingRepo, contentRepo)
+	ratingHandler := NewRatingHandler(ratingUseCase)
+
+	// 評価管理API
+	router.GET("/api/contents/:contentId/ratings", ratingHandler.GetRatingsByContentID)              // コンテンツに対する評価一覧
+	router.GET("/api/contents/:contentId/rating/average", ratingHandler.GetAverageRatingByContentID) // コンテンツの平均評価
+	router.GET("/api/users/:userId/ratings", ratingHandler.GetRatingsByUserID)                       // ユーザーが投稿した評価一覧
+	router.POST("/api/ratings", authMiddleware, ratingHandler.CreateOrUpdateRating)                  // 評価の投稿/更新
+	router.DELETE("/api/ratings/:id", authMiddleware, ratingHandler.DeleteRating)                    // 評価の削除
+
 	// ヘルスチェックエンドポイント
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
