@@ -14,7 +14,7 @@ import (
 	"media-platform/internal/infrastructure/persistence"
 )
 
-func setupTestDB(t *testing.T) *sql.DB {
+func setupContentTestDB(t *testing.T) *sql.DB {
 	db, err := sql.Open("sqlite3", ":memory:")
 	require.NoError(t, err)
 
@@ -54,7 +54,7 @@ func insertTestContent(t *testing.T, db *sql.DB) {
 }
 
 func TestContentRepositoryImpl_Find(t *testing.T) {
-	db := setupTestDB(t)
+	db := setupContentTestDB(t)
 	defer db.Close()
 
 	insertTestContent(t, db)
@@ -82,7 +82,7 @@ func TestContentRepositoryImpl_Find(t *testing.T) {
 }
 
 func TestContentRepositoryImpl_FindAll(t *testing.T) {
-	db := setupTestDB(t)
+	db := setupContentTestDB(t)
 	defer db.Close()
 
 	// 複数のテストデータを挿入
@@ -123,7 +123,7 @@ func TestContentRepositoryImpl_FindAll(t *testing.T) {
 }
 
 func TestContentRepositoryImpl_Create(t *testing.T) {
-	db := setupTestDB(t)
+	db := setupContentTestDB(t)
 	defer db.Close()
 
 	repo := persistence.NewContentRepository(db)
@@ -153,7 +153,7 @@ func TestContentRepositoryImpl_Create(t *testing.T) {
 }
 
 func TestContentRepositoryImpl_Update(t *testing.T) {
-	db := setupTestDB(t)
+	db := setupContentTestDB(t)
 	defer db.Close()
 
 	insertTestContent(t, db)
@@ -183,7 +183,7 @@ func TestContentRepositoryImpl_Update(t *testing.T) {
 }
 
 func TestContentRepositoryImpl_Delete(t *testing.T) {
-	db := setupTestDB(t)
+	db := setupContentTestDB(t)
 	defer db.Close()
 
 	insertTestContent(t, db)
@@ -212,7 +212,7 @@ func TestContentRepositoryImpl_Delete(t *testing.T) {
 }
 
 func TestContentRepositoryImpl_IncrementViewCount(t *testing.T) {
-	db := setupTestDB(t)
+	db := setupContentTestDB(t)
 	defer db.Close()
 
 	insertTestContent(t, db)
@@ -236,7 +236,7 @@ func TestContentRepositoryImpl_IncrementViewCount(t *testing.T) {
 }
 
 func TestContentRepositoryImpl_FindByAuthor(t *testing.T) {
-	db := setupTestDB(t)
+	db := setupContentTestDB(t)
 	defer db.Close()
 
 	// 複数の著者のテストデータを挿入
@@ -273,7 +273,7 @@ func TestContentRepositoryImpl_FindByAuthor(t *testing.T) {
 }
 
 func TestContentRepositoryImpl_FindByCategory(t *testing.T) {
-	db := setupTestDB(t)
+	db := setupContentTestDB(t)
 	defer db.Close()
 
 	// 複数のカテゴリのテストデータを挿入
@@ -310,7 +310,7 @@ func TestContentRepositoryImpl_FindByCategory(t *testing.T) {
 }
 
 func TestContentRepositoryImpl_Search(t *testing.T) {
-	db := setupTestDB(t)
+	db := setupContentTestDB(t)
 	defer db.Close()
 
 	// 検索用のテストデータを挿入
@@ -355,7 +355,7 @@ func TestContentRepositoryImpl_Search(t *testing.T) {
 }
 
 func TestContentRepositoryImpl_FindPublished(t *testing.T) {
-	db := setupTestDB(t)
+	db := setupContentTestDB(t)
 	defer db.Close()
 
 	// 公開状態と下書き状態のテストデータを挿入
@@ -401,7 +401,7 @@ func TestContentRepositoryImpl_FindPublished(t *testing.T) {
 }
 
 func TestContentRepositoryImpl_FindTrending(t *testing.T) {
-	db := setupTestDB(t)
+	db := setupContentTestDB(t)
 	defer db.Close()
 
 	// 異なる閲覧数のテストデータを挿入
