@@ -14,7 +14,7 @@ import (
 )
 
 // テスト用データベースのセットアップ
-func setupTestDB(t *testing.T) *sql.DB {
+func setupUserTestDB(t *testing.T) *sql.DB {
 	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatalf("データベース接続の作成に失敗しました: %v", err)
@@ -76,7 +76,7 @@ func createTestUser(t *testing.T, db *sql.DB) *model.User {
 // Find メソッドのテスト
 func TestFind(t *testing.T) {
 	// テスト用DBのセットアップ
-	db := setupTestDB(t)
+	db := setupUserTestDB(t)
 	defer db.Close()
 
 	// リポジトリの作成
@@ -103,7 +103,7 @@ func TestFind(t *testing.T) {
 // FindByEmail メソッドのテスト
 func TestFindByEmail(t *testing.T) {
 	// テスト用DBのセットアップ
-	db := setupTestDB(t)
+	db := setupUserTestDB(t)
 	defer db.Close()
 
 	// リポジトリの作成
@@ -129,7 +129,7 @@ func TestFindByEmail(t *testing.T) {
 // FindAll メソッドのテスト
 func TestFindAll(t *testing.T) {
 	// テスト用DBのセットアップ
-	db := setupTestDB(t)
+	db := setupUserTestDB(t)
 	defer db.Close()
 
 	// リポジトリの作成
@@ -175,9 +175,9 @@ func TestFindAll(t *testing.T) {
 }
 
 // Create メソッドのテスト
-func TestCreate(t *testing.T) {
+func TestUserCreate(t *testing.T) {
 	// テスト用DBのセットアップ
-	db := setupTestDB(t)
+	db := setupUserTestDB(t)
 	defer db.Close()
 
 	// リポジトリの作成
@@ -227,9 +227,9 @@ func TestCreate(t *testing.T) {
 }
 
 // Update メソッドのテスト
-func TestUpdate(t *testing.T) {
+func TestUserUpdate(t *testing.T) {
 	// テスト用DBのセットアップ
-	db := setupTestDB(t)
+	db := setupUserTestDB(t)
 	defer db.Close()
 
 	// リポジトリの作成
@@ -283,9 +283,9 @@ func TestUpdate(t *testing.T) {
 }
 
 // Delete メソッドのテスト
-func TestDelete(t *testing.T) {
+func TestUserDelete(t *testing.T) {
 	// テスト用DBのセットアップ
-	db := setupTestDB(t)
+	db := setupUserTestDB(t)
 	defer db.Close()
 
 	// リポジトリの作成
