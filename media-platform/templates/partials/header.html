@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ .title }} | メディアプラットフォーム</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    {{ block "css" . }}{{ end }}
+</head>
+<body>
+    <header class="main-header">
+        <div class="container">
+            <div class="header-logo">
+                <a href="/">メディアプラットフォーム</a>
+            </div>
+            <nav class="main-nav">
+                <ul>
+                    <li><a href="/">ホーム</a></li>
+                    <li><a href="/contents">コンテンツ</a></li>
+                    <li class="user-nav" id="userNavContainer">
+                        <!-- ユーザーメニューはJSで動的に表示 -->
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+    <main>

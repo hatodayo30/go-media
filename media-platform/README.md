@@ -135,3 +135,30 @@ make db-reset
 ## APIドキュメント
 
 APIドキュメントは `/api/docs` エンドポイントで確認できます（Swagger UIを実装する場合）。
+
+media-platform/
+├── templates/
+│   ├── index.html         # ホームページ
+│   ├── login.html         # ログインページ
+│   ├── register.html      # 登録ページ
+│   ├── profile.html       # ユーザープロフィール
+│   ├── content/
+│   │   ├── list.html      # コンテンツ一覧
+│   │   ├── single.html    # 単一コンテンツ表示
+│   │   ├── create.html    # コンテンツ作成
+│   │   └── edit.html      # コンテンツ編集
+│   └── partials/          # 再利用可能なパーツ
+│       ├── header.html    # ヘッダー
+│       ├── footer.html    # フッター
+│       └── sidebar.html   # サイドバー
+│
+├── static/
+│   ├── css/
+│   │   ├── style.css      # メインスタイル
+│   │   ├── auth.css       # 認証関連スタイル
+│   │   └── content.css    # コンテンツ関連スタイル
+│   ├── js/
+│   │   ├── main.js        # メインスクリプト
+│   │   ├── auth.js        # 認証関連スクリプト
+│   │   └── content.js     # コンテンツ関連スクリプト
+│   └── images/            # イメージファイル
