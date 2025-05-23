@@ -29,11 +29,11 @@ func NewRatingHandler(ratingUseCase usecase.RatingUseCase) *RatingHandler {
 // @Tags ratings
 // @Accept json
 // @Produce json
-// @Param contentId path int true "コンテンツID"
+// @Param id path int true "コンテンツID"
 // @Success 200 {array} model.Rating
-// @Router /api/contents/{contentId}/ratings [get]
+// @Router /api/contents/{id}/ratings [get]
 func (h *RatingHandler) GetRatingsByContentID(c *gin.Context) {
-	contentIDStr := c.Param("contentId")
+	contentIDStr := c.Param("id") // contentId → id に変更
 	contentID, err := strconv.ParseInt(contentIDStr, 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "無効なコンテンツIDです"})
@@ -165,11 +165,11 @@ func (h *RatingHandler) DeleteRating(c *gin.Context) {
 // @Tags ratings
 // @Accept json
 // @Produce json
-// @Param contentId path int true "コンテンツID"
+// @Param id path int true "コンテンツID"
 // @Success 200 {object} model.RatingAverage
-// @Router /api/contents/{contentId}/rating/average [get]
+// @Router /api/contents/{id}/rating/average [get]
 func (h *RatingHandler) GetAverageRatingByContentID(c *gin.Context) {
-	contentIDStr := c.Param("contentId")
+	contentIDStr := c.Param("id") // contentId → id に変更
 	contentID, err := strconv.ParseInt(contentIDStr, 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "無効なコンテンツIDです"})
@@ -196,11 +196,11 @@ func (h *RatingHandler) GetAverageRatingByContentID(c *gin.Context) {
 // @Tags ratings
 // @Accept json
 // @Produce json
-// @Param userId path int true "ユーザーID"
+// @Param id path int true "ユーザーID"
 // @Success 200 {array} model.Rating
-// @Router /api/users/{userId}/ratings [get]
+// @Router /api/users/{id}/ratings [get]
 func (h *RatingHandler) GetRatingsByUserID(c *gin.Context) {
-	userIDStr := c.Param("userId")
+	userIDStr := c.Param("id") // userId → id に変更
 	userID, err := strconv.ParseInt(userIDStr, 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "無効なユーザーIDです"})
