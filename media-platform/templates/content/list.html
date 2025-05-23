@@ -1,0 +1,53 @@
+{{ template "partials/header.html" . }}
+
+<div class="content-container">
+    <div class="container">
+        <div class="content-layout">
+            <div class="content-sidebar">
+                {{ template "partials/sidebar.html" (dict "showUserActions" false) }}
+            </div>
+            
+            <div class="content-main">
+                <div class="content-header">
+                    <h1>コンテンツ一覧</h1>
+                    <div class="content-filters">
+                        <div class="search-box">
+                            <input type="text" id="searchInput" placeholder="コンテンツを検索">
+                            <button id="searchBtn" class="btn btn-primary">検索</button>
+                        </div>
+                        <div class="filter-options">
+                            <select id="categoryFilter">
+                                <option value="">すべてのカテゴリー</option>
+                                <!-- カテゴリーはJSで動的に追加 -->
+                            </select>
+                            <select id="sortFilter">
+                                <option value="created_at:desc">新着順</option>
+                                <option value="rating:desc">評価順</option>
+                                <option value="views:desc">閲覧数順</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="content-list-grid" id="contentsList">
+                    <!-- コンテンツはJSで動的に表示 -->
+                    <div class="loader"></div>
+                </div>
+                
+                <div class="pagination" id="pagination">
+                    <!-- ページネーションはJSで動的に表示 -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{ define "css" }}
+<link rel="stylesheet" href="/static/css/content.css">
+{{ end }}
+
+{{ define "scripts" }}
+<script src="/static/js/content.js"></script>
+{{ end }}
+
+{{ template "partials/footer.html" . }}
