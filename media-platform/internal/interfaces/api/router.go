@@ -115,83 +115,44 @@ func SetupRouter(router *gin.Engine, db persistence.DBConn, jwtConfig *JWTConfig
 
 // setupFrontendRoutes フロントエンドルートを設定
 func setupFrontendRoutes(router *gin.Engine, authMiddleware gin.HandlerFunc) {
-	// まずJSONレスポンスでテスト
+	// ホームページ
 	router.GET("/", func(c *gin.Context) {
-		// テンプレートが利用できるかチェック
-		if router.HTMLRender != nil {
-			c.HTML(200, "index.html", gin.H{
-				"title": "メディアプラットフォーム",
-			})
-		} else {
-			c.JSON(200, gin.H{
-				"message": "ホームページ（テンプレートなし）",
-				"status":  "OK",
-			})
-		}
+		c.HTML(200, "index.html", gin.H{
+			"title": "メディアプラットフォーム",
+		})
 	})
 
+	// 認証ページ
 	router.GET("/login", func(c *gin.Context) {
-		if router.HTMLRender != nil {
-			c.HTML(200, "login.html", gin.H{
-				"title": "ログイン",
-			})
-		} else {
-			c.JSON(200, gin.H{
-				"message": "ログインページ（テンプレートなし）",
-				"status":  "OK",
-			})
-		}
+		c.HTML(200, "login.html", gin.H{
+			"title": "ログイン",
+		})
 	})
 
 	router.GET("/register", func(c *gin.Context) {
-		if router.HTMLRender != nil {
-			c.HTML(200, "register.html", gin.H{
-				"title": "アカウント登録",
-			})
-		} else {
-			c.JSON(200, gin.H{
-				"message": "登録ページ（テンプレートなし）",
-				"status":  "OK",
-			})
-		}
-	})
-
-	// テストエンドポイント
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message":       "テストエンドポイント",
-			"template_ok":   router.HTMLRender != nil,
-			"working_dir":   getWorkingDir(),
-			"template_path": "templates/",
+		c.HTML(200, "register.html", gin.H{
+			"title": "アカウント登録",
 		})
 	})
 
 	// プロフィールページ（認証必須）
 	router.GET("/profile", authMiddleware, func(c *gin.Context) {
-		if router.HTMLRender != nil {
-			c.HTML(200, "profile.html", gin.H{
-				"title": "マイプロフィール",
-			})
-		} else {
-			c.JSON(200, gin.H{
-				"message": "プロフィールページ（テンプレートなし）",
-				"status":  "OK",
-			})
-		}
+		c.HTML(200, "profile.html", gin.H{
+			"title": "マイプロフィール",
+		})
 	})
 
 	// コンテンツ関連ページ
 	router.GET("/contents", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "コンテンツ一覧ページ",
-			"status":  "OK",
+		c.HTML(200, "contents.html", gin.H{
+			"title": "コンテンツ一覧",
 		})
 	})
 
 	// より具体的なルートを先に定義
 	router.GET("/contents/create", authMiddleware, func(c *gin.Context) {
 		c.JSON(200, gin.H{
-			"message": "コンテンツ作成ページ",
+			"message": "コンテンツ作成ページ（未実装）",
 			"status":  "OK",
 		})
 	})
@@ -199,7 +160,7 @@ func setupFrontendRoutes(router *gin.Engine, authMiddleware gin.HandlerFunc) {
 	router.GET("/contents/:id", func(c *gin.Context) {
 		contentID := c.Param("id")
 		c.JSON(200, gin.H{
-			"message":   "コンテンツ詳細ページ",
+			"message":   "コンテンツ詳細ページ（未実装）",
 			"contentID": contentID,
 			"status":    "OK",
 		})
@@ -208,9 +169,18 @@ func setupFrontendRoutes(router *gin.Engine, authMiddleware gin.HandlerFunc) {
 	router.GET("/contents/:id/edit", authMiddleware, func(c *gin.Context) {
 		contentID := c.Param("id")
 		c.JSON(200, gin.H{
-			"message":   "コンテンツ編集ページ",
+			"message":   "コンテンツ編集ページ（未実装）",
 			"contentID": contentID,
 			"status":    "OK",
+		})
+	})
+
+	// テストエンドポイント
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message":     "テストエンドポイント",
+			"status":      "OK",
+			"working_dir": getWorkingDir(),
 		})
 	})
 }
