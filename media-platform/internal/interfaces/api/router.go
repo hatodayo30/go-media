@@ -3,6 +3,7 @@ package api
 import (
 	"media-platform/internal/infrastructure/persistence"
 	"media-platform/internal/usecase"
+	"os"
 
 	"github.com/gin-gonic/gin"
 )
@@ -108,4 +109,116 @@ func SetupRouter(router *gin.Engine, db persistence.DBConn, jwtConfig *JWTConfig
 			"status": "ok",
 		})
 	})
+	// フロントエンドルートの設定
+	setupFrontendRoutes(router, authMiddleware)
+}
+
+// setupFrontendRoutes フロントエンドルートを設定
+func setupFrontendRoutes(router *gin.Engine, authMiddleware gin.HandlerFunc) {
+	// まずJSONレスポンスでテスト
+	router.GET("/", func(c *gin.Context) {
+		// テンプレートが利用できるかチェック
+		if router.HTMLRender != nil {
+			c.HTML(200, "index.html", gin.H{
+				"title": "メディアプラットフォーム",
+			})
+		} else {
+			c.JSON(200, gin.H{
+				"message": "ホームページ（テンプレートなし）",
+				"status":  "OK",
+			})
+		}
+	})
+
+	router.GET("/login", func(c *gin.Context) {
+		if router.HTMLRender != nil {
+			c.HTML(200, "login.html", gin.H{
+				"title": "ログイン",
+			})
+		} else {
+			c.JSON(200, gin.H{
+				"message": "ログインページ（テンプレートなし）",
+				"status":  "OK",
+			})
+		}
+	})
+
+	router.GET("/register", func(c *gin.Context) {
+		if router.HTMLRender != nil {
+			c.HTML(200, "register.html", gin.H{
+				"title": "アカウント登録",
+			})
+		} else {
+			c.JSON(200, gin.H{
+				"message": "登録ページ（テンプレートなし）",
+				"status":  "OK",
+			})
+		}
+	})
+
+	// テストエンドポイント
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message":       "テストエンドポイント",
+			"template_ok":   router.HTMLRender != nil,
+			"working_dir":   getWorkingDir(),
+			"template_path": "templates/",
+		})
+	})
+
+	// プロフィールページ（認証必須）
+	router.GET("/profile", authMiddleware, func(c *gin.Context) {
+		if router.HTMLRender != nil {
+			c.HTML(200, "profile.html", gin.H{
+				"title": "マイプロフィール",
+			})
+		} else {
+			c.JSON(200, gin.H{
+				"message": "プロフィールページ（テンプレートなし）",
+				"status":  "OK",
+			})
+		}
+	})
+
+	// コンテンツ関連ページ
+	router.GET("/contents", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "コンテンツ一覧ページ",
+			"status":  "OK",
+		})
+	})
+
+	// より具体的なルートを先に定義
+	router.GET("/contents/create", authMiddleware, func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "コンテンツ作成ページ",
+			"status":  "OK",
+		})
+	})
+
+	router.GET("/contents/:id", func(c *gin.Context) {
+		contentID := c.Param("id")
+		c.JSON(200, gin.H{
+			"message":   "コンテンツ詳細ページ",
+			"contentID": contentID,
+			"status":    "OK",
+		})
+	})
+
+	router.GET("/contents/:id/edit", authMiddleware, func(c *gin.Context) {
+		contentID := c.Param("id")
+		c.JSON(200, gin.H{
+			"message":   "コンテンツ編集ページ",
+			"contentID": contentID,
+			"status":    "OK",
+		})
+	})
+}
+
+// 作業ディレクトリを取得するヘルパー関数
+func getWorkingDir() string {
+	if wd, err := os.Getwd(); err == nil {
+		return wd
+	}
+	return "unknown"
 }

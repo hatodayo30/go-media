@@ -23,6 +23,12 @@ RUN apk --no-cache add tzdata ca-certificates
 # ビルドしたバイナリをコピー
 COPY --from=builder /app/api-server .
 
+# テンプレートファイルをコピー
+COPY --from=builder /app/templates ./templates
+
+# スタティックファイルをコピー
+COPY --from=builder /app/static ./static
+
 # データベース初期化スクリプトをコピー
 COPY scripts/init.sql /app/scripts/
 
