@@ -1,8 +1,10 @@
 package main
 
 import (
+	"html/template"
 	"log"
 	"os"
+	"path/filepath"
 
 	"media-platform/internal/infrastructure/db"
 	"media-platform/internal/interfaces/api"
@@ -27,12 +29,38 @@ func main() {
 	// Ginルーターの初期化
 	router := gin.Default()
 
+	// カスタムテンプレート関数の設定
+	router.SetFuncMap(template.FuncMap{
+		"dict": func(values ...interface{}) map[string]interface{} {
+			if len(values)%2 != 0 {
+				return nil
+			}
+			dict := make(map[string]interface{})
+			for i := 0; i < len(values); i += 2 {
+				key, ok := values[i].(string)
+				if !ok {
+					return nil
+				}
+				dict[key] = values[i+1]
+			}
+			return dict
+		},
+	})
+
 	// テンプレートディレクトリの存在確認
 	if _, err := os.Stat("templates"); os.IsNotExist(err) {
 		log.Println("Warning: templates directory not found")
 	} else {
 		log.Println("Loading templates from templates directory")
-		router.LoadHTMLGlob("templates/*")
+		// デバッグ: ファイル一覧を表示
+		filepath.Walk("templates", func(path string, info os.FileInfo, err error) error {
+			if err == nil && !info.IsDir() {
+				log.Printf("Found template file: %s", path)
+			}
+			return nil
+		})
+		// サブディレクトリも含めてテンプレートを読み込み
+		router.LoadHTMLGlob("templates/**/*")
 	}
 
 	// 静的ファイルディレクトリの存在確認

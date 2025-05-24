@@ -144,34 +144,31 @@ func setupFrontendRoutes(router *gin.Engine, authMiddleware gin.HandlerFunc) {
 
 	// コンテンツ関連ページ
 	router.GET("/contents", func(c *gin.Context) {
-		c.HTML(200, "contents.html", gin.H{
+		c.HTML(200, "content/list.html", gin.H{
 			"title": "コンテンツ一覧",
 		})
 	})
 
 	// より具体的なルートを先に定義
 	router.GET("/contents/create", authMiddleware, func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "コンテンツ作成ページ（未実装）",
-			"status":  "OK",
+		c.HTML(200, "content/create.html", gin.H{
+			"title": "コンテンツ作成",
 		})
 	})
 
 	router.GET("/contents/:id", func(c *gin.Context) {
 		contentID := c.Param("id")
-		c.JSON(200, gin.H{
-			"message":   "コンテンツ詳細ページ（未実装）",
+		c.HTML(200, "content/single.html", gin.H{
+			"title":     "コンテンツ詳細",
 			"contentID": contentID,
-			"status":    "OK",
 		})
 	})
 
 	router.GET("/contents/:id/edit", authMiddleware, func(c *gin.Context) {
 		contentID := c.Param("id")
-		c.JSON(200, gin.H{
-			"message":   "コンテンツ編集ページ（未実装）",
+		c.HTML(200, "content/edit.html", gin.H{
+			"title":     "コンテンツ編集",
 			"contentID": contentID,
-			"status":    "OK",
 		})
 	})
 
@@ -185,7 +182,6 @@ func setupFrontendRoutes(router *gin.Engine, authMiddleware gin.HandlerFunc) {
 	})
 }
 
-// 作業ディレクトリを取得するヘルパー関数
 func getWorkingDir() string {
 	if wd, err := os.Getwd(); err == nil {
 		return wd

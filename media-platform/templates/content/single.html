@@ -1,0 +1,50 @@
+{{ template "partials/header.html" . }}
+
+<div class="content-single">
+    <div class="container">
+        <div class="content-layout">
+            <div class="content-sidebar">
+                {{ template "partials/sidebar.html" (dict "showUserActions" false) }}
+            </div>
+            
+            <div class="content-main">
+                <article id="contentContainer">
+                    <div class="loader"></div>
+                </article>
+                
+                <div class="content-actions" id="contentActions">
+                    <!-- アクションボタンはJSで動的に表示 -->
+                </div>
+                
+                <div class="content-ratings" id="ratingsContainer">
+                    <h3>評価</h3>
+                    <div id="averageRating"></div>
+                    <div id="userRating">
+                        <!-- ユーザー評価フォームはJSで動的に表示 -->
+                    </div>
+                </div>
+                
+                <div class="content-comments" id="commentsContainer">
+                    <h3>コメント</h3>
+                    <div id="commentForm">
+                        <!-- コメントフォームはJSで動的に表示 -->
+                    </div>
+                    <div id="commentsList">
+                        <!-- コメントはJSで動的に表示 -->
+                        <div class="loader"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{ define "css" }}
+<link rel="stylesheet" href="/static/css/content.css">
+{{ end }}
+
+{{ define "scripts" }}
+<script src="/static/js/content.js"></script>
+{{ end }}
+
+{{ template "partials/footer.html" . }}
