@@ -1,4 +1,5 @@
-{{ template "partials/header.html" . }}
+{{define "index.html"}}
+{{template "header" .}}
 
 <div class="hero">
     <div class="container">
@@ -41,8 +42,5 @@
     </div>
 </section>
 
-{{ define "scripts" }}
-<script src="/static/js/main.js"></script>
-{{ end }}
-
-{{ template "partials/footer.html" . }}
+{{template "footer" .}}
+{{end}}

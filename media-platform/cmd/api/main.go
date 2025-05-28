@@ -4,7 +4,6 @@ import (
 	"html/template"
 	"log"
 	"os"
-	"path/filepath"
 
 	"media-platform/internal/infrastructure/db"
 	"media-platform/internal/interfaces/api"
@@ -52,15 +51,10 @@ func main() {
 		log.Println("Warning: templates directory not found")
 	} else {
 		log.Println("Loading templates from templates directory")
-		// デバッグ: ファイル一覧を表示
-		filepath.Walk("templates", func(path string, info os.FileInfo, err error) error {
-			if err == nil && !info.IsDir() {
-				log.Printf("Found template file: %s", path)
-			}
-			return nil
-		})
-		// サブディレクトリも含めてテンプレートを読み込み
+
+		// すべてのテンプレートファイルを読み込み
 		router.LoadHTMLGlob("templates/**/*")
+		log.Println("Templates loaded")
 	}
 
 	// 静的ファイルディレクトリの存在確認
@@ -86,7 +80,6 @@ func main() {
 	if port == "" {
 		port = "8082"
 	}
-
 	log.Printf("Server starting on port %s", port)
 	if err := router.Run(":" + port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)

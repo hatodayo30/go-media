@@ -3,7 +3,6 @@ package api
 import (
 	"media-platform/internal/infrastructure/persistence"
 	"media-platform/internal/usecase"
-	"os"
 
 	"github.com/gin-gonic/gin"
 )
@@ -109,6 +108,7 @@ func SetupRouter(router *gin.Engine, db persistence.DBConn, jwtConfig *JWTConfig
 			"status": "ok",
 		})
 	})
+
 	// フロントエンドルートの設定
 	setupFrontendRoutes(router, authMiddleware)
 }
@@ -144,21 +144,21 @@ func setupFrontendRoutes(router *gin.Engine, authMiddleware gin.HandlerFunc) {
 
 	// コンテンツ関連ページ
 	router.GET("/contents", func(c *gin.Context) {
-		c.HTML(200, "content/list.html", gin.H{
+		c.HTML(200, "contents.html", gin.H{
 			"title": "コンテンツ一覧",
 		})
 	})
 
 	// より具体的なルートを先に定義
 	router.GET("/contents/create", authMiddleware, func(c *gin.Context) {
-		c.HTML(200, "content/create.html", gin.H{
+		c.HTML(200, "content-create.html", gin.H{
 			"title": "コンテンツ作成",
 		})
 	})
 
 	router.GET("/contents/:id", func(c *gin.Context) {
 		contentID := c.Param("id")
-		c.HTML(200, "content/single.html", gin.H{
+		c.HTML(200, "content-detail.html", gin.H{
 			"title":     "コンテンツ詳細",
 			"contentID": contentID,
 		})
@@ -166,25 +166,9 @@ func setupFrontendRoutes(router *gin.Engine, authMiddleware gin.HandlerFunc) {
 
 	router.GET("/contents/:id/edit", authMiddleware, func(c *gin.Context) {
 		contentID := c.Param("id")
-		c.HTML(200, "content/edit.html", gin.H{
+		c.HTML(200, "content-edit.html", gin.H{
 			"title":     "コンテンツ編集",
 			"contentID": contentID,
 		})
 	})
-
-	// テストエンドポイント
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message":     "テストエンドポイント",
-			"status":      "OK",
-			"working_dir": getWorkingDir(),
-		})
-	})
-}
-
-func getWorkingDir() string {
-	if wd, err := os.Getwd(); err == nil {
-		return wd
-	}
-	return "unknown"
 }
