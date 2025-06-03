@@ -4,8 +4,8 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(100) NOT NULL UNIQUE,
     email VARCHAR(255) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
-    bio TEXT,
-    avatar VARCHAR(255),
+    bio TEXT NOT NULL DEFAULT '',
+    avatar VARCHAR(255) NOT NULL DEFAULT '',
     role VARCHAR(20) NOT NULL DEFAULT 'user',
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
@@ -78,8 +78,8 @@ CREATE INDEX idx_ratings_content_id ON ratings(content_id);
 
 -- 初期データ投入（オプション）
 -- 管理者ユーザーの作成
-INSERT INTO users (username, email, password, role)
-VALUES ('admin', 'admin@example.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'admin')
+INSERT INTO users (username, email, password, role, bio, avatar)
+VALUES ('admin', 'admin@example.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'admin', 'システム管理者', '')
 ON CONFLICT (email) DO NOTHING;
 
 -- サンプルカテゴリの作成

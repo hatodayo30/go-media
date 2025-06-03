@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { Link, useNavigate } from 'react-router-dom';
+import { api } from '../services/api';
 
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -15,9 +15,38 @@ const LoginPage: React.FC = () => {
     setLoading(true);
 
     try {
-      await login(email, password);
+      console.log('Attempting login with:', { email, password });
+      
+      // API通信
+      const response = await api.login(email, password);
+      console.log('Login response:', response);
+      
+      // トークンを保存
+      if (response.data && response.data.token) {
+        localStorage.setItem('token', response.data.token);
+        
+        console.log('Token saved to localStorage');
+        
+        // ダッシュボードに遷移
+        navigate('/dashboard');
+      } else {
+        setError('ログインレスポンスが不正です');
+      }
+      
     } catch (err: any) {
-      setError(err.response?.data?.message || 'ログインに失敗しました');
+      console.error('Login error:', err);
+      
+      if (err.response) {
+        // サーバーからのエラーレスポンス
+        const errorMessage = err.response.data?.error || err.response.data?.message || `エラー: ${err.response.status}`;
+        setError(errorMessage);
+      } else if (err.request) {
+        // ネットワークエラー
+        setError('サーバーに接続できません。APIサーバーが起動しているか確認してください。');
+      } else {
+        // その他のエラー
+        setError('ログインに失敗しました');
+      }
     } finally {
       setLoading(false);
     }
@@ -43,6 +72,20 @@ const LoginPage: React.FC = () => {
         <h2 style={{ textAlign: 'center', marginBottom: '2rem', fontSize: '2rem' }}>
           ログイン
         </h2>
+        
+        {/* テスト用アカウント情報 */}
+        <div style={{ 
+          marginBottom: '1rem', 
+          padding: '0.75rem', 
+          backgroundColor: '#f0f9ff', 
+          borderRadius: '6px',
+          fontSize: '0.875rem'
+        }}>
+          <strong>テスト用アカウント:</strong><br />
+          Email: test@example.com<br />
+          Password: test123
+        </div>
+        
         <form onSubmit={handleSubmit}>
           {error && (
             <div style={{
