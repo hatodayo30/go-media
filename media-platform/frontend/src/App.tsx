@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
+import CreateContentPage from './pages/CreateContentPage';
 
 // 簡易的な認証チェック
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -42,6 +43,14 @@ const App: React.FC = () => {
             element={
               <PrivateRoute>
                 <DashboardPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/contents/new"
+            element={
+              <PrivateRoute>
+                <CreateContentPage />
               </PrivateRoute>
             }
           />

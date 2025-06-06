@@ -10,6 +10,7 @@ import (
 	domainErrors "media-platform/internal/domain/errors"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v4"
 )
 
 // UserHandler はユーザーに関するHTTPハンドラを提供します
@@ -105,9 +106,35 @@ func (h *UserHandler) GetCurrentUser(c *gin.Context) {
 		return
 	}
 
-	// トークンから取得したユーザーIDでユーザー情報を取得
-	claims := userClaims.(map[string]interface{})
-	userID := int64(claims["user_id"].(float64))
+	// jwt.MapClaims型に変換
+	claims, ok := userClaims.(jwt.MapClaims)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": "error",
+			"error":  "認証情報の形式が不正です",
+		})
+		return
+	}
+
+	// ユーザーIDを安全に取得
+	userIDInterface, exists := claims["user_id"]
+	if !exists {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "ユーザーIDが見つかりません",
+		})
+		return
+	}
+
+	userIDFloat, ok := userIDInterface.(float64)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "ユーザーIDの形式が不正です",
+		})
+		return
+	}
+	userID := int64(userIDFloat)
 
 	user, err := h.userUseCase.GetCurrentUser(c.Request.Context(), userID)
 	if err != nil {
@@ -204,9 +231,35 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 
-	// トークンから取得したユーザーIDでユーザー情報を取得
-	claims := userClaims.(map[string]interface{})
-	userID := int64(claims["user_id"].(float64))
+	// jwt.MapClaims型に変換
+	claims, ok := userClaims.(jwt.MapClaims)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": "error",
+			"error":  "認証情報の形式が不正です",
+		})
+		return
+	}
+
+	// ユーザーIDを安全に取得
+	userIDInterface, exists := claims["user_id"]
+	if !exists {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "ユーザーIDが見つかりません",
+		})
+		return
+	}
+
+	userIDFloat, ok := userIDInterface.(float64)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "ユーザーIDの形式が不正です",
+		})
+		return
+	}
+	userID := int64(userIDFloat)
 
 	var req model.UpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

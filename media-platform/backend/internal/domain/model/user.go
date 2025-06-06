@@ -88,8 +88,29 @@ func (u *User) validateEmail() error {
 	return nil
 }
 
-// validatePassword はパスワードのバリデーションを行います
+// validatePassword はパスワードのバリデーションを行います（開発環境向けに緩和版）
 func (u *User) validatePassword() error {
+	if u.Password == "" {
+		return errors.New("パスワードは必須です")
+	}
+
+	// 最低文字数を8文字から4文字に緩和（開発環境用）
+	if len(u.Password) < 4 {
+		return errors.New("パスワードは最低4文字必要です")
+	}
+
+	// 複雑な要件を簡素化 - 英数字のみチェック
+	hasAlphaNum := regexp.MustCompile(`[a-zA-Z0-9]`).MatchString(u.Password)
+
+	if !hasAlphaNum {
+		return errors.New("パスワードには英数字を含む必要があります")
+	}
+
+	return nil
+}
+
+// validatePasswordStrict は本番環境用の厳格なパスワードバリデーション（参考用）
+func (u *User) validatePasswordStrict() error {
 	if u.Password == "" {
 		return errors.New("パスワードは必須です")
 	}

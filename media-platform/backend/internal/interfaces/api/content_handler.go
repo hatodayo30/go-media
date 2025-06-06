@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -10,6 +11,7 @@ import (
 	domainErrors "media-platform/internal/domain/errors"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v4"
 )
 
 // ContentHandler はコンテンツに関するHTTPハンドラを提供します
@@ -251,19 +253,25 @@ func (h *ContentHandler) SearchContents(c *gin.Context) {
 
 // CreateContent は新しいコンテンツを作成するハンドラです
 func (h *ContentHandler) CreateContent(c *gin.Context) {
-	// JWTミドルウェアで設定されたユーザー情報を取得
-	userClaims, exists := c.Get("user")
-	if !exists {
+	// ユーザー認証情報を取得
+	claims, err := h.getUserClaimsFromContext(c)
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"status": "error",
-			"error":  "認証されていません",
+			"error":  err.Error(),
 		})
 		return
 	}
 
-	// ユーザーIDの取得
-	claims := userClaims.(map[string]interface{})
-	userID := int64(claims["user_id"].(float64))
+	// ユーザーIDを取得
+	userID, err := h.getUserIDFromClaims(claims)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  err.Error(),
+		})
+		return
+	}
 
 	var req model.CreateContentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -313,20 +321,34 @@ func (h *ContentHandler) UpdateContent(c *gin.Context) {
 		return
 	}
 
-	// JWTミドルウェアで設定されたユーザー情報を取得
-	userClaims, exists := c.Get("user")
-	if !exists {
+	// ユーザー認証情報を取得
+	claims, err := h.getUserClaimsFromContext(c)
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"status": "error",
-			"error":  "認証されていません",
+			"error":  err.Error(),
 		})
 		return
 	}
 
-	// ユーザー情報の取得
-	claims := userClaims.(map[string]interface{})
-	userID := int64(claims["user_id"].(float64))
-	userRole := claims["role"].(string)
+	// ユーザーIDとロールを取得
+	userID, err := h.getUserIDFromClaims(claims)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  err.Error(),
+		})
+		return
+	}
+
+	userRole, err := h.getUserRoleFromClaims(claims)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  err.Error(),
+		})
+		return
+	}
 
 	var req model.UpdateContentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -383,20 +405,34 @@ func (h *ContentHandler) UpdateContentStatus(c *gin.Context) {
 		return
 	}
 
-	// JWTミドルウェアで設定されたユーザー情報を取得
-	userClaims, exists := c.Get("user")
-	if !exists {
+	// ユーザー認証情報を取得
+	claims, err := h.getUserClaimsFromContext(c)
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"status": "error",
-			"error":  "認証されていません",
+			"error":  err.Error(),
 		})
 		return
 	}
 
-	// ユーザー情報の取得
-	claims := userClaims.(map[string]interface{})
-	userID := int64(claims["user_id"].(float64))
-	userRole := claims["role"].(string)
+	// ユーザーIDとロールを取得
+	userID, err := h.getUserIDFromClaims(claims)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  err.Error(),
+		})
+		return
+	}
+
+	userRole, err := h.getUserRoleFromClaims(claims)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  err.Error(),
+		})
+		return
+	}
 
 	var req model.UpdateContentStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -453,20 +489,34 @@ func (h *ContentHandler) DeleteContent(c *gin.Context) {
 		return
 	}
 
-	// JWTミドルウェアで設定されたユーザー情報を取得
-	userClaims, exists := c.Get("user")
-	if !exists {
+	// ユーザー認証情報を取得
+	claims, err := h.getUserClaimsFromContext(c)
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"status": "error",
-			"error":  "認証されていません",
+			"error":  err.Error(),
 		})
 		return
 	}
 
-	// ユーザー情報の取得
-	claims := userClaims.(map[string]interface{})
-	userID := int64(claims["user_id"].(float64))
-	userRole := claims["role"].(string)
+	// ユーザーIDとロールを取得
+	userID, err := h.getUserIDFromClaims(claims)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  err.Error(),
+		})
+		return
+	}
+
+	userRole, err := h.getUserRoleFromClaims(claims)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  err.Error(),
+		})
+		return
+	}
 
 	err = h.contentUseCase.DeleteContent(c.Request.Context(), id, userID, userRole)
 	if err != nil {
@@ -564,4 +614,49 @@ func (h *ContentHandler) getPaginationParams(c *gin.Context) (int, int) {
 	}
 
 	return limit, offset
+}
+
+// ヘルパーメソッド：ユーザー認証情報をコンテキストから取得
+func (h *ContentHandler) getUserClaimsFromContext(c *gin.Context) (jwt.MapClaims, error) {
+	userClaims, exists := c.Get("user")
+	if !exists {
+		return nil, errors.New("認証されていません")
+	}
+
+	claims, ok := userClaims.(jwt.MapClaims)
+	if !ok {
+		return nil, errors.New("認証情報の形式が不正です")
+	}
+
+	return claims, nil
+}
+
+// ヘルパーメソッド：クレームからユーザーIDを取得
+func (h *ContentHandler) getUserIDFromClaims(claims jwt.MapClaims) (int64, error) {
+	userIDInterface, exists := claims["user_id"]
+	if !exists {
+		return 0, errors.New("ユーザーIDが見つかりません")
+	}
+
+	userIDFloat, ok := userIDInterface.(float64)
+	if !ok {
+		return 0, errors.New("ユーザーIDの形式が不正です")
+	}
+
+	return int64(userIDFloat), nil
+}
+
+// ヘルパーメソッド：クレームからユーザーロールを取得
+func (h *ContentHandler) getUserRoleFromClaims(claims jwt.MapClaims) (string, error) {
+	userRoleInterface, exists := claims["role"]
+	if !exists {
+		return "", errors.New("ユーザーロールが見つかりません")
+	}
+
+	userRole, ok := userRoleInterface.(string)
+	if !ok {
+		return "", errors.New("ユーザーロールの形式が不正です")
+	}
+
+	return userRole, nil
 }

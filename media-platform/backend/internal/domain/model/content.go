@@ -11,10 +11,13 @@ import (
 type ContentType string
 
 const (
-	ContentTypeArticle ContentType = "article"
-	ContentTypeVideo   ContentType = "video"
-	ContentTypeImage   ContentType = "image"
-	ContentTypeAudio   ContentType = "audio"
+	ContentTypeArticle  ContentType = "article"
+	ContentTypeTutorial ContentType = "tutorial" // フロントエンドで使用
+	ContentTypeNews     ContentType = "news"     // フロントエンドで使用
+	ContentTypeReview   ContentType = "review"   // フロントエンドで使用
+	ContentTypeVideo    ContentType = "video"
+	ContentTypeImage    ContentType = "image"
+	ContentTypeAudio    ContentType = "audio"
 )
 
 // ContentStatus はコンテンツの状態を表す型です
@@ -79,10 +82,13 @@ func (c *Content) Validate() error {
 // isValidContentType はコンテンツタイプが有効かチェックします
 func isValidContentType(contentType ContentType) bool {
 	validTypes := map[ContentType]bool{
-		ContentTypeArticle: true,
-		ContentTypeVideo:   true,
-		ContentTypeImage:   true,
-		ContentTypeAudio:   true,
+		ContentTypeArticle:  true,
+		ContentTypeTutorial: true, // 追加
+		ContentTypeNews:     true, // 追加
+		ContentTypeReview:   true, // 追加
+		ContentTypeVideo:    true,
+		ContentTypeImage:    true,
+		ContentTypeAudio:    true,
 	}
 	return validTypes[contentType]
 }
@@ -219,6 +225,7 @@ type CreateContentRequest struct {
 	Body       string `json:"body" binding:"required"`
 	Type       string `json:"type" binding:"required"`
 	CategoryID int64  `json:"category_id" binding:"required"`
+	Status     string `json:"status"` // フロントエンドから送信されるstatusフィールド
 }
 
 // UpdateContentRequest はコンテンツ更新リクエスト用の構造体です
@@ -227,6 +234,7 @@ type UpdateContentRequest struct {
 	Body       string `json:"body"`
 	Type       string `json:"type"`
 	CategoryID int64  `json:"category_id"`
+	Status     string `json:"status"` // status更新も可能に
 }
 
 // UpdateContentStatusRequest はコンテンツステータス更新リクエスト用の構造体です

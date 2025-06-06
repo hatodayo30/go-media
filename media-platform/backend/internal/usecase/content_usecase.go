@@ -245,14 +245,21 @@ func (u *ContentUseCase) SearchContents(ctx context.Context, keyword string, lim
 }
 
 // CreateContent は新しいコンテンツを作成します
-func (u *ContentUseCase) CreateContent(ctx context.Context, userID int64, req *model.CreateContentRequest) (*model.ContentResponse, error) {
-	// カテゴリの存在チェック
-	exists, err := u.categoryExists(ctx, req.CategoryID)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.New("指定されたカテゴリが存在しません")
+func (u *ContentUseCase) CreateContent(ctx context.Context, authorID int64, req *model.CreateContentRequest) (*model.ContentResponse, error) {
+	// デフォルトステータスの設定
+	status := model.ContentStatusDraft // デフォルトは下書き
+	if req.Status != "" {
+		// フロントエンドから送信されたstatusを使用
+		switch req.Status {
+		case "draft":
+			status = model.ContentStatusDraft
+		case "published":
+			status = model.ContentStatusPublished
+		case "pending":
+			status = model.ContentStatusPending
+		default:
+			status = model.ContentStatusDraft // 無効な値の場合はデフォルト
+		}
 	}
 
 	// コンテンツエンティティの作成
@@ -260,17 +267,41 @@ func (u *ContentUseCase) CreateContent(ctx context.Context, userID int64, req *m
 		Title:      req.Title,
 		Body:       req.Body,
 		Type:       model.ContentType(req.Type),
-		AuthorID:   userID,
+		AuthorID:   authorID,
 		CategoryID: req.CategoryID,
-		Status:     model.ContentStatusDraft, // 初期状態はドラフト
+		Status:     status, // ステータスを設定
 		ViewCount:  0,
 		CreatedAt:  time.Now(),
 		UpdatedAt:  time.Now(),
 	}
 
-	// ドメインルールのバリデーション
+	// 公開ステータスの場合は公開日時を設定
+	if status == model.ContentStatusPublished {
+		now := time.Now()
+		content.PublishedAt = &now
+	}
+
+	// バリデーション
 	if err := content.Validate(); err != nil {
-		return nil, domainErrors.NewValidationError(err.Error())
+		return nil, err
+	}
+
+	// 著者の存在確認
+	author, err := u.userRepo.Find(ctx, authorID)
+	if err != nil {
+		return nil, err
+	}
+	if author == nil {
+		return nil, errors.New("指定された著者が存在しません")
+	}
+
+	// カテゴリの存在確認（正しいメソッド名使用）
+	category, err := u.categoryRepo.FindByID(ctx, req.CategoryID)
+	if err != nil {
+		return nil, err
+	}
+	if category == nil {
+		return nil, errors.New("指定されたカテゴリが存在しません")
 	}
 
 	// コンテンツの保存
