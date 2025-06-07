@@ -85,10 +85,11 @@ export const api = {
 
   // コンテンツ関連
   getContents: async (params?: any) => {
+    console.log('🔍 API リクエスト params:', params);
     const response = await apiClient.get('/api/contents', { params });
+    console.log('📥 API レスポンス:', response.data);
     return response.data;
   },
-
   getPublishedContents: async () => {
     const response = await apiClient.get('/api/contents/published');
     return response.data;

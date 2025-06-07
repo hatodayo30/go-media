@@ -123,47 +123,118 @@ const DashboardPage: React.FC = () => {
         <div style={{
           maxWidth: '1200px',
           margin: '0 auto',
-          padding: '0 1rem',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
+          padding: '0 1rem'
         }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 'bold' }}>
-              メディアプラットフォーム
-            </h1>
+          {/* トップヘッダー：タイトルとユーザー情報 */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '1rem'
+          }}>
+            <div>
+              <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 'bold' }}>
+                メディアプラットフォーム
+              </h1>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                こんにちは、{user?.username}さん ({user?.role})
+              </span>
+              <button
+                onClick={handleLogout}
+                style={{
+                  backgroundColor: '#ef4444',
+                  color: 'white',
+                  border: 'none',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '0.875rem'
+                }}
+              >
+                ログアウト
+              </button>
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-              こんにちは、{user?.username}さん ({user?.role})
-            </span>
-            <Link
-              to="/contents/new"
+
+          {/* ナビゲーションボタン */}
+          <div style={{ 
+            display: 'flex', 
+            gap: '0.75rem',
+            flexWrap: 'wrap'
+          }}>
+            <Link 
+              to="/create"
               style={{
+                padding: '0.75rem 1.5rem',
                 backgroundColor: '#3b82f6',
                 color: 'white',
-                padding: '0.5rem 1rem',
-                borderRadius: '6px',
                 textDecoration: 'none',
-                fontSize: '0.875rem'
-              }}
-            >
-              新規投稿
-            </Link>
-            <button
-              onClick={handleLogout}
-              style={{
-                backgroundColor: '#ef4444',
-                color: 'white',
-                border: 'none',
-                padding: '0.5rem 1rem',
                 borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '0.875rem'
+                fontSize: '0.875rem',
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
               }}
             >
-              ログアウト
-            </button>
+              ✏️ 新規投稿
+            </Link>
+            
+            <Link 
+              to="/drafts"
+              style={{
+                padding: '0.75rem 1.5rem',
+                backgroundColor: '#f59e0b',
+                color: 'white',
+                textDecoration: 'none',
+                borderRadius: '6px',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}
+            >
+              📝 下書き一覧
+            </Link>
+
+            <Link 
+              to="/my-posts"
+              style={{
+                padding: '0.75rem 1.5rem',
+                backgroundColor: '#8b5cf6',
+                color: 'white',
+                textDecoration: 'none',
+                borderRadius: '6px',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}
+            >
+              📄 マイ投稿
+            </Link>
+
+            <Link 
+              to="/profile"
+              style={{
+                padding: '0.75rem 1.5rem',
+                backgroundColor: '#6b7280',
+                color: 'white',
+                textDecoration: 'none',
+                borderRadius: '6px',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}
+            >
+              👤 プロフィール
+            </Link>
           </div>
         </div>
       </header>
@@ -184,7 +255,7 @@ const DashboardPage: React.FC = () => {
             boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
           }}>
             <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.125rem', fontWeight: '600' }}>
-              カテゴリ
+              📂 カテゴリ
             </h3>
             <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
               <li style={{ marginBottom: '0.5rem' }}>
@@ -193,15 +264,17 @@ const DashboardPage: React.FC = () => {
                   style={{
                     width: '100%',
                     textAlign: 'left',
-                    padding: '0.5rem 0.75rem',
+                    padding: '0.75rem',
                     border: 'none',
                     borderRadius: '6px',
                     cursor: 'pointer',
                     backgroundColor: selectedCategory === null ? '#dbeafe' : 'transparent',
-                    color: selectedCategory === null ? '#1d4ed8' : '#374151'
+                    color: selectedCategory === null ? '#1d4ed8' : '#374151',
+                    fontWeight: selectedCategory === null ? '600' : '400',
+                    transition: 'all 0.2s'
                   }}
                 >
-                  すべて
+                  🏠 すべて
                 </button>
               </li>
               {categories.map((category) => (
@@ -211,19 +284,45 @@ const DashboardPage: React.FC = () => {
                     style={{
                       width: '100%',
                       textAlign: 'left',
-                      padding: '0.5rem 0.75rem',
+                      padding: '0.75rem',
                       border: 'none',
                       borderRadius: '6px',
                       cursor: 'pointer',
                       backgroundColor: selectedCategory === category.id ? '#dbeafe' : 'transparent',
-                      color: selectedCategory === category.id ? '#1d4ed8' : '#374151'
+                      color: selectedCategory === category.id ? '#1d4ed8' : '#374151',
+                      fontWeight: selectedCategory === category.id ? '600' : '400',
+                      transition: 'all 0.2s'
                     }}
                   >
-                    {category.name}
+                    📁 {category.name}
                   </button>
                 </li>
               ))}
             </ul>
+          </div>
+
+          {/* 統計情報 */}
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            padding: '1.5rem',
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+            marginTop: '1rem'
+          }}>
+            <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.125rem', fontWeight: '600' }}>
+              📊 統計
+            </h3>
+            <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+              <div style={{ marginBottom: '0.5rem' }}>
+                📝 公開記事: {contents.length}件
+              </div>
+              <div style={{ marginBottom: '0.5rem' }}>
+                🏷️ カテゴリ: {categories.length}件
+              </div>
+              <div>
+                👤 ログイン: {user?.role}
+              </div>
+            </div>
           </div>
         </aside>
 
@@ -232,12 +331,12 @@ const DashboardPage: React.FC = () => {
           <div style={{ marginBottom: '2rem' }}>
             <h2 style={{ margin: '0 0 0.5rem 0', fontSize: '1.875rem', fontWeight: 'bold' }}>
               {selectedCategory 
-                ? categories.find(c => c.id === selectedCategory)?.name 
-                : 'すべてのコンテンツ'
+                ? `📁 ${categories.find(c => c.id === selectedCategory)?.name}` 
+                : '🏠 すべてのコンテンツ'
               }
             </h2>
             <p style={{ margin: 0, color: '#6b7280' }}>
-              {contents.length}件のコンテンツ
+              {contents.length}件のコンテンツが見つかりました
             </p>
           </div>
 
@@ -245,7 +344,7 @@ const DashboardPage: React.FC = () => {
           {contents.length > 0 ? (
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
               gap: '1.5rem'
             }}>
               {contents.map((content) => (
@@ -254,9 +353,19 @@ const DashboardPage: React.FC = () => {
                   borderRadius: '8px',
                   padding: '1.5rem',
                   boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-                  transition: 'box-shadow 0.2s',
-                  cursor: 'pointer'
-                }}>
+                  transition: 'all 0.2s',
+                  cursor: 'pointer',
+                  border: '1px solid #e5e7eb'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}
+                >
                   <div style={{
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -267,13 +376,20 @@ const DashboardPage: React.FC = () => {
                       fontSize: '0.75rem',
                       backgroundColor: '#dbeafe',
                       color: '#1d4ed8',
-                      padding: '0.25rem 0.5rem',
-                      borderRadius: '9999px'
+                      padding: '0.25rem 0.75rem',
+                      borderRadius: '9999px',
+                      fontWeight: '500'
                     }}>
-                      {content.category?.name || 'カテゴリなし'}
+                      📁 {content.category?.name || 'カテゴリなし'}
                     </span>
-                    <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
-                      {content.view_count} 回閲覧
+                    <span style={{ 
+                      fontSize: '0.75rem', 
+                      color: '#6b7280',
+                      backgroundColor: '#f3f4f6',
+                      padding: '0.25rem 0.5rem',
+                      borderRadius: '4px'
+                    }}>
+                      👁️ {content.view_count}
                     </span>
                   </div>
                   
@@ -281,11 +397,22 @@ const DashboardPage: React.FC = () => {
                     margin: '0 0 0.75rem 0',
                     fontSize: '1.125rem',
                     fontWeight: '600',
-                    color: '#1f2937'
+                    color: '#1f2937',
+                    lineHeight: '1.4'
                   }}>
                     <Link 
                       to={`/contents/${content.id}`}
-                      style={{ textDecoration: 'none', color: 'inherit' }}
+                      style={{ 
+                        textDecoration: 'none', 
+                        color: 'inherit',
+                        transition: 'color 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = '#3b82f6';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = 'inherit';
+                      }}
                     >
                       {content.title}
                     </Link>
@@ -295,7 +422,7 @@ const DashboardPage: React.FC = () => {
                     margin: '0 0 1rem 0',
                     color: '#6b7280',
                     fontSize: '0.875rem',
-                    lineHeight: '1.4',
+                    lineHeight: '1.5',
                     overflow: 'hidden',
                     display: '-webkit-box',
                     WebkitLineClamp: 3,
@@ -309,10 +436,16 @@ const DashboardPage: React.FC = () => {
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     fontSize: '0.75rem',
-                    color: '#6b7280'
+                    color: '#6b7280',
+                    borderTop: '1px solid #f3f4f6',
+                    paddingTop: '0.75rem'
                   }}>
-                    <span>by {content.author?.username || '不明'}</span>
-                    <span>{new Date(content.created_at).toLocaleDateString('ja-JP')}</span>
+                    <span style={{ fontWeight: '500' }}>
+                      ✍️ {content.author?.username || '不明'}
+                    </span>
+                    <span>
+                      📅 {new Date(content.created_at).toLocaleDateString('ja-JP')}
+                    </span>
                   </div>
                 </div>
               ))}
@@ -320,26 +453,35 @@ const DashboardPage: React.FC = () => {
           ) : (
             <div style={{
               textAlign: 'center',
-              padding: '3rem',
+              padding: '4rem 2rem',
               backgroundColor: 'white',
               borderRadius: '8px',
               boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
             }}>
-              <h3 style={{ margin: '0 0 1rem 0', color: '#6b7280' }}>
-                コンテンツが見つかりませんでした
+              <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>📝</div>
+              <h3 style={{ margin: '0 0 1rem 0', color: '#6b7280', fontSize: '1.25rem' }}>
+                {selectedCategory 
+                  ? 'このカテゴリにはまだコンテンツがありません' 
+                  : 'コンテンツが見つかりませんでした'
+                }
               </h3>
+              <p style={{ margin: '0 0 2rem 0', color: '#9ca3af' }}>
+                新しいコンテンツを作成して、プラットフォームを充実させましょう！
+              </p>
               <Link
-                to="/contents/new"
+                to="/create"
                 style={{
                   display: 'inline-block',
                   backgroundColor: '#3b82f6',
                   color: 'white',
-                  padding: '0.75rem 1.5rem',
-                  borderRadius: '6px',
-                  textDecoration: 'none'
+                  padding: '1rem 2rem',
+                  borderRadius: '8px',
+                  textDecoration: 'none',
+                  fontSize: '1rem',
+                  fontWeight: '500'
                 }}
               >
-                最初のコンテンツを作成
+                ✏️ 最初のコンテンツを作成
               </Link>
             </div>
           )}

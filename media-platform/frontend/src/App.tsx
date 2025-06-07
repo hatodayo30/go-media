@@ -4,6 +4,8 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import CreateContentPage from './pages/CreateContentPage';
+import DraftsPage from './pages/DraftsPage';
+
 
 // 簡易的な認証チェック
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -53,6 +55,11 @@ const App: React.FC = () => {
                 <CreateContentPage />
               </PrivateRoute>
             }
+          />
+          <Route path="/drafts" 
+          element={
+          <DraftsPage />
+          } 
           />
           <Route path="/" element={<Navigate to="/dashboard" />} />
         </Routes>
