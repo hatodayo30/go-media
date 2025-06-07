@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { api } from '../services/api';
 
 const RegisterPage: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -11,12 +12,14 @@ const RegisterPage: React.FC = () => {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
+    // バリデーション
     if (formData.password !== formData.confirmPassword) {
       setError('パスワードが一致しません');
       setLoading(false);
@@ -29,12 +32,43 @@ const RegisterPage: React.FC = () => {
       return;
     }
 
+    if (!formData.username.trim()) {
+      setError('ユーザー名を入力してください');
+      setLoading(false);
+      return;
+    }
+
     try {
-      // 一時的にAuthContextを使わずにダミー処理
       console.log('Register attempt:', formData);
-      alert('登録機能は準備中です');
+      
+      // API通信
+      const response = await api.register({
+        username: formData.username,
+        email: formData.email,
+        password: formData.password,
+        bio: formData.bio || undefined
+      });
+      
+      console.log('Register response:', response);
+      
+      // 登録成功
+      alert('登録が完了しました！ログインページに移動します。');
+      navigate('/login');
+      
     } catch (err: any) {
-      setError('登録に失敗しました');
+      console.error('Register error:', err);
+      
+      if (err.response) {
+        // サーバーからのエラーレスポンス
+        const errorMessage = err.response.data?.error || err.response.data?.message || `エラー: ${err.response.status}`;
+        setError(errorMessage);
+      } else if (err.request) {
+        // ネットワークエラー
+        setError('サーバーに接続できません。APIサーバーが起動しているか確認してください。');
+      } else {
+        // その他のエラー
+        setError('登録に失敗しました');
+      }
     } finally {
       setLoading(false);
     }
