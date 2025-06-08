@@ -145,6 +145,11 @@ export const api = {
     const response = await apiClient.get(`/api/comments/${id}`);
     return response.data;
   },
+  // コメント関連のセクションに追加
+  getCommentsByContentId: async (contentId: string) => {
+    const response = await apiClient.get(`/api/contents/${contentId}/comments`);
+    return response.data;
+  },
 
   getReplies: async (parentId: string) => {
     const response = await apiClient.get(`/api/comments/parent/${parentId}/replies`);
