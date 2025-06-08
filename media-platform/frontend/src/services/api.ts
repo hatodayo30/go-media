@@ -15,24 +15,50 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
+    console.log('🔐 Request interceptor - Token check:', {
+      hasToken: !!token,
+      tokenLength: token?.length,
+      url: config.url,
+      method: config.method
+    });
+    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      console.log('✅ Authorization header set:', `Bearer ${token.substring(0, 20)}...`);
+    } else {
+      console.warn('⚠️ No token found in localStorage');
     }
     return config;
   },
   (error) => {
+    console.error('❌ Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
 
-// レスポンスインターセプター（エラーハンドリング）
+// レスポンスインターセプター（一時的に無効化してデバッグ用ログ追加）
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log('✅ Response interceptor - Success:', {
+      status: response.status,
+      url: response.config.url,
+      method: response.config.method
+    });
+    return response;
+  },
   (error) => {
+    console.error('❌ Response interceptor - Error:', {
+      status: error.response?.status,
+      url: error.config?.url,
+      method: error.config?.method,
+      data: error.response?.data
+    });
+    
     if (error.response?.status === 401) {
-      // 認証エラーの場合、トークンを削除してログインページへ
-      localStorage.removeItem('token');
-      window.location.href = '/login';
+      console.warn('🚫 401 Unauthorized detected, but NOT redirecting for debugging');
+      // 一時的にリダイレクトを無効化
+      // localStorage.removeItem('token');
+      // window.location.href = '/login';
     }
     return Promise.reject(error);
   }
@@ -145,7 +171,7 @@ export const api = {
     const response = await apiClient.get(`/api/comments/${id}`);
     return response.data;
   },
-  // コメント関連のセクションに追加
+  
   getCommentsByContentId: async (contentId: string) => {
     const response = await apiClient.get(`/api/contents/${contentId}/comments`);
     return response.data;
@@ -157,7 +183,9 @@ export const api = {
   },
 
   createComment: async (commentData: any) => {
+    console.log('💬 Creating comment:', commentData);
     const response = await apiClient.post('/api/comments', commentData);
+    console.log('✅ Comment created:', response.data);
     return response.data;
   },
 

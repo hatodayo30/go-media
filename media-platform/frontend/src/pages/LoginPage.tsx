@@ -15,35 +15,88 @@ const LoginPage: React.FC = () => {
     setLoading(true);
 
     try {
-      console.log('Attempting login with:', { email, password });
+      console.log('🔐 ログイン開始:', { email, password: password ? '[HIDDEN]' : '[EMPTY]' });
       
       // API通信
       const response = await api.login(email, password);
-      console.log('Login response:', response);
+      console.log('📥 ログインレスポンス（完全）:', response);
+      
+      // レスポンス構造の詳細確認
+      console.log('🔍 レスポンス解析:', {
+        hasData: !!response.data,
+        hasToken: response.data && !!response.data.token,
+        hasUser: response.data && !!response.data.user,
+        status: response.status,
+        responseKeys: Object.keys(response),
+        dataKeys: response.data ? Object.keys(response.data) : null
+      });
       
       // トークンを保存
       if (response.data && response.data.token) {
-        localStorage.setItem('token', response.data.token);
+        const token = response.data.token;
+        console.log('💾 トークン保存開始:', {
+          tokenExists: !!token,
+          tokenLength: token?.length,
+          tokenPreview: token?.substring(0, 20) + '...'
+        });
         
-        console.log('Token saved to localStorage');
+        localStorage.setItem('token', token);
         
-        // ダッシュボードに遷移
+        // 保存確認
+        const savedToken = localStorage.getItem('token');
+        console.log('✅ トークン保存確認:', {
+          savedSuccessfully: !!savedToken,
+          savedLength: savedToken?.length,
+          tokensMatch: savedToken === token
+        });
+        
+        // ユーザー情報も保存
+        if (response.data.user) {
+          localStorage.setItem('user', JSON.stringify(response.data.user));
+          console.log('👤 ユーザー情報保存:', response.data.user);
+        }
+        
+        console.log('🎉 ログイン成功 - ダッシュボードへリダイレクト');
+        
+        // 最終確認
+        setTimeout(() => {
+          const finalCheck = localStorage.getItem('token');
+          console.log('🔍 最終トークン確認:', {
+            exists: !!finalCheck,
+            length: finalCheck?.length
+          });
+        }, 100);
+        
         navigate('/dashboard');
       } else {
+        console.error('❌ トークンが見つかりません:', {
+          hasData: !!response.data,
+          dataContent: response.data,
+          fullResponse: response
+        });
         setError('ログインレスポンスが不正です');
       }
       
     } catch (err: any) {
-      console.error('Login error:', err);
+      console.error('❌ ログインエラー:', err);
       
       if (err.response) {
+        console.error('📥 エラーレスポンス詳細:', {
+          status: err.response.status,
+          statusText: err.response.statusText,
+          data: err.response.data,
+          headers: err.response.headers
+        });
+        
         // サーバーからのエラーレスポンス
         const errorMessage = err.response.data?.error || err.response.data?.message || `エラー: ${err.response.status}`;
         setError(errorMessage);
       } else if (err.request) {
+        console.error('🌐 ネットワークエラー:', err.request);
         // ネットワークエラー
         setError('サーバーに接続できません。APIサーバーが起動しているか確認してください。');
       } else {
+        console.error('❓ その他のエラー:', err.message);
         // その他のエラー
         setError('ログインに失敗しました');
       }
@@ -84,6 +137,18 @@ const LoginPage: React.FC = () => {
           <strong>テスト用アカウント:</strong><br />
           Email: test@example.com<br />
           Password: test123
+        </div>
+        
+        {/* デバッグ情報 */}
+        <div style={{ 
+          marginBottom: '1rem', 
+          padding: '0.75rem', 
+          backgroundColor: '#f0fdf4', 
+          borderRadius: '6px',
+          fontSize: '0.875rem'
+        }}>
+          <strong>🔍 デバッグモード有効</strong><br />
+          コンソールで詳細ログを確認してください
         </div>
         
         <form onSubmit={handleSubmit}>

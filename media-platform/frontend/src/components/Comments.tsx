@@ -3,8 +3,13 @@ import { api } from '../services/api';
 
 interface Comment {
   id: number;
-  content: string;
-  author: {
+  content?: string;  // バックエンドが "body" を返す可能性
+  body?: string;     // バックエンドが "body" を返す可能性
+  author?: {         // フロントエンドが期待する構造
+    id: number;
+    username: string;
+  };
+  user?: {          // バックエンドが返す可能性のある構造
     id: number;
     username: string;
   };
@@ -26,14 +31,20 @@ const Comments: React.FC<CommentsProps> = ({ contentId }) => {
   const [replyContent, setReplyContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
+    // 認証状態を確認
+    const token = localStorage.getItem('token');
+    setIsAuthenticated(!!token);
     fetchComments();
   }, [contentId]);
 
   const fetchComments = async () => {
     try {
       setLoading(true);
+      setError(null);
       console.log(`📥 コメント取得: コンテンツID ${contentId}`);
       
       // 実際のAPI呼び出し
@@ -42,10 +53,48 @@ const Comments: React.FC<CommentsProps> = ({ contentId }) => {
       
       // レスポンス構造に応じて調整
       const commentsData = response.data?.comments || response.comments || [];
-      setComments(commentsData);
       
-    } catch (error) {
+      // コメントデータの正規化
+      const normalizedComments = commentsData.map((comment: any) => ({
+        ...comment,
+        // content と body フィールドの統一
+        content: comment.content || comment.body || '',
+        // author と user フィールドの統一
+        author: comment.author || comment.user || {
+          id: 0,
+          username: '不明なユーザー'
+        }
+      }));
+      
+      console.log('📋 正規化後のコメント:', normalizedComments);
+      setComments(normalizedComments);
+      
+    } catch (error: any) {
       console.error('❌ コメント取得エラー:', error);
+      
+      // エラーの詳細をログ出力
+      if (error.response) {
+        console.error('レスポンスエラー:', {
+          status: error.response.status,
+          data: error.response.data,
+          headers: error.response.headers
+        });
+        
+        if (error.response.status === 404) {
+          setError('コンテンツが見つかりません');
+        } else if (error.response.status === 500) {
+          setError('サーバーエラーが発生しました');
+        } else {
+          setError(`エラー: ${error.response.data?.error || 'コメントの取得に失敗しました'}`);
+        }
+      } else if (error.request) {
+        console.error('リクエストエラー:', error.request);
+        setError('サーバーに接続できません');
+      } else {
+        console.error('その他のエラー:', error.message);
+        setError(error.message || 'コメントの取得に失敗しました');
+      }
+      
       // エラーの場合は空配列を設定
       setComments([]);
     } finally {
@@ -57,8 +106,15 @@ const Comments: React.FC<CommentsProps> = ({ contentId }) => {
     e.preventDefault();
     if (!newComment.trim()) return;
 
+    // 認証チェック
+    if (!isAuthenticated) {
+      alert('コメントを投稿するにはログインが必要です');
+      return;
+    }
+
     try {
       setSubmitting(true);
+      setError(null);
       console.log('📝 コメント投稿:', { content: newComment, content_id: contentId });
       
       // 実際のAPI呼び出し
@@ -73,9 +129,34 @@ const Comments: React.FC<CommentsProps> = ({ contentId }) => {
       // コメント一覧を再取得
       await fetchComments();
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ コメント投稿エラー:', error);
-      alert('コメントの投稿に失敗しました');
+      
+      // 詳細なエラーハンドリング
+      let errorMessage = 'コメントの投稿に失敗しました';
+      
+      if (error.response) {
+        console.error('レスポンスエラー:', {
+          status: error.response.status,
+          data: error.response.data
+        });
+        
+        if (error.response.status === 401) {
+          errorMessage = '認証が必要です。再度ログインしてください。';
+          // トークンを削除して認証状態を更新
+          localStorage.removeItem('token');
+          setIsAuthenticated(false);
+        } else if (error.response.status === 400) {
+          errorMessage = error.response.data?.error || 'リクエストデータが無効です';
+        } else if (error.response.status === 404) {
+          errorMessage = 'コンテンツが見つかりません';
+        } else {
+          errorMessage = error.response.data?.error || errorMessage;
+        }
+      }
+      
+      alert(errorMessage);
+      setError(errorMessage);
     } finally {
       setSubmitting(false);
     }
@@ -85,8 +166,15 @@ const Comments: React.FC<CommentsProps> = ({ contentId }) => {
     e.preventDefault();
     if (!replyContent.trim() || !replyTo) return;
 
+    // 認証チェック
+    if (!isAuthenticated) {
+      alert('返信を投稿するにはログインが必要です');
+      return;
+    }
+
     try {
       setSubmitting(true);
+      setError(null);
       console.log('💬 返信投稿:', { 
         content: replyContent, 
         content_id: contentId,
@@ -107,9 +195,28 @@ const Comments: React.FC<CommentsProps> = ({ contentId }) => {
       // コメント一覧を再取得
       await fetchComments();
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ 返信投稿エラー:', error);
-      alert('返信の投稿に失敗しました');
+      
+      // 詳細なエラーハンドリング
+      let errorMessage = '返信の投稿に失敗しました';
+      
+      if (error.response) {
+        if (error.response.status === 401) {
+          errorMessage = '認証が必要です。再度ログインしてください。';
+          localStorage.removeItem('token');
+          setIsAuthenticated(false);
+        } else if (error.response.status === 400) {
+          errorMessage = error.response.data?.error || 'リクエストデータが無効です';
+        } else if (error.response.status === 404) {
+          errorMessage = error.response.data?.error || '親コメントまたはコンテンツが見つかりません';
+        } else {
+          errorMessage = error.response.data?.error || errorMessage;
+        }
+      }
+      
+      alert(errorMessage);
+      setError(errorMessage);
     } finally {
       setSubmitting(false);
     }
@@ -126,131 +233,142 @@ const Comments: React.FC<CommentsProps> = ({ contentId }) => {
     });
   };
 
-  const renderComment = (comment: Comment, isReply: boolean = false) => (
-    <div
-      key={comment.id}
-      style={{
-        backgroundColor: 'white',
-        padding: '1rem',
-        borderRadius: '8px',
-        marginBottom: '1rem',
-        marginLeft: isReply ? '2rem' : '0',
-        border: '1px solid #e5e7eb',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
-      }}
-    >
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '0.75rem'
-      }}>
+  const renderComment = (comment: Comment, isReply: boolean = false) => {
+    // 安全なユーザー情報の取得
+    const author = comment.author || comment.user || {
+      id: 0,
+      username: '不明なユーザー'
+    };
+    
+    // 安全なコンテンツの取得
+    const content = comment.content || comment.body || '';
+
+    return (
+      <div
+        key={comment.id}
+        style={{
+          backgroundColor: 'white',
+          padding: '1rem',
+          borderRadius: '8px',
+          marginBottom: '1rem',
+          marginLeft: isReply ? '2rem' : '0',
+          border: '1px solid #e5e7eb',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+        }}
+      >
         <div style={{ 
-          fontSize: '0.875rem',
-          fontWeight: '600',
-          color: '#374151'
+          display: 'flex', 
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '0.75rem'
         }}>
-          👤 {comment.author.username}
-        </div>
-        <div style={{ 
-          fontSize: '0.75rem',
-          color: '#6b7280'
-        }}>
-          📅 {formatDate(comment.created_at)}
-        </div>
-      </div>
-      
-      <div style={{
-        color: '#374151',
-        lineHeight: '1.6',
-        marginBottom: '0.75rem'
-      }}>
-        {comment.content}
-      </div>
-      
-      {!isReply && (
-        <button
-          onClick={() => setReplyTo(replyTo === comment.id ? null : comment.id)}
-          style={{
-            padding: '0.25rem 0.75rem',
-            backgroundColor: '#f3f4f6',
-            color: '#374151',
-            border: '1px solid #d1d5db',
-            borderRadius: '4px',
-            fontSize: '0.75rem',
-            cursor: 'pointer'
-          }}
-        >
-          💬 返信
-        </button>
-      )}
-      
-      {/* 返信フォーム */}
-      {replyTo === comment.id && (
-        <form onSubmit={handleSubmitReply} style={{ marginTop: '1rem' }}>
-          <textarea
-            value={replyContent}
-            onChange={(e) => setReplyContent(e.target.value)}
-            placeholder={`${comment.author.username}さんに返信...`}
-            required
-            rows={3}
-            style={{
-              width: '100%',
-              padding: '0.75rem',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              fontSize: '0.875rem',
-              resize: 'vertical',
-              marginBottom: '0.5rem'
-            }}
-          />
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button
-              type="submit"
-              disabled={submitting}
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: '#3b82f6',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                fontSize: '0.875rem',
-                cursor: submitting ? 'not-allowed' : 'pointer',
-                opacity: submitting ? 0.6 : 1
-              }}
-            >
-              {submitting ? '投稿中...' : '返信投稿'}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setReplyTo(null);
-                setReplyContent('');
-              }}
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: '#6b7280',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                fontSize: '0.875rem',
-                cursor: 'pointer'
-              }}
-            >
-              キャンセル
-            </button>
+          <div style={{ 
+            fontSize: '0.875rem',
+            fontWeight: '600',
+            color: '#374151'
+          }}>
+            👤 {author.username}
           </div>
-        </form>
-      )}
-      
-      {/* 返信表示 */}
-      {comment.replies && comment.replies.length > 0 && (
-        <div style={{ marginTop: '1rem' }}>
-          {comment.replies.map(reply => renderComment(reply, true))}
+          <div style={{ 
+            fontSize: '0.75rem',
+            color: '#6b7280'
+          }}>
+            📅 {formatDate(comment.created_at)}
+          </div>
         </div>
-      )}
-    </div>
-  );
+        
+        <div style={{
+          color: '#374151',
+          lineHeight: '1.6',
+          marginBottom: '0.75rem'
+        }}>
+          {content}
+        </div>
+        
+        {!isReply && isAuthenticated && (
+          <button
+            onClick={() => setReplyTo(replyTo === comment.id ? null : comment.id)}
+            style={{
+              padding: '0.25rem 0.75rem',
+              backgroundColor: '#f3f4f6',
+              color: '#374151',
+              border: '1px solid #d1d5db',
+              borderRadius: '4px',
+              fontSize: '0.75rem',
+              cursor: 'pointer'
+            }}
+          >
+            💬 返信
+          </button>
+        )}
+        
+        {/* 返信フォーム */}
+        {replyTo === comment.id && isAuthenticated && (
+          <form onSubmit={handleSubmitReply} style={{ marginTop: '1rem' }}>
+            <textarea
+              value={replyContent}
+              onChange={(e) => setReplyContent(e.target.value)}
+              placeholder={`${author.username}さんに返信...`}
+              required
+              rows={3}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                fontSize: '0.875rem',
+                resize: 'vertical',
+                marginBottom: '0.5rem'
+              }}
+            />
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                type="submit"
+                disabled={submitting}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontSize: '0.875rem',
+                  cursor: submitting ? 'not-allowed' : 'pointer',
+                  opacity: submitting ? 0.6 : 1
+                }}
+              >
+                {submitting ? '投稿中...' : '返信投稿'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setReplyTo(null);
+                  setReplyContent('');
+                }}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: '#6b7280',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontSize: '0.875rem',
+                  cursor: 'pointer'
+                }}
+              >
+                キャンセル
+              </button>
+            </div>
+          </form>
+        )}
+        
+        {/* 返信表示 */}
+        {comment.replies && comment.replies.length > 0 && (
+          <div style={{ marginTop: '1rem' }}>
+            {comment.replies.map(reply => renderComment(reply, true))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div style={{
@@ -268,42 +386,69 @@ const Comments: React.FC<CommentsProps> = ({ contentId }) => {
         💬 コメント ({comments.length})
       </h3>
 
-      {/* 新規コメント投稿フォーム */}
-      <form onSubmit={handleSubmitComment} style={{ marginBottom: '2rem' }}>
-        <textarea
-          value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-          placeholder="コメントを投稿..."
-          required
-          rows={4}
-          style={{
-            width: '100%',
-            padding: '0.75rem',
-            border: '1px solid #d1d5db',
-            borderRadius: '6px',
-            fontSize: '0.875rem',
-            resize: 'vertical',
-            marginBottom: '1rem'
-          }}
-        />
-        <button
-          type="submit"
-          disabled={submitting}
-          style={{
-            padding: '0.75rem 1.5rem',
-            backgroundColor: '#10b981',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            fontSize: '0.875rem',
-            fontWeight: '500',
-            cursor: submitting ? 'not-allowed' : 'pointer',
-            opacity: submitting ? 0.6 : 1
-          }}
-        >
-          {submitting ? '投稿中...' : '💬 コメント投稿'}
-        </button>
-      </form>
+      {/* エラー表示 */}
+      {error && (
+        <div style={{
+          backgroundColor: '#fee2e2',
+          color: '#dc2626',
+          padding: '0.75rem',
+          borderRadius: '6px',
+          marginBottom: '1rem',
+          border: '1px solid #fecaca'
+        }}>
+          ⚠️ {error}
+        </div>
+      )}
+
+      {/* 認証状態に応じたコメント投稿フォーム */}
+      {isAuthenticated ? (
+        <form onSubmit={handleSubmitComment} style={{ marginBottom: '2rem' }}>
+          <textarea
+            value={newComment}
+            onChange={(e) => setNewComment(e.target.value)}
+            placeholder="コメントを投稿..."
+            required
+            rows={4}
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '6px',
+              fontSize: '0.875rem',
+              resize: 'vertical',
+              marginBottom: '1rem'
+            }}
+          />
+          <button
+            type="submit"
+            disabled={submitting}
+            style={{
+              padding: '0.75rem 1.5rem',
+              backgroundColor: '#10b981',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              cursor: submitting ? 'not-allowed' : 'pointer',
+              opacity: submitting ? 0.6 : 1
+            }}
+          >
+            {submitting ? '投稿中...' : '💬 コメント投稿'}
+          </button>
+        </form>
+      ) : (
+        <div style={{
+          backgroundColor: '#fef3c7',
+          color: '#92400e',
+          padding: '1rem',
+          borderRadius: '6px',
+          marginBottom: '2rem',
+          textAlign: 'center'
+        }}>
+          🔒 コメントを投稿するにはログインが必要です
+        </div>
+      )}
 
       {/* コメント一覧 */}
       {loading ? (
