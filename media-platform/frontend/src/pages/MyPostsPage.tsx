@@ -315,7 +315,7 @@ const MyPostsPage: React.FC = () => {
                       }}>
                         {statusInfo.text}
                       </span>
-                    </div>
+                   P </div>
                     
                     <div style={{ 
                       color: '#6b7280', 

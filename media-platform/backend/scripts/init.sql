@@ -46,6 +46,15 @@ CREATE INDEX idx_contents_category_id ON contents(category_id);
 CREATE INDEX idx_contents_status ON contents(status);
 CREATE INDEX idx_contents_published_at ON contents(published_at);
 
+-- ブックマーク用テーブル（新規作成が必要）
+CREATE TABLE bookmarks (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    content_id INTEGER REFERENCES contents(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, content_id)
+);
+
 -- コメントテーブル
 CREATE TABLE IF NOT EXISTS comments (
     id SERIAL PRIMARY KEY,

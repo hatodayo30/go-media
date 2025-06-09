@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import Comments from '../components/Comments';
+import ContentActions from '../components/ContentActions';
 
 
 interface User {
@@ -343,6 +344,25 @@ const ContentDetailPage: React.FC = () => {
       </div>
 
       <Comments contentId={content.id} />
+
+        // JSX部分を以下に変更
+      <div style={{ marginTop: '2rem' }}>
+      <h3 style={{ 
+          fontSize: '1.25rem', 
+          fontWeight: '600', 
+          marginBottom: '1rem',
+          color: '#374151'
+       }}>
+          📊 この記事への反応
+      </h3>
+  
+       <ContentActions 
+         contentId={content.id} 
+          size="medium" 
+       showCounts={true} 
+      />
+      </div>
+    
 
       {/* フッター */}
       <div style={{

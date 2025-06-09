@@ -199,7 +199,7 @@ export const api = {
     return response.data;
   },
 
-  // 評価関連
+  // 評価関連（既に実装済みの場合はスキップ）
   getRatingsByContent: async (contentId: string) => {
     const response = await apiClient.get(`/api/contents/${contentId}/ratings`);
     return response.data;
