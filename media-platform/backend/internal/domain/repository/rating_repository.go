@@ -1,3 +1,4 @@
+// domain/repository/rating_repository.go
 package repository
 
 import (

@@ -29,25 +29,33 @@ func SetupRouter(router *gin.Engine, db persistence.DBConn, jwtConfig *JWTConfig
 	// APIグループ
 	api := router.Group("/api")
 
-	// リポジトリとユースケースの初期化
+	// リポジトリの初期化
 	userRepo := persistence.NewUserRepository(db.GetDB())
 	categoryRepo := persistence.NewCategoryRepository(db.GetDB())
 	contentRepo := persistence.NewContentRepository(db.GetDB())
 	commentRepo := persistence.NewCommentRepository(db.GetDB())
 	ratingRepo := persistence.NewRatingRepository(db.GetDB())
+	bookmarkRepo := persistence.NewBookmarkRepository(db.GetDB())
 
+	// ユースケースの初期化
 	userUseCase := usecase.NewUserUseCase(userRepo)
 	categoryUseCase := usecase.NewCategoryUseCase(categoryRepo)
 	contentUseCase := usecase.NewContentUseCase(contentRepo, categoryRepo, userRepo)
 	commentUseCase := usecase.NewCommentUseCase(commentRepo, contentRepo, userRepo)
+
+	// 🆕 個別ユースケース
 	ratingUseCase := usecase.NewRatingUseCase(ratingRepo, contentRepo)
+	bookmarkUseCase := usecase.NewBookmarkUseCase(bookmarkRepo, contentRepo)
 
 	// ハンドラーの初期化
 	userHandler := NewUserHandler(userUseCase)
 	categoryHandler := NewCategoryHandler(categoryUseCase)
 	contentHandler := NewContentHandler(contentUseCase)
 	commentHandler := NewCommentHandler(commentUseCase)
+
+	// 🆕 個別ハンドラー
 	ratingHandler := NewRatingHandler(ratingUseCase)
+	bookmarkHandler := NewBookmarkHandler(bookmarkUseCase)
 
 	// ユーザーAPI
 	userRoutes := api.Group("/users")
@@ -64,6 +72,10 @@ func SetupRouter(router *gin.Engine, db persistence.DBConn, jwtConfig *JWTConfig
 		userRoutes.GET("/:id", authMiddleware, adminMiddleware, userHandler.GetUserByID)
 		userRoutes.PUT("/:id", authMiddleware, adminMiddleware, userHandler.UpdateUserByAdmin)
 		userRoutes.DELETE("/:id", authMiddleware, adminMiddleware, userHandler.DeleteUser)
+
+		// ユーザー別評価・ブックマーク取得
+		userRoutes.GET("/:id/ratings", ratingHandler.GetRatingsByUserID)
+		userRoutes.GET("/:id/bookmarks", bookmarkHandler.GetBookmarksByUserID)
 	}
 
 	// カテゴリAPI
@@ -92,8 +104,11 @@ func SetupRouter(router *gin.Engine, db persistence.DBConn, jwtConfig *JWTConfig
 
 		// ★ 重要：より具体的なルートを先に定義
 		contentRoutes.GET("/:id/comments", commentHandler.GetCommentsByContent)
+
+		// 🆕 個別の評価・ブックマークAPI
 		contentRoutes.GET("/:id/ratings", ratingHandler.GetRatingsByContentID)
-		contentRoutes.GET("/:id/rating/average", ratingHandler.GetAverageRatingByContentID)
+		contentRoutes.GET("/:id/ratings/average", ratingHandler.GetAverageRatingByContentID)
+		contentRoutes.GET("/:id/bookmarks", bookmarkHandler.GetBookmarksByContentID)
 
 		// 一般的なコンテンツ取得（これを最後に配置）
 		contentRoutes.GET("/:id", contentHandler.GetContentByID)
@@ -118,17 +133,21 @@ func SetupRouter(router *gin.Engine, db persistence.DBConn, jwtConfig *JWTConfig
 		commentRoutes.DELETE("/:id", authMiddleware, commentHandler.DeleteComment)
 	}
 
-	// ユーザー評価API
-	userRatingRoutes := api.Group("/users")
-	{
-		userRatingRoutes.GET("/:id/ratings", ratingHandler.GetRatingsByUserID)
-	}
-
-	// 評価API（書き込み系）
+	// 🆕 評価API
 	ratingRoutes := api.Group("/ratings")
 	{
-		ratingRoutes.POST("", authMiddleware, ratingHandler.CreateOrUpdateRating)
+		// 認証が必要なエンドポイント
+		ratingRoutes.POST("", authMiddleware, ratingHandler.CreateRating)
 		ratingRoutes.DELETE("/:id", authMiddleware, ratingHandler.DeleteRating)
+	}
+
+	// 🆕 ブックマークAPI
+	bookmarkRoutes := api.Group("/bookmarks")
+	{
+		// 認証が必要なエンドポイント
+		bookmarkRoutes.POST("", authMiddleware, bookmarkHandler.CreateBookmark)
+		bookmarkRoutes.POST("/toggle", authMiddleware, bookmarkHandler.ToggleBookmark)
+		bookmarkRoutes.DELETE("/:id", authMiddleware, bookmarkHandler.DeleteBookmark)
 	}
 
 	// ヘルスチェックエンドポイント
@@ -138,5 +157,15 @@ func SetupRouter(router *gin.Engine, db persistence.DBConn, jwtConfig *JWTConfig
 		})
 	})
 
-	log.Println("API server configured for backend-only mode")
+	log.Println("✅ API server configured with individual rating and bookmark management")
+	log.Println("📊 Rating endpoints:")
+	log.Println("  GET    /api/contents/:id/ratings")
+	log.Println("  GET    /api/contents/:id/ratings/average")
+	log.Println("  POST   /api/ratings")
+	log.Println("  DELETE /api/ratings/:id")
+	log.Println("🔖 Bookmark endpoints:")
+	log.Println("  GET    /api/contents/:id/bookmarks")
+	log.Println("  POST   /api/bookmarks")
+	log.Println("  POST   /api/bookmarks/toggle")
+	log.Println("  DELETE /api/bookmarks/:id")
 }

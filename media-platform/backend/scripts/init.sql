@@ -46,14 +46,36 @@ CREATE INDEX idx_contents_category_id ON contents(category_id);
 CREATE INDEX idx_contents_status ON contents(status);
 CREATE INDEX idx_contents_published_at ON contents(published_at);
 
--- ブックマーク用テーブル（新規作成が必要）
-CREATE TABLE bookmarks (
+-- 既存のratingsテーブルを削除して再作成
+DROP TABLE IF EXISTS ratings CASCADE;
+
+-- 新しい評価テーブル（いいね・バッド用）
+CREATE TABLE ratings (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    content_id INTEGER REFERENCES contents(id) ON DELETE CASCADE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    value INTEGER NOT NULL CHECK (value IN (0, 1)), -- 0=バッド, 1=いいね
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content_id INTEGER NOT NULL REFERENCES contents(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     UNIQUE(user_id, content_id)
 );
+
+CREATE INDEX idx_ratings_user_id ON ratings(user_id);
+CREATE INDEX idx_ratings_content_id ON ratings(content_id);
+CREATE INDEX idx_ratings_value ON ratings(value);
+
+-- ブックマークテーブル
+CREATE TABLE IF NOT EXISTS bookmarks (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content_id INTEGER NOT NULL REFERENCES contents(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, content_id)
+);
+
+CREATE INDEX idx_bookmarks_user_id ON bookmarks(user_id);
+CREATE INDEX idx_bookmarks_content_id ON bookmarks(content_id);
 
 -- コメントテーブル
 CREATE TABLE IF NOT EXISTS comments (
@@ -71,27 +93,28 @@ CREATE INDEX idx_comments_content_id ON comments(content_id);
 CREATE INDEX idx_comments_parent_id ON comments(parent_id);
 CREATE INDEX idx_comments_created_at ON comments(created_at);
 
--- 評価テーブル
-CREATE TABLE IF NOT EXISTS ratings (
-    id SERIAL PRIMARY KEY,
-    value INTEGER NOT NULL CHECK (value BETWEEN 1 AND 5),
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    content_id INTEGER NOT NULL REFERENCES contents(id) ON DELETE CASCADE,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    UNIQUE(user_id, content_id)
-);
+-- 統計用ビュー
+CREATE OR REPLACE VIEW rating_stats AS
+SELECT 
+    content_id,
+    COUNT(CASE WHEN value = 1 THEN 1 END) as likes,
+    COUNT(CASE WHEN value = 0 THEN 1 END) as dislikes,
+    COUNT(*) as total_ratings
+FROM ratings 
+GROUP BY content_id;
 
-CREATE INDEX idx_ratings_user_id ON ratings(user_id);
-CREATE INDEX idx_ratings_content_id ON ratings(content_id);
+CREATE OR REPLACE VIEW bookmark_stats AS
+SELECT 
+    content_id,
+    COUNT(*) as bookmark_count
+FROM bookmarks 
+GROUP BY content_id;
 
--- 初期データ投入（オプション）
--- 管理者ユーザーの作成
+-- 初期データ投入
 INSERT INTO users (username, email, password, role, bio, avatar)
 VALUES ('admin', 'admin@example.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'admin', 'システム管理者', '')
 ON CONFLICT (email) DO NOTHING;
 
--- サンプルカテゴリの作成
 INSERT INTO categories (name, description)
 VALUES 
     ('ニュース', 'ニュースカテゴリ'),

@@ -78,19 +78,58 @@ const ContentActions: React.FC<ContentActionsProps> = ({
       setError(null);
       console.log(`🎯 アクション取得: コンテンツID ${contentId}`);
 
-      // 評価データを取得（いいね・バッド）
+      // 新しい統合APIを試行、失敗したら従来のAPIを使用
+      try {
+        const response = await api.getContentActions(contentId.toString());
+        console.log('📊 統合アクションレスポンス:', response);
+
+        if (response.success && response.data) {
+          const actionData = response.data;
+          
+          // 統計データを設定
+          setStats({
+            likes: actionData.stats.likes || 0,
+            dislikes: actionData.stats.dislikes || 0,
+            bookmarks: actionData.stats.bookmarks || 0
+          });
+
+          // ユーザーのアクション状態を設定
+          if (isAuthenticated && actionData.user_status) {
+            const userStatus = actionData.user_status;
+            setUserActions({
+              hasLiked: userStatus.has_liked || false,
+              hasDisliked: userStatus.has_disliked || false,
+              hasBookmarked: userStatus.has_bookmarked || false,
+              likeId: userStatus.like_id,
+              dislikeId: userStatus.dislike_id,
+              bookmarkId: userStatus.bookmark_id
+            });
+
+            console.log('👤 ユーザーアクション:', userStatus);
+          } else {
+            // ログインしていない場合はデフォルト状態
+            setUserActions({
+              hasLiked: false,
+              hasDisliked: false,
+              hasBookmarked: false
+            });
+          }
+          return; // 成功したので処理終了
+        }
+      } catch (newApiError) {
+        console.log('⚠️ 新しいAPIが利用できません、従来のAPIを使用します');
+      }
+
+      // フォールバック: 従来のAPI使用
       const ratingsResponse = await api.getRatingsByContent(contentId.toString());
       console.log('📊 評価レスポンス:', ratingsResponse);
-
-      // TODO: ブックマークAPI（後で実装）
-      // const bookmarksResponse = await api.getBookmarksByContent(contentId.toString());
 
       // データの正規化
       const ratings = ratingsResponse.data?.ratings || ratingsResponse.ratings || [];
       
       // 統計の計算
-      const likes = ratings.filter((r: any) => r.value === 1 || r.rating === 1).length;
-      const dislikes = ratings.filter((r: any) => r.value === 0 || r.rating === 0).length;
+      const likes = ratings.filter((r: any) => r.value === 1).length;
+      const dislikes = ratings.filter((r: any) => r.value === 0).length;
       
       setStats({
         likes,
@@ -105,10 +144,10 @@ const ContentActions: React.FC<ContentActionsProps> = ({
         
         if (userId) {
           const userLike = ratings.find((r: any) => 
-            r.user_id === userId && (r.value === 1 || r.rating === 1)
+            r.user_id === userId && r.value === 1
           );
           const userDislike = ratings.find((r: any) => 
-            r.user_id === userId && (r.value === 0 || r.rating === 0)
+            r.user_id === userId && r.value === 0
           );
 
           setUserActions({
@@ -132,6 +171,11 @@ const ContentActions: React.FC<ContentActionsProps> = ({
       if (error.response?.status === 404) {
         // データがない場合は正常
         setStats({ likes: 0, dislikes: 0, bookmarks: 0 });
+        setUserActions({
+          hasLiked: false,
+          hasDisliked: false,
+          hasBookmarked: false
+        });
       } else {
         setError('アクションデータの取得に失敗しました');
       }
@@ -148,6 +192,7 @@ const ContentActions: React.FC<ContentActionsProps> = ({
 
     try {
       setSubmitting(true);
+      setError(null);
       console.log('👍 いいね処理');
 
       if (userActions.hasLiked) {
@@ -162,9 +207,10 @@ const ContentActions: React.FC<ContentActionsProps> = ({
           await api.deleteRating(userActions.dislikeId.toString());
         }
         
+        // 修正: 'rating' を 'value' に変更
         await api.createOrUpdateRating({
           content_id: contentId,
-          rating: 1  // いいね = 1
+          value: 1  // いいね = 1
         });
         console.log('✅ いいね成功');
       }
@@ -173,7 +219,16 @@ const ContentActions: React.FC<ContentActionsProps> = ({
 
     } catch (error: any) {
       console.error('❌ いいねエラー:', error);
-      alert('いいねの処理に失敗しました');
+      
+      // エラーハンドリングの改善
+      let errorMessage = 'いいねの処理に失敗しました';
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setSubmitting(false);
     }
@@ -187,6 +242,7 @@ const ContentActions: React.FC<ContentActionsProps> = ({
 
     try {
       setSubmitting(true);
+      setError(null);
       console.log('👎 バッド処理');
 
       if (userActions.hasDisliked) {
@@ -201,9 +257,10 @@ const ContentActions: React.FC<ContentActionsProps> = ({
           await api.deleteRating(userActions.likeId.toString());
         }
         
+        // 修正: 'rating' を 'value' に変更
         await api.createOrUpdateRating({
           content_id: contentId,
-          rating: 0  // バッド = 0
+          value: 0  // バッド = 0
         });
         console.log('✅ バッド成功');
       }
@@ -212,7 +269,16 @@ const ContentActions: React.FC<ContentActionsProps> = ({
 
     } catch (error: any) {
       console.error('❌ バッドエラー:', error);
-      alert('バッドの処理に失敗しました');
+      
+      // エラーハンドリングの改善
+      let errorMessage = 'バッドの処理に失敗しました';
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setSubmitting(false);
     }
@@ -226,23 +292,16 @@ const ContentActions: React.FC<ContentActionsProps> = ({
 
     try {
       setSubmitting(true);
+      setError(null);
       console.log('🔖 ブックマーク処理');
 
-      if (userActions.hasBookmarked) {
-        // ブックマークを削除
-        // TODO: ブックマーク削除API
-        console.log('✅ ブックマーク削除成功（TODO）');
-      } else {
-        // ブックマークを追加
-        // TODO: ブックマーク追加API
-        console.log('✅ ブックマーク追加成功（TODO）');
-      }
-
-      // TODO: fetchActions(); でブックマーク状態を更新
+      // TODO: ブックマークAPI実装後に有効化
+      console.log('🔖 ブックマーク機能は今後実装予定です');
+      setError('ブックマーク機能は今後実装予定です');
 
     } catch (error: any) {
       console.error('❌ ブックマークエラー:', error);
-      alert('ブックマークの処理に失敗しました');
+      setError('ブックマークの処理に失敗しました');
     } finally {
       setSubmitting(false);
     }

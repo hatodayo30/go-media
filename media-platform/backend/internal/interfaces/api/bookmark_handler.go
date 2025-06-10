@@ -1,3 +1,4 @@
+// interfaces/api/bookmark_handler.go
 package api
 
 import (
@@ -14,20 +15,20 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 )
 
-// RatingHandler は評価に関するHTTPハンドラを提供します
-type RatingHandler struct {
-	ratingUseCase *usecase.RatingUseCase
+// BookmarkHandler はブックマークに関するHTTPハンドラを提供します
+type BookmarkHandler struct {
+	bookmarkUseCase *usecase.BookmarkUseCase
 }
 
-// NewRatingHandler は新しいRatingHandlerのインスタンスを生成します
-func NewRatingHandler(ratingUseCase *usecase.RatingUseCase) *RatingHandler {
-	return &RatingHandler{
-		ratingUseCase: ratingUseCase,
+// NewBookmarkHandler は新しいBookmarkHandlerのインスタンスを生成します
+func NewBookmarkHandler(bookmarkUseCase *usecase.BookmarkUseCase) *BookmarkHandler {
+	return &BookmarkHandler{
+		bookmarkUseCase: bookmarkUseCase,
 	}
 }
 
-// GetRatingsByContentID は指定したコンテンツIDの評価一覧を取得するハンドラです
-func (h *RatingHandler) GetRatingsByContentID(c *gin.Context) {
+// GetBookmarksByContentID は指定したコンテンツIDのブックマーク一覧を取得するハンドラです
+func (h *BookmarkHandler) GetBookmarksByContentID(c *gin.Context) {
 	contentIDStr := c.Param("id")
 	contentID, err := strconv.ParseInt(contentIDStr, 10, 64)
 	if err != nil {
@@ -38,11 +39,11 @@ func (h *RatingHandler) GetRatingsByContentID(c *gin.Context) {
 		return
 	}
 
-	ratings, err := h.ratingUseCase.GetRatingsByContentID(c.Request.Context(), contentID)
+	bookmarks, err := h.bookmarkUseCase.GetBookmarksByContentID(c.Request.Context(), contentID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status": "error",
-			"error":  "評価の取得に失敗しました: " + err.Error(),
+			"error":  "ブックマークの取得に失敗しました: " + err.Error(),
 		})
 		return
 	}
@@ -50,14 +51,14 @@ func (h *RatingHandler) GetRatingsByContentID(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data": gin.H{
-			"ratings": ratings,
-			"total":   len(ratings),
+			"bookmarks": bookmarks,
+			"total":     len(bookmarks),
 		},
 	})
 }
 
-// GetRatingsByUserID は指定したユーザーIDの評価一覧を取得するハンドラです
-func (h *RatingHandler) GetRatingsByUserID(c *gin.Context) {
+// GetBookmarksByUserID は指定したユーザーIDのブックマーク一覧を取得するハンドラです
+func (h *BookmarkHandler) GetBookmarksByUserID(c *gin.Context) {
 	userIDStr := c.Param("id")
 	userID, err := strconv.ParseInt(userIDStr, 10, 64)
 	if err != nil {
@@ -68,11 +69,11 @@ func (h *RatingHandler) GetRatingsByUserID(c *gin.Context) {
 		return
 	}
 
-	ratings, err := h.ratingUseCase.GetRatingsByUserID(c.Request.Context(), userID)
+	bookmarks, err := h.bookmarkUseCase.GetBookmarksByUserID(c.Request.Context(), userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status": "error",
-			"error":  "評価の取得に失敗しました: " + err.Error(),
+			"error":  "ブックマークの取得に失敗しました: " + err.Error(),
 		})
 		return
 	}
@@ -80,41 +81,14 @@ func (h *RatingHandler) GetRatingsByUserID(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data": gin.H{
-			"ratings": ratings,
-			"total":   len(ratings),
+			"bookmarks": bookmarks,
+			"total":     len(bookmarks),
 		},
 	})
 }
 
-// GetAverageRatingByContentID は指定したコンテンツIDの平均評価を取得するハンドラです
-func (h *RatingHandler) GetAverageRatingByContentID(c *gin.Context) {
-	contentIDStr := c.Param("id")
-	contentID, err := strconv.ParseInt(contentIDStr, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status": "error",
-			"error":  "無効なコンテンツIDです",
-		})
-		return
-	}
-
-	ratingStats, err := h.ratingUseCase.GetRatingStatsByContentID(c.Request.Context(), contentID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"status": "error",
-			"error":  "平均評価の取得に失敗しました: " + err.Error(),
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"status": "success",
-		"data":   ratingStats,
-	})
-}
-
-// CreateRating は新しい評価を作成するハンドラです
-func (h *RatingHandler) CreateRating(c *gin.Context) {
+// CreateBookmark は新しいブックマークを作成するハンドラです
+func (h *BookmarkHandler) CreateBookmark(c *gin.Context) {
 	// ユーザー認証情報を取得
 	claims, err := h.getUserClaimsFromContext(c)
 	if err != nil {
@@ -135,7 +109,7 @@ func (h *RatingHandler) CreateRating(c *gin.Context) {
 		return
 	}
 
-	var req model.CreateRatingRequest
+	var req model.CreateBookmarkRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status": "error",
@@ -144,14 +118,13 @@ func (h *RatingHandler) CreateRating(c *gin.Context) {
 		return
 	}
 
-	// 評価エンティティを作成
-	rating := &model.Rating{
+	// ブックマークエンティティを作成
+	bookmark := &model.Bookmark{
 		UserID:    userID,
 		ContentID: req.ContentID,
-		Value:     req.Value,
 	}
 
-	err = h.ratingUseCase.CreateOrUpdateRating(c.Request.Context(), rating)
+	err = h.bookmarkUseCase.CreateBookmark(c.Request.Context(), bookmark)
 	if err != nil {
 		// ValidationError か判断
 		if _, ok := err.(*domainErrors.ValidationError); ok {
@@ -164,7 +137,7 @@ func (h *RatingHandler) CreateRating(c *gin.Context) {
 
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status": "error",
-			"error":  "評価の作成に失敗しました: " + err.Error(),
+			"error":  "ブックマークの作成に失敗しました: " + err.Error(),
 		})
 		return
 	}
@@ -172,20 +145,20 @@ func (h *RatingHandler) CreateRating(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{
 		"status": "success",
 		"data": gin.H{
-			"rating": rating,
+			"bookmark": bookmark,
 		},
 	})
 }
 
-// DeleteRating は評価を削除するハンドラです
-func (h *RatingHandler) DeleteRating(c *gin.Context) {
-	// 評価IDの取得
+// DeleteBookmark はブックマークを削除するハンドラです
+func (h *BookmarkHandler) DeleteBookmark(c *gin.Context) {
+	// ブックマークIDの取得
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status": "error",
-			"error":  "無効な評価IDです",
+			"error":  "無効なブックマークIDです",
 		})
 		return
 	}
@@ -220,14 +193,14 @@ func (h *RatingHandler) DeleteRating(c *gin.Context) {
 	}
 
 	isAdmin := userRole == "admin"
-	err = h.ratingUseCase.DeleteRating(c.Request.Context(), id, userID, isAdmin)
+	err = h.bookmarkUseCase.DeleteBookmark(c.Request.Context(), id, userID, isAdmin)
 	if err != nil {
 		// ValidationError か判断
 		if _, ok := err.(*domainErrors.ValidationError); ok {
 			statusCode := http.StatusBadRequest
-			if err.Error() == "この評価を削除する権限がありません" {
+			if err.Error() == "このブックマークを削除する権限がありません" {
 				statusCode = http.StatusForbidden
-			} else if err.Error() == "指定された評価が見つかりません" {
+			} else if err.Error() == "指定されたブックマークが見つかりません" {
 				statusCode = http.StatusNotFound
 			}
 			c.JSON(statusCode, gin.H{
@@ -239,7 +212,7 @@ func (h *RatingHandler) DeleteRating(c *gin.Context) {
 
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status": "error",
-			"error":  "評価の削除に失敗しました: " + err.Error(),
+			"error":  "ブックマークの削除に失敗しました: " + err.Error(),
 		})
 		return
 	}
@@ -247,8 +220,74 @@ func (h *RatingHandler) DeleteRating(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// ToggleBookmark はブックマークの追加/削除を切り替えるハンドラです
+func (h *BookmarkHandler) ToggleBookmark(c *gin.Context) {
+	// ユーザー認証情報を取得
+	claims, err := h.getUserClaimsFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"status": "error",
+			"error":  err.Error(),
+		})
+		return
+	}
+
+	// ユーザーIDを取得
+	userID, err := h.getUserIDFromClaims(claims)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  err.Error(),
+		})
+		return
+	}
+
+	var req model.CreateBookmarkRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "リクエストデータが無効です: " + err.Error(),
+		})
+		return
+	}
+
+	bookmark, isCreated, err := h.bookmarkUseCase.ToggleBookmark(c.Request.Context(), userID, req.ContentID)
+	if err != nil {
+		// ValidationError か判断
+		if _, ok := err.(*domainErrors.ValidationError); ok {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"status": "error",
+				"error":  err.Error(),
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": "error",
+			"error":  "ブックマークの処理に失敗しました: " + err.Error(),
+		})
+		return
+	}
+
+	var message string
+	if isCreated {
+		message = "ブックマークを追加しました"
+	} else {
+		message = "ブックマークを削除しました"
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"message": message,
+		"data": gin.H{
+			"bookmark":   bookmark,
+			"is_created": isCreated,
+		},
+	})
+}
+
 // ヘルパーメソッド：ユーザー認証情報をコンテキストから取得
-func (h *RatingHandler) getUserClaimsFromContext(c *gin.Context) (jwt.MapClaims, error) {
+func (h *BookmarkHandler) getUserClaimsFromContext(c *gin.Context) (jwt.MapClaims, error) {
 	userClaims, exists := c.Get("user")
 	if !exists {
 		return nil, errors.New("認証されていません")
@@ -263,7 +302,7 @@ func (h *RatingHandler) getUserClaimsFromContext(c *gin.Context) (jwt.MapClaims,
 }
 
 // ヘルパーメソッド：クレームからユーザーIDを取得
-func (h *RatingHandler) getUserIDFromClaims(claims jwt.MapClaims) (int64, error) {
+func (h *BookmarkHandler) getUserIDFromClaims(claims jwt.MapClaims) (int64, error) {
 	userIDInterface, exists := claims["user_id"]
 	if !exists {
 		return 0, errors.New("ユーザーIDが見つかりません")
@@ -278,7 +317,7 @@ func (h *RatingHandler) getUserIDFromClaims(claims jwt.MapClaims) (int64, error)
 }
 
 // ヘルパーメソッド：クレームからユーザーロールを取得
-func (h *RatingHandler) getUserRoleFromClaims(claims jwt.MapClaims) (string, error) {
+func (h *BookmarkHandler) getUserRoleFromClaims(claims jwt.MapClaims) (string, error) {
 	userRoleInterface, exists := claims["role"]
 	if !exists {
 		return "", errors.New("ユーザーロールが見つかりません")
