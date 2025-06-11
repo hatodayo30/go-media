@@ -23,6 +23,12 @@ RUN apk --no-cache add tzdata ca-certificates
 # ビルドしたバイナリをコピー
 COPY --from=builder /app/api-server .
 
+# テンプレートファイルをコピー（存在する場合のみ）
+# COPY --from=builder /app/templates ./templates
+
+# スタティックファイルをコピー（存在する場合のみ）
+# COPY --from=builder /app/static ./static
+
 # データベース初期化スクリプトをコピー
 COPY scripts/init.sql /app/scripts/
 
@@ -31,7 +37,11 @@ RUN mkdir -p /app/uploads
 
 # 実行ユーザーの設定
 RUN adduser -D appuser
+RUN chown -R appuser:appuser /app
 USER appuser
+
+# ポートの公開
+EXPOSE 8082
 
 # アプリケーションの実行
 CMD ["./api-server"]

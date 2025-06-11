@@ -64,19 +64,6 @@ CREATE INDEX idx_ratings_user_id ON ratings(user_id);
 CREATE INDEX idx_ratings_content_id ON ratings(content_id);
 CREATE INDEX idx_ratings_value ON ratings(value);
 
--- ブックマークテーブル
-CREATE TABLE IF NOT EXISTS bookmarks (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    content_id INTEGER NOT NULL REFERENCES contents(id) ON DELETE CASCADE,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    UNIQUE(user_id, content_id)
-);
-
-CREATE INDEX idx_bookmarks_user_id ON bookmarks(user_id);
-CREATE INDEX idx_bookmarks_content_id ON bookmarks(content_id);
-
 -- コメントテーブル
 CREATE TABLE IF NOT EXISTS comments (
     id SERIAL PRIMARY KEY,

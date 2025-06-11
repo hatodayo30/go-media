@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { ThumbsUp, ThumbsDown } from 'lucide-react';
-import { api } from '../utils/api';
+import { api } from '../services/api';
 
 interface RatingProps {
   contentId: number;
-  mode?: 'like' | 'star'; // 'like': いいね/ディスライク, 'star': 5段階評価（将来用）
+  mode?: 'like' | 'star';
   showStats?: boolean;
   size?: 'small' | 'medium' | 'large';
   onRatingChange?: (rating: number) => void;
@@ -32,7 +32,6 @@ const Rating: React.FC<RatingProps> = ({
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // サイズに応じたスタイル
   const sizeClasses = {
     small: 'text-sm px-2 py-1',
     medium: 'text-base px-3 py-2',
@@ -47,19 +46,22 @@ const Rating: React.FC<RatingProps> = ({
     fetchStats();
   }, [contentId]);
 
-  // 統計情報を取得
+  // 統計情報を取得（シンプル版）
   const fetchStats = async () => {
     try {
       setError(null);
       console.log('📊 統計情報取得開始:', contentId);
       
-      const response = await api.getContentActions(contentId);
-      console.log('📊 統計情報取得レスポンス:', response);
+      // 平均評価統計を取得
+      const averageResponse = await api.getAverageRating(contentId.toString());
+      console.log('📊 平均評価レスポンス:', averageResponse);
+      
+      const avgData = averageResponse.data || averageResponse;
       
       setStats({
-        likes: response.likes || 0,
-        dislikes: response.dislikes || 0,
-        userRating: response.user_rating
+        likes: avgData.like_count || 0,
+        dislikes: avgData.dislike_count || 0,
+        userRating: undefined // 個別ユーザー評価は省略（シンプル化）
       });
       
     } catch (error: any) {
@@ -78,7 +80,7 @@ const Rating: React.FC<RatingProps> = ({
     }
   };
 
-  // 評価を送信
+  // 評価を送信 - 修正箇所
   const handleRating = async (rating: number) => {
     if (!isAuthenticated) {
       alert('評価するにはログインが必要です');
@@ -92,18 +94,10 @@ const Rating: React.FC<RatingProps> = ({
     
     try {
       console.log('🔄 評価送信中...', { contentId, rating });
-      
-      // 同じ評価を再度クリックした場合は削除として扱う
-      if (stats.userRating === rating) {
-        console.log('🗑️ 同じ評価なので削除扱い');
-        // TODO: 評価削除APIの実装が必要
-        // 現在は再評価として扱う
-      }
+      console.log('📤 送信予定データ:', { contentId, value: rating });
 
-      const response = await api.createOrUpdateRating({
-        content_id: contentId,
-        value: rating
-      });
+      // 修正: api.createOrUpdateRating の呼び出し方法を変更
+      const response = await api.createOrUpdateRating(contentId, rating);
 
       console.log('✅ 評価投稿成功:', response);
 
@@ -115,6 +109,9 @@ const Rating: React.FC<RatingProps> = ({
       
     } catch (error: any) {
       console.error('❌ 評価投稿エラー:', error);
+      if (error.response?.data) {
+        console.error('❌ エラー詳細:', error.response.data);
+      }
       
       let errorMessage = '評価の投稿に失敗しました';
       if (error.response?.status === 401) {
@@ -138,7 +135,7 @@ const Rating: React.FC<RatingProps> = ({
       <div className="flex items-center gap-3">
         {/* いいねボタン */}
         <button
-          onClick={() => handleRating(1)}
+          onClick={() => handleRating(1)}  // 1 = いいね
           disabled={isLoading || !isAuthenticated}
           className={`
             flex items-center gap-2 rounded-lg border transition-all duration-200
@@ -161,7 +158,7 @@ const Rating: React.FC<RatingProps> = ({
 
         {/* ディスライクボタン */}
         <button
-          onClick={() => handleRating(0)}
+          onClick={() => handleRating(0)}  // 0 = バッド
           disabled={isLoading || !isAuthenticated}
           className={`
             flex items-center gap-2 rounded-lg border transition-all duration-200
@@ -217,11 +214,6 @@ const Rating: React.FC<RatingProps> = ({
         <div className="mt-3 pt-2 border-t border-gray-100">
           <div className="text-xs text-gray-500">
             総評価数: {stats.likes + stats.dislikes}件
-            {stats.userRating !== undefined && (
-              <span className="ml-2">
-                (あなた: {stats.userRating === 1 ? '👍 いいね' : '👎 ディスライク'})
-              </span>
-            )}
           </div>
         </div>
       )}

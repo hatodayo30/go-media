@@ -215,8 +215,19 @@ export const api = {
     return response.data;
   },
 
-  createOrUpdateRating: async (ratingData: any) => {
-    const response = await apiClient.post('/api/ratings', ratingData);
+  createOrUpdateRating: async (contentId: number, value: number) => {
+    console.log('🎯 評価作成リクエスト:', { contentId, value });
+    
+    // バックエンドが期待する形式でデータを作成
+    const requestData = {
+      content_id: contentId,
+      value: value
+    };
+    
+    console.log('📤 送信データ:', JSON.stringify(requestData, null, 2));
+    
+    const response = await apiClient.post('/api/ratings', requestData);
+    console.log('✅ 評価作成レスポンス:', response.data);
     return response.data;
   },
 

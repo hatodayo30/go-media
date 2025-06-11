@@ -10,16 +10,13 @@ interface ContentActionsProps {
 interface ActionStats {
   likes: number;
   dislikes: number;
-  bookmarks: number;
 }
 
 interface UserActions {
   hasLiked: boolean;
   hasDisliked: boolean;
-  hasBookmarked: boolean;
   likeId?: number;
   dislikeId?: number;
-  bookmarkId?: number;
 }
 
 const ContentActions: React.FC<ContentActionsProps> = ({ 
@@ -29,13 +26,11 @@ const ContentActions: React.FC<ContentActionsProps> = ({
 }) => {
   const [stats, setStats] = useState<ActionStats>({
     likes: 0,
-    dislikes: 0,
-    bookmarks: 0
+    dislikes: 0
   });
   const [userActions, setUserActions] = useState<UserActions>({
     hasLiked: false,
-    hasDisliked: false,
-    hasBookmarked: false
+    hasDisliked: false
   });
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -76,69 +71,22 @@ const ContentActions: React.FC<ContentActionsProps> = ({
     try {
       setLoading(true);
       setError(null);
-      console.log(`🎯 アクション取得: コンテンツID ${contentId}`);
+      console.log(`🎯 評価データ取得: コンテンツID ${contentId}`);
 
-      // 新しい統合APIを試行、失敗したら従来のAPIを使用
-      try {
-        const response = await api.getContentActions(contentId.toString());
-        console.log('📊 統合アクションレスポンス:', response);
-
-        if (response.success && response.data) {
-          const actionData = response.data;
-          
-          // 統計データを設定
-          setStats({
-            likes: actionData.stats.likes || 0,
-            dislikes: actionData.stats.dislikes || 0,
-            bookmarks: actionData.stats.bookmarks || 0
-          });
-
-          // ユーザーのアクション状態を設定
-          if (isAuthenticated && actionData.user_status) {
-            const userStatus = actionData.user_status;
-            setUserActions({
-              hasLiked: userStatus.has_liked || false,
-              hasDisliked: userStatus.has_disliked || false,
-              hasBookmarked: userStatus.has_bookmarked || false,
-              likeId: userStatus.like_id,
-              dislikeId: userStatus.dislike_id,
-              bookmarkId: userStatus.bookmark_id
-            });
-
-            console.log('👤 ユーザーアクション:', userStatus);
-          } else {
-            // ログインしていない場合はデフォルト状態
-            setUserActions({
-              hasLiked: false,
-              hasDisliked: false,
-              hasBookmarked: false
-            });
-          }
-          return; // 成功したので処理終了
-        }
-      } catch (newApiError) {
-        console.log('⚠️ 新しいAPIが利用できません、従来のAPIを使用します');
-      }
-
-      // フォールバック: 従来のAPI使用
-      const ratingsResponse = await api.getRatingsByContent(contentId.toString());
-      console.log('📊 評価レスポンス:', ratingsResponse);
-
-      // データの正規化
-      const ratings = ratingsResponse.data?.ratings || ratingsResponse.ratings || [];
-      
-      // 統計の計算
-      const likes = ratings.filter((r: any) => r.value === 1).length;
-      const dislikes = ratings.filter((r: any) => r.value === 0).length;
+      // 評価統計を取得
+      const averageResponse = await api.getAverageRating(contentId.toString());
+      const avgData = averageResponse.data || averageResponse;
       
       setStats({
-        likes,
-        dislikes,
-        bookmarks: 0 // TODO: ブックマーク数
+        likes: avgData.like_count || 0,
+        dislikes: avgData.dislike_count || 0
       });
 
-      // ユーザーのアクション状態を確認
+      // ユーザーの評価状態確認（ログイン時のみ）
       if (isAuthenticated) {
+        const ratingsResponse = await api.getRatingsByContent(contentId.toString());
+        const ratings = ratingsResponse.data?.ratings || ratingsResponse.ratings || [];
+        
         const user = JSON.parse(localStorage.getItem('user') || '{}');
         const userId = user.id;
         
@@ -153,14 +101,8 @@ const ContentActions: React.FC<ContentActionsProps> = ({
           setUserActions({
             hasLiked: !!userLike,
             hasDisliked: !!userDislike,
-            hasBookmarked: false, // TODO: ブックマーク状態
             likeId: userLike?.id,
             dislikeId: userDislike?.id
-          });
-
-          console.log('👤 ユーザーアクション:', {
-            liked: !!userLike,
-            disliked: !!userDislike
           });
         }
       }
@@ -170,14 +112,10 @@ const ContentActions: React.FC<ContentActionsProps> = ({
       
       if (error.response?.status === 404) {
         // データがない場合は正常
-        setStats({ likes: 0, dislikes: 0, bookmarks: 0 });
-        setUserActions({
-          hasLiked: false,
-          hasDisliked: false,
-          hasBookmarked: false
-        });
+        setStats({ likes: 0, dislikes: 0 });
+        setUserActions({ hasLiked: false, hasDisliked: false });
       } else {
-        setError('アクションデータの取得に失敗しました');
+        setError('評価データの取得に失敗しました');
       }
     } finally {
       setLoading(false);
@@ -189,12 +127,13 @@ const ContentActions: React.FC<ContentActionsProps> = ({
       alert('いいねするにはログインが必要です');
       return;
     }
-
+  
     try {
       setSubmitting(true);
       setError(null);
-      console.log('👍 いいね処理');
-
+      console.log('👍 いいね処理開始');
+      console.log('📤 送信予定データ:', { contentId, value: 1 });
+  
       if (userActions.hasLiked) {
         // いいねを取り消し
         if (userActions.likeId) {
@@ -207,25 +146,22 @@ const ContentActions: React.FC<ContentActionsProps> = ({
           await api.deleteRating(userActions.dislikeId.toString());
         }
         
-        // 修正: 'rating' を 'value' に変更
-        await api.createOrUpdateRating({
-          content_id: contentId,
-          value: 1  // いいね = 1
-        });
+        // 修正: オブジェクトではなく、個別の引数として渡す
+        await api.createOrUpdateRating(contentId, 1);  // 1 = いいね
         console.log('✅ いいね成功');
       }
-
+  
       await fetchActions();
-
+  
     } catch (error: any) {
       console.error('❌ いいねエラー:', error);
+      if (error.response?.data) {
+        console.error('❌ エラー詳細:', error.response.data);
+      }
       
-      // エラーハンドリングの改善
       let errorMessage = 'いいねの処理に失敗しました';
       if (error.response?.data?.error) {
         errorMessage = error.response.data.error;
-      } else if (error.message) {
-        errorMessage = error.message;
       }
       
       setError(errorMessage);
@@ -234,78 +170,54 @@ const ContentActions: React.FC<ContentActionsProps> = ({
     }
   };
 
-  const handleDislike = async () => {
-    if (!isAuthenticated) {
-      alert('バッドするにはログインが必要です');
-      return;
-    }
+const handleDislike = async () => {
+  if (!isAuthenticated) {
+    alert('バッドするにはログインが必要です');
+    return;
+  }
 
-    try {
-      setSubmitting(true);
-      setError(null);
-      console.log('👎 バッド処理');
+  try {
+    setSubmitting(true);
+    setError(null);
+    console.log('👎 バッド処理開始');
+    console.log('📤 送信予定データ:', { contentId, value: 0 });
 
-      if (userActions.hasDisliked) {
-        // バッドを取り消し
-        if (userActions.dislikeId) {
-          await api.deleteRating(userActions.dislikeId.toString());
-          console.log('✅ バッド取り消し成功');
-        }
-      } else {
-        // バッドを追加（既存のいいねがあれば削除）
-        if (userActions.hasLiked && userActions.likeId) {
-          await api.deleteRating(userActions.likeId.toString());
-        }
-        
-        // 修正: 'rating' を 'value' に変更
-        await api.createOrUpdateRating({
-          content_id: contentId,
-          value: 0  // バッド = 0
-        });
-        console.log('✅ バッド成功');
+    if (userActions.hasDisliked) {
+      // バッドを取り消し
+      if (userActions.dislikeId) {
+        await api.deleteRating(userActions.dislikeId.toString());
+        console.log('✅ バッド取り消し成功');
       }
-
-      await fetchActions();
-
-    } catch (error: any) {
-      console.error('❌ バッドエラー:', error);
-      
-      // エラーハンドリングの改善
-      let errorMessage = 'バッドの処理に失敗しました';
-      if (error.response?.data?.error) {
-        errorMessage = error.response.data.error;
-      } else if (error.message) {
-        errorMessage = error.message;
+    } else {
+      // バッドを追加（既存のいいねがあれば削除）
+      if (userActions.hasLiked && userActions.likeId) {
+        await api.deleteRating(userActions.likeId.toString());
       }
       
-      setError(errorMessage);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleBookmark = async () => {
-    if (!isAuthenticated) {
-      alert('ブックマークするにはログインが必要です');
-      return;
+      // 修正: オブジェクトではなく、個別の引数として渡す & 0 = バッド
+      await api.createOrUpdateRating(contentId, 0);  // 0 = バッド
+      console.log('✅ バッド成功');
     }
 
-    try {
-      setSubmitting(true);
-      setError(null);
-      console.log('🔖 ブックマーク処理');
+    await fetchActions();
 
-      // TODO: ブックマークAPI実装後に有効化
-      console.log('🔖 ブックマーク機能は今後実装予定です');
-      setError('ブックマーク機能は今後実装予定です');
-
-    } catch (error: any) {
-      console.error('❌ ブックマークエラー:', error);
-      setError('ブックマークの処理に失敗しました');
-    } finally {
-      setSubmitting(false);
+  } catch (error: any) {
+    console.error('❌ バッドエラー:', error);
+    if (error.response?.data) {
+      console.error('❌ エラー詳細:', error.response.data);
     }
-  };
+    
+    let errorMessage = 'バッドの処理に失敗しました';
+    if (error.response?.data?.error) {
+      errorMessage = error.response.data.error;
+    }
+    
+    setError(errorMessage);
+  } finally {
+    setSubmitting(false);
+  }
+};
+
 
   if (loading) {
     return (
@@ -341,7 +253,7 @@ const ContentActions: React.FC<ContentActionsProps> = ({
         </div>
       )}
 
-      {/* アクションボタン */}
+      {/* 評価ボタン（ブックマーク削除） */}
       <div style={{
         display: 'flex',
         gap: currentSize.gap,
@@ -408,36 +320,6 @@ const ContentActions: React.FC<ContentActionsProps> = ({
           )}
           <span style={{ fontSize: '0.875em' }}>バッド</span>
         </button>
-
-        {/* ブックマークボタン */}
-        <button
-          onClick={handleBookmark}
-          disabled={submitting || !isAuthenticated}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.375rem',
-            padding: currentSize.padding,
-            backgroundColor: userActions.hasBookmarked ? '#fef3c7' : 'transparent',
-            color: userActions.hasBookmarked ? '#92400e' : '#6b7280',
-            border: `1px solid ${userActions.hasBookmarked ? '#92400e' : '#d1d5db'}`,
-            borderRadius: '8px',
-            fontSize: currentSize.fontSize,
-            cursor: isAuthenticated ? 'pointer' : 'not-allowed',
-            opacity: submitting ? 0.6 : 1,
-            transition: 'all 0.2s ease',
-            fontWeight: userActions.hasBookmarked ? '600' : '400'
-          }}
-          title={isAuthenticated ? 'ブックマーク' : 'ログインが必要です'}
-        >
-          <span style={{ fontSize: currentSize.iconSize }}>
-            {userActions.hasBookmarked ? '🔖' : '📑'}
-          </span>
-          {showCounts && (
-            <span>{stats.bookmarks}</span>
-          )}
-          <span style={{ fontSize: '0.875em' }}>保存</span>
-        </button>
       </div>
 
       {/* 認証状態の表示 */}
@@ -448,12 +330,12 @@ const ContentActions: React.FC<ContentActionsProps> = ({
           fontSize: '0.75rem',
           color: '#6b7280'
         }}>
-          🔒 アクションを実行するにはログインしてください
+          🔒 評価するにはログインしてください
         </div>
       )}
 
-      {/* 統計情報 */}
-      {showCounts && isAuthenticated && (
+      {/* ユーザー状態表示 */}
+      {showCounts && isAuthenticated && (userActions.hasLiked || userActions.hasDisliked) && (
         <div style={{
           marginTop: '0.75rem',
           paddingTop: '0.75rem',
@@ -464,7 +346,6 @@ const ContentActions: React.FC<ContentActionsProps> = ({
         }}>
           {userActions.hasLiked && <span>✅ あなたがいいねしました</span>}
           {userActions.hasDisliked && <span>✅ あなたがバッドしました</span>}
-          {userActions.hasBookmarked && <span>✅ ブックマークに保存済み</span>}
         </div>
       )}
     </div>
