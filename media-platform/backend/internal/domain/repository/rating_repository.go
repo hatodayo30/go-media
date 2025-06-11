@@ -18,10 +18,10 @@ type RatingRepository interface {
 	FindByUserAndContentID(ctx context.Context, userID, contentID int64) (*model.Rating, error)
 	// 評価の作成
 	Create(ctx context.Context, rating *model.Rating) error
-	// 評価の更新
+	// 評価の更新（削除予定）
 	Update(ctx context.Context, rating *model.Rating) error
 	// 評価の削除
 	Delete(ctx context.Context, id int64) error
-	// コンテンツIDによる平均評価取得
-	GetAverageByContentID(ctx context.Context, contentID int64) (*model.RatingAverage, error)
+	// コンテンツIDによるいいね統計取得（GetAverageByContentIDから変更）
+	GetStatsByContentID(ctx context.Context, contentID int64) (*model.RatingStats, error)
 }

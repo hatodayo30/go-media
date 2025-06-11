@@ -199,15 +199,33 @@ export const api = {
     return response.data;
   },
 
-  // 評価関連（既に実装済みの場合はスキップ）
+  // 評価関連
   getRatingsByContent: async (contentId: string) => {
     const response = await apiClient.get(`/api/contents/${contentId}/ratings`);
     return response.data;
   },
 
-  getAverageRating: async (contentId: string) => {
-    const response = await apiClient.get(`/api/contents/${contentId}/rating/average`);
+  // 🔄 変更: getGoodStats（将来の新エンドポイント用）
+  getGoodStats: async (contentId: string) => {
+    console.log('📊 グッド統計取得:', contentId);
+    console.log('⚠️ /goods エンドポイントが未実装のため、既存エンドポイントを使用');
+    const response = await apiClient.get(`/api/contents/${contentId}/ratings/average`);
+    console.log('✅ グッド統計レスポンス:', response.data);
     return response.data;
+  },
+
+  // 🔄 既存のエンドポイントを使用
+  getAverageRating: async (contentId: string) => {
+    console.log('📊 平均評価取得:', contentId);
+    const response = await apiClient.get(`/api/contents/${contentId}/ratings/average`);
+    console.log('✅ 平均評価レスポンス:', response.data);
+    return response.data;
+  },
+
+  // 🔄 変更: getLikeStats → getGoodStats のエイリアス（下位互換性）
+  getLikeStats: async (contentId: string) => {
+    console.log('⚠️ getLikeStats は非推奨です。getGoodStats を使用してください。');
+    return api.getGoodStats(contentId);
   },
 
   getRatingsByUser: async (userId: string) => {
@@ -215,24 +233,27 @@ export const api = {
     return response.data;
   },
 
+  // 評価作成・更新（グッド専用）
   createOrUpdateRating: async (contentId: number, value: number) => {
-    console.log('🎯 評価作成リクエスト:', { contentId, value });
+    console.log('🎯 グッド評価リクエスト:', { contentId, value });
     
-    // バックエンドが期待する形式でデータを作成
+    // value は常に1（グッド）に強制
     const requestData = {
       content_id: contentId,
-      value: value
+      value: 1  // グッド専用なので常に1
     };
     
     console.log('📤 送信データ:', JSON.stringify(requestData, null, 2));
     
     const response = await apiClient.post('/api/ratings', requestData);
-    console.log('✅ 評価作成レスポンス:', response.data);
+    console.log('✅ グッド評価レスポンス:', response.data);
     return response.data;
   },
 
   deleteRating: async (id: string) => {
+    console.log('🗑️ 評価削除リクエスト:', id);
     const response = await apiClient.delete(`/api/ratings/${id}`);
+    console.log('✅ 評価削除成功');
     return response.data;
   },
 

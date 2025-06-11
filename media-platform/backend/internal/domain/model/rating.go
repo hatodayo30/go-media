@@ -8,7 +8,7 @@ import (
 // Rating は評価を表す構造体です
 type Rating struct {
 	ID        int64     `json:"id"`
-	Value     int       `json:"value"` // 0 = バッド, 1 = いいね
+	Value     int       `json:"value"` // 1 = いいね（固定値）
 	UserID    int64     `json:"user_id"`
 	ContentID int64     `json:"content_id"`
 	CreatedAt time.Time `json:"created_at"`
@@ -25,45 +25,40 @@ func (r *Rating) Validate() error {
 		return domainErrors.NewValidationError("コンテンツIDは必須です")
 	}
 
-	if r.Value != 0 && r.Value != 1 {
-		return domainErrors.NewValidationError("評価値は0（バッド）または1（いいね）である必要があります")
+	// グッド(1)のみ許可
+	if r.Value != 1 {
+		return domainErrors.NewValidationError("評価値は1（グッド）である必要があります")
 	}
 
 	return nil
 }
 
-// IsLike は評価がいいねかどうかを判定します
+// IsLike は評価がいいねかどうかを判定します（常にtrue）
 func (r *Rating) IsLike() bool {
-	return r.Value == 1
-}
-
-// IsBad は評価がバッドかどうかを判定します
-func (r *Rating) IsBad() bool {
-	return r.Value == 0
+	return true
 }
 
 // SetValue は評価値を設定し、バリデーションを行います
 func (r *Rating) SetValue(value int) error {
-	if value != 0 && value != 1 {
-		return domainErrors.NewValidationError("評価値は0（バッド）または1（いいね）である必要があります")
+	// グッド(1)のみ許可
+	if value != 1 {
+		return domainErrors.NewValidationError("評価値は1（グッド）である必要があります")
 	}
 
-	r.Value = value
+	r.Value = 1 // 常に1に固定
 	r.UpdatedAt = time.Now()
 	return nil
 }
 
-// RatingAverage は評価の平均と統計を表す構造体です
-type RatingAverage struct {
-	ContentID    int64   `json:"content_id"`
-	Average      float64 `json:"average"`       // いいね率 (0.0 - 1.0)
-	Count        int     `json:"count"`         // 総評価数
-	LikeCount    int     `json:"like_count"`    // いいね数
-	DislikeCount int     `json:"dislike_count"` // バッド数
+// RatingStats は評価の統計を表す構造体です（DislikeCount削除）
+type RatingStats struct {
+	ContentID int64 `json:"content_id"`
+	LikeCount int   `json:"like_count"` // いいね数のみ
+	Count     int   `json:"count"`      // 総評価数（like_countと同じ）
 }
 
 // CreateRatingRequest は評価作成リクエスト用の構造体です
 type CreateRatingRequest struct {
 	ContentID int64 `json:"content_id" binding:"required"`
-	Value     int   `json:"value" binding:"required"`
+	Value     int   `json:"value" binding:"required"` // 1のみ有効
 }

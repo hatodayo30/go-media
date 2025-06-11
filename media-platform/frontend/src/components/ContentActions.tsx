@@ -8,15 +8,12 @@ interface ContentActionsProps {
 }
 
 interface ActionStats {
-  likes: number;
-  dislikes: number;
+  goods: number; // likes → goods に変更
 }
 
 interface UserActions {
-  hasLiked: boolean;
-  hasDisliked: boolean;
-  likeId?: number;
-  dislikeId?: number;
+  hasGood: boolean; // hasLiked → hasGood に変更
+  goodId?: number;  // likeId → goodId に変更
 }
 
 const ContentActions: React.FC<ContentActionsProps> = ({ 
@@ -25,12 +22,10 @@ const ContentActions: React.FC<ContentActionsProps> = ({
   showCounts = true 
 }) => {
   const [stats, setStats] = useState<ActionStats>({
-    likes: 0,
-    dislikes: 0
+    goods: 0 // likes → goods に変更
   });
   const [userActions, setUserActions] = useState<UserActions>({
-    hasLiked: false,
-    hasDisliked: false
+    hasGood: false // hasLiked → hasGood に変更
   });
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -73,13 +68,14 @@ const ContentActions: React.FC<ContentActionsProps> = ({
       setError(null);
       console.log(`🎯 評価データ取得: コンテンツID ${contentId}`);
 
-      // 評価統計を取得
-      const averageResponse = await api.getAverageRating(contentId.toString());
-      const avgData = averageResponse.data || averageResponse;
+      // 評価統計を取得（既存のエンドポイントを使用）
+      const statsResponse = await api.getAverageRating(contentId.toString()); // 既存エンドポイント
+      const statsData = statsResponse.data || statsResponse;
+      
+      console.log('📊 統計データ:', statsData); // デバッグ用
       
       setStats({
-        likes: avgData.like_count || 0,
-        dislikes: avgData.dislike_count || 0
+        goods: statsData.good_count || statsData.like_count || 0 // good_count または like_count
       });
 
       // ユーザーの評価状態確認（ログイン時のみ）
@@ -91,18 +87,13 @@ const ContentActions: React.FC<ContentActionsProps> = ({
         const userId = user.id;
         
         if (userId) {
-          const userLike = ratings.find((r: any) => 
+          const userGood = ratings.find((r: any) => // userLike → userGood
             r.user_id === userId && r.value === 1
-          );
-          const userDislike = ratings.find((r: any) => 
-            r.user_id === userId && r.value === 0
           );
 
           setUserActions({
-            hasLiked: !!userLike,
-            hasDisliked: !!userDislike,
-            likeId: userLike?.id,
-            dislikeId: userDislike?.id
+            hasGood: !!userGood,    // hasLiked → hasGood
+            goodId: userGood?.id    // likeId → goodId
           });
         }
       }
@@ -112,8 +103,8 @@ const ContentActions: React.FC<ContentActionsProps> = ({
       
       if (error.response?.status === 404) {
         // データがない場合は正常
-        setStats({ likes: 0, dislikes: 0 });
-        setUserActions({ hasLiked: false, hasDisliked: false });
+        setStats({ goods: 0 });
+        setUserActions({ hasGood: false });
       } else {
         setError('評価データの取得に失敗しました');
       }
@@ -122,102 +113,40 @@ const ContentActions: React.FC<ContentActionsProps> = ({
     }
   };
 
-  const handleLike = async () => {
+  const handleGood = async () => { // handleLike → handleGood
     if (!isAuthenticated) {
-      alert('いいねするにはログインが必要です');
+      alert('評価するにはログインが必要です');
       return;
     }
   
     try {
       setSubmitting(true);
       setError(null);
-      console.log('👍 いいね処理開始');
-      console.log('📤 送信予定データ:', { contentId, value: 1 });
+      console.log('👍 グッド処理開始');
   
-      if (userActions.hasLiked) {
-        // いいねを取り消し
-        if (userActions.likeId) {
-          await api.deleteRating(userActions.likeId.toString());
-          console.log('✅ いいね取り消し成功');
+      if (userActions.hasGood) { // hasLiked → hasGood
+        // グッドを取り消し（削除）
+        if (userActions.goodId) { // likeId → goodId
+          console.log('❌ グッド取り消し:', userActions.goodId);
+          await api.deleteRating(userActions.goodId.toString());
+          console.log('✅ グッド取り消し成功');
         }
       } else {
-        // いいねを追加（既存のバッドがあれば削除）
-        if (userActions.hasDisliked && userActions.dislikeId) {
-          await api.deleteRating(userActions.dislikeId.toString());
-        }
-        
-        // 修正: オブジェクトではなく、個別の引数として渡す
-        await api.createOrUpdateRating(contentId, 1);  // 1 = いいね
-        console.log('✅ いいね成功');
+        // グッドを追加
+        console.log('➕ グッド追加');
+        await api.createOrUpdateRating(contentId, 1);  // 1 = グッド
+        console.log('✅ グッド追加成功');
       }
   
       await fetchActions();
   
     } catch (error: any) {
-      console.error('❌ いいねエラー:', error);
-      if (error.response?.data) {
-        console.error('❌ エラー詳細:', error.response.data);
-      }
-      
-      let errorMessage = 'いいねの処理に失敗しました';
-      if (error.response?.data?.error) {
-        errorMessage = error.response.data.error;
-      }
-      
-      setError(errorMessage);
+      console.error('❌ グッドエラー:', error);
+      setError('グッドの処理に失敗しました'); // いいね → グッド
     } finally {
       setSubmitting(false);
     }
   };
-
-const handleDislike = async () => {
-  if (!isAuthenticated) {
-    alert('バッドするにはログインが必要です');
-    return;
-  }
-
-  try {
-    setSubmitting(true);
-    setError(null);
-    console.log('👎 バッド処理開始');
-    console.log('📤 送信予定データ:', { contentId, value: 0 });
-
-    if (userActions.hasDisliked) {
-      // バッドを取り消し
-      if (userActions.dislikeId) {
-        await api.deleteRating(userActions.dislikeId.toString());
-        console.log('✅ バッド取り消し成功');
-      }
-    } else {
-      // バッドを追加（既存のいいねがあれば削除）
-      if (userActions.hasLiked && userActions.likeId) {
-        await api.deleteRating(userActions.likeId.toString());
-      }
-      
-      // 修正: オブジェクトではなく、個別の引数として渡す & 0 = バッド
-      await api.createOrUpdateRating(contentId, 0);  // 0 = バッド
-      console.log('✅ バッド成功');
-    }
-
-    await fetchActions();
-
-  } catch (error: any) {
-    console.error('❌ バッドエラー:', error);
-    if (error.response?.data) {
-      console.error('❌ エラー詳細:', error.response.data);
-    }
-    
-    let errorMessage = 'バッドの処理に失敗しました';
-    if (error.response?.data?.error) {
-      errorMessage = error.response.data.error;
-    }
-    
-    setError(errorMessage);
-  } finally {
-    setSubmitting(false);
-  }
-};
-
 
   if (loading) {
     return (
@@ -253,7 +182,7 @@ const handleDislike = async () => {
         </div>
       )}
 
-      {/* 評価ボタン（ブックマーク削除） */}
+      {/* グッドボタンのみ */}
       <div style={{
         display: 'flex',
         gap: currentSize.gap,
@@ -261,64 +190,33 @@ const handleDislike = async () => {
         justifyContent: 'center',
         flexWrap: 'wrap'
       }}>
-        {/* いいねボタン */}
         <button
-          onClick={handleLike}
+          onClick={handleGood} // handleLike → handleGood
           disabled={submitting || !isAuthenticated}
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: '0.375rem',
             padding: currentSize.padding,
-            backgroundColor: userActions.hasLiked ? '#dcfce7' : 'transparent',
-            color: userActions.hasLiked ? '#059669' : '#6b7280',
-            border: `1px solid ${userActions.hasLiked ? '#059669' : '#d1d5db'}`,
+            backgroundColor: userActions.hasGood ? '#dcfce7' : 'transparent', // hasLiked → hasGood
+            color: userActions.hasGood ? '#059669' : '#6b7280',
+            border: `1px solid ${userActions.hasGood ? '#059669' : '#d1d5db'}`,
             borderRadius: '8px',
             fontSize: currentSize.fontSize,
             cursor: isAuthenticated ? 'pointer' : 'not-allowed',
             opacity: submitting ? 0.6 : 1,
             transition: 'all 0.2s ease',
-            fontWeight: userActions.hasLiked ? '600' : '400'
+            fontWeight: userActions.hasGood ? '600' : '400'
           }}
-          title={isAuthenticated ? 'いいね' : 'ログインが必要です'}
+          title={isAuthenticated ? 'グッド' : 'ログインが必要です'} // いいね → グッド
         >
           <span style={{ fontSize: currentSize.iconSize }}>
-            {userActions.hasLiked ? '👍' : '🤍'}
+            {userActions.hasGood ? '👍' : '🤍'} {/* ❤️ → 👍 に変更 */}
           </span>
           {showCounts && (
-            <span>{stats.likes}</span>
+            <span>{stats?.goods || 0}</span>
           )}
-          <span style={{ fontSize: '0.875em' }}>いいね</span>
-        </button>
-
-        {/* バッドボタン */}
-        <button
-          onClick={handleDislike}
-          disabled={submitting || !isAuthenticated}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.375rem',
-            padding: currentSize.padding,
-            backgroundColor: userActions.hasDisliked ? '#fee2e2' : 'transparent',
-            color: userActions.hasDisliked ? '#dc2626' : '#6b7280',
-            border: `1px solid ${userActions.hasDisliked ? '#dc2626' : '#d1d5db'}`,
-            borderRadius: '8px',
-            fontSize: currentSize.fontSize,
-            cursor: isAuthenticated ? 'pointer' : 'not-allowed',
-            opacity: submitting ? 0.6 : 1,
-            transition: 'all 0.2s ease',
-            fontWeight: userActions.hasDisliked ? '600' : '400'
-          }}
-          title={isAuthenticated ? 'バッド' : 'ログインが必要です'}
-        >
-          <span style={{ fontSize: currentSize.iconSize }}>
-            {userActions.hasDisliked ? '👎' : '🖤'}
-          </span>
-          {showCounts && (
-            <span>{stats.dislikes}</span>
-          )}
-          <span style={{ fontSize: '0.875em' }}>バッド</span>
+          <span style={{ fontSize: '0.875em' }}>グッド</span> {/* いいね → グッド */}
         </button>
       </div>
 
@@ -335,7 +233,7 @@ const handleDislike = async () => {
       )}
 
       {/* ユーザー状態表示 */}
-      {showCounts && isAuthenticated && (userActions.hasLiked || userActions.hasDisliked) && (
+      {showCounts && isAuthenticated && userActions.hasGood && ( // hasLiked → hasGood
         <div style={{
           marginTop: '0.75rem',
           paddingTop: '0.75rem',
@@ -344,8 +242,7 @@ const handleDislike = async () => {
           color: '#6b7280',
           textAlign: 'center'
         }}>
-          {userActions.hasLiked && <span>✅ あなたがいいねしました</span>}
-          {userActions.hasDisliked && <span>✅ あなたがバッドしました</span>}
+          <span>👍 あなたがグッドしました</span> {/* ❤️ → 👍, いいね → グッド */}
         </div>
       )}
     </div>

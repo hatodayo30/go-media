@@ -234,44 +234,18 @@ func (r *RatingRepositoryImpl) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-// GetAverageByContentID はコンテンツIDによる平均評価を取得します（統計ビューを使用）
-func (r *RatingRepositoryImpl) GetAverageByContentID(ctx context.Context, contentID int64) (*model.RatingAverage, error) {
-	query := `
-		SELECT 
-			content_id,
-			total_ratings,
-			CASE 
-				WHEN total_ratings > 0 THEN CAST(likes AS FLOAT) / total_ratings 
-				ELSE 0 
-			END as average,
-			likes,
-			dislikes
-		FROM rating_stats
-		WHERE content_id = $1
-	`
-
-	ratingAverage := &model.RatingAverage{}
-	err := r.db.QueryRowContext(ctx, query, contentID).Scan(
-		&ratingAverage.ContentID,
-		&ratingAverage.Count,
-		&ratingAverage.Average,
-		&ratingAverage.LikeCount,
-		&ratingAverage.DislikeCount,
-	)
-
-	if err == sql.ErrNoRows {
-		// 評価が存在しない場合はデフォルト値を返す
-		return &model.RatingAverage{
-			ContentID:    contentID,
-			Average:      0.0,
-			Count:        0,
-			LikeCount:    0,
-			DislikeCount: 0,
-		}, nil
-	}
+func (r *RatingRepositoryImpl) GetStatsByContentID(ctx context.Context, contentID int64) (*model.RatingStats, error) {
+	// グッド評価(value=1)のみカウント
+	countQuery := `SELECT COUNT(*) FROM ratings WHERE content_id = $1 AND value = 1`
+	var likeCount int
+	err := r.db.QueryRowContext(ctx, countQuery, contentID).Scan(&likeCount)
 	if err != nil {
-		return nil, fmt.Errorf("平均評価の取得に失敗しました: %w", err)
+		return nil, fmt.Errorf("評価データの確認に失敗しました: %w", err)
 	}
 
-	return ratingAverage, nil
+	return &model.RatingStats{
+		ContentID: contentID,
+		LikeCount: likeCount,
+		Count:     likeCount, // グッドのみなので同じ値
+	}, nil
 }

@@ -1,4 +1,3 @@
-// usecase/rating_usecase.go
 package usecase
 
 import (
@@ -43,8 +42,11 @@ func (uc *RatingUseCase) GetRatingsByUserID(ctx context.Context, userID int64) (
 	return ratings, nil
 }
 
-// CreateOrUpdateRating は評価の投稿/更新を行います
+// CreateOrUpdateRating は評価の投稿/削除を行います（トグル動作）
 func (uc *RatingUseCase) CreateOrUpdateRating(ctx context.Context, rating *model.Rating) error {
+	// 値を1に強制設定
+	rating.Value = 1
+
 	// バリデーション
 	if err := rating.Validate(); err != nil {
 		return err
@@ -57,24 +59,15 @@ func (uc *RatingUseCase) CreateOrUpdateRating(ctx context.Context, rating *model
 	}
 
 	if existingRating != nil {
-		// 既存の評価を更新
-		if err := existingRating.SetValue(rating.Value); err != nil {
-			return err
-		}
-
-		err = uc.ratingRepo.Update(ctx, existingRating)
+		// 既存の評価がある場合は削除（トグルオフ）
+		err = uc.ratingRepo.Delete(ctx, existingRating.ID)
 		if err != nil {
-			return fmt.Errorf("評価の更新に失敗しました: %w", err)
+			return fmt.Errorf("評価の削除に失敗しました: %w", err)
 		}
-
-		// 返り値として使用するため、IDをセット
-		rating.ID = existingRating.ID
-		rating.CreatedAt = existingRating.CreatedAt
-		rating.UpdatedAt = existingRating.UpdatedAt
 		return nil
 	}
 
-	// 新規評価を作成
+	// 新規評価を作成（トグルオン）
 	return uc.ratingRepo.Create(ctx, rating)
 }
 
@@ -98,6 +91,6 @@ func (uc *RatingUseCase) DeleteRating(ctx context.Context, id int64, userID int6
 }
 
 // GetRatingStatsByContentID はコンテンツの評価統計を取得します
-func (uc *RatingUseCase) GetRatingStatsByContentID(ctx context.Context, contentID int64) (*model.RatingAverage, error) {
-	return uc.ratingRepo.GetAverageByContentID(ctx, contentID)
+func (uc *RatingUseCase) GetRatingStatsByContentID(ctx context.Context, contentID int64) (*model.RatingStats, error) {
+	return uc.ratingRepo.GetStatsByContentID(ctx, contentID)
 }

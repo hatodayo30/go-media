@@ -46,13 +46,14 @@ CREATE INDEX idx_contents_category_id ON contents(category_id);
 CREATE INDEX idx_contents_status ON contents(status);
 CREATE INDEX idx_contents_published_at ON contents(published_at);
 
--- 既存のratingsテーブルを削除して再作成
+-- 既存のratingsテーブルとビューを完全削除
+DROP VIEW IF EXISTS rating_stats CASCADE;
 DROP TABLE IF EXISTS ratings CASCADE;
 
--- 新しい評価テーブル（いいね・バッド用）
+-- 新しいいいね専用テーブル
 CREATE TABLE ratings (
     id SERIAL PRIMARY KEY,
-    value INTEGER NOT NULL CHECK (value IN (0, 1)), -- 0=バッド, 1=いいね
+    value INTEGER NOT NULL DEFAULT 1 CHECK (value = 1), -- いいね(1)のみ許可
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     content_id INTEGER NOT NULL REFERENCES contents(id) ON DELETE CASCADE,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
@@ -60,9 +61,9 @@ CREATE TABLE ratings (
     UNIQUE(user_id, content_id)
 );
 
+-- インデックス作成（いいね専用最適化）
 CREATE INDEX idx_ratings_user_id ON ratings(user_id);
 CREATE INDEX idx_ratings_content_id ON ratings(content_id);
-CREATE INDEX idx_ratings_value ON ratings(value);
 
 -- コメントテーブル
 CREATE TABLE IF NOT EXISTS comments (
@@ -80,21 +81,12 @@ CREATE INDEX idx_comments_content_id ON comments(content_id);
 CREATE INDEX idx_comments_parent_id ON comments(parent_id);
 CREATE INDEX idx_comments_created_at ON comments(created_at);
 
--- 統計用ビュー
-CREATE OR REPLACE VIEW rating_stats AS
+-- いいね統計用ビュー（シンプル版）
+CREATE OR REPLACE VIEW like_stats AS
 SELECT 
     content_id,
-    COUNT(CASE WHEN value = 1 THEN 1 END) as likes,
-    COUNT(CASE WHEN value = 0 THEN 1 END) as dislikes,
-    COUNT(*) as total_ratings
+    COUNT(*) as like_count
 FROM ratings 
-GROUP BY content_id;
-
-CREATE OR REPLACE VIEW bookmark_stats AS
-SELECT 
-    content_id,
-    COUNT(*) as bookmark_count
-FROM bookmarks 
 GROUP BY content_id;
 
 -- 初期データ投入

@@ -86,7 +86,39 @@ func (h *RatingHandler) GetRatingsByUserID(c *gin.Context) {
 	})
 }
 
-// GetAverageRatingByContentID は指定したコンテンツIDの平均評価を取得するハンドラです
+// 🔄 新メソッド: GetGoodStatsByContentID は指定したコンテンツIDのグッド統計を取得するハンドラです
+func (h *RatingHandler) GetGoodStatsByContentID(c *gin.Context) {
+	contentIDStr := c.Param("id")
+	contentID, err := strconv.ParseInt(contentIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "無効なコンテンツIDです",
+		})
+		return
+	}
+
+	ratingStats, err := h.ratingUseCase.GetRatingStatsByContentID(c.Request.Context(), contentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": "error",
+			"error":  "グッド統計取得に失敗しました: " + err.Error(),
+		})
+		return
+	}
+
+	// フロントエンドの期待する形式に変換
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data": gin.H{
+			"good_count": ratingStats.LikeCount, // like_count → good_count
+			"count":      ratingStats.Count,
+			"content_id": ratingStats.ContentID,
+		},
+	})
+}
+
+// 🔄 下位互換性のため残す：GetAverageRatingByContentID
 func (h *RatingHandler) GetAverageRatingByContentID(c *gin.Context) {
 	contentIDStr := c.Param("id")
 	contentID, err := strconv.ParseInt(contentIDStr, 10, 64)
@@ -102,14 +134,24 @@ func (h *RatingHandler) GetAverageRatingByContentID(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status": "error",
-			"error":  "平均評価の取得に失敗しました: " + err.Error(),
+			"error":  "平均評価取得に失敗しました: " + err.Error(),
 		})
 		return
 	}
 
+	// 下位互換性のため、両方のフィールド名で返す
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
-		"data":   ratingStats,
+		"data": gin.H{
+			// 新形式
+			"good_count": ratingStats.LikeCount,
+			"count":      ratingStats.Count,
+			"content_id": ratingStats.ContentID,
+			// 旧形式（下位互換性）
+			"like_count":    ratingStats.LikeCount,
+			"dislike_count": 0,   // 常に0
+			"average":       1.0, // グッドのみなので常に1.0
+		},
 	})
 }
 
@@ -143,6 +185,9 @@ func (h *RatingHandler) CreateRating(c *gin.Context) {
 		})
 		return
 	}
+
+	// 🔄 値を1（グッド）に強制
+	req.Value = 1
 
 	// 評価エンティティを作成
 	rating := &model.Rating{
