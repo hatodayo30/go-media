@@ -4,7 +4,6 @@ import { api } from '../services/api';
 import Comments from '../components/Comments';
 import ContentActions from '../components/ContentActions';
 
-
 interface User {
   id: number;
   username: string;
@@ -343,26 +342,26 @@ const ContentDetailPage: React.FC = () => {
         </div>
       </div>
 
+      {/* コメント機能 */}
       <Comments contentId={content.id} />
 
-        // JSX部分を以下に変更
+      {/* 🔧 グッド評価機能 */}
       <div style={{ marginTop: '2rem' }}>
-      <h3 style={{ 
+        <h3 style={{ 
           fontSize: '1.25rem', 
           fontWeight: '600', 
           marginBottom: '1rem',
           color: '#374151'
-       }}>
+        }}>
           📊 この記事への反応
-      </h3>
-  
-       <ContentActions 
-         contentId={content.id} 
+        </h3>
+        
+        <ContentActions 
+          contentId={content.id} 
           size="medium" 
-       showCounts={true} 
-      />
+          showCounts={true} 
+        />
       </div>
-    
 
       {/* フッター */}
       <div style={{
@@ -370,7 +369,8 @@ const ContentDetailPage: React.FC = () => {
         borderRadius: '8px',
         padding: '1.5rem',
         boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
-        textAlign: 'center'
+        textAlign: 'center',
+        marginTop: '2rem'
       }}>
         <div style={{ 
           display: 'flex',

@@ -11,11 +11,20 @@ import (
 
 // SetupRouter はAPIルーターを設定します
 func SetupRouter(router *gin.Engine, db persistence.DBConn, jwtConfig *JWTConfig) {
-	// CORS設定
+	// 🔧 CORS設定を修正（複数ポート対応）
 	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{"http://localhost:3000"}
-	config.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
-	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
+	config.AllowOrigins = []string{
+		"http://localhost:3000", // React開発サーバー（デフォルト）
+		"http://localhost:3001", // React開発サーバー（現在のポート）
+		"http://localhost:3002", // その他のポート
+	}
+	config.AllowMethods = []string{
+		"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS",
+	}
+	config.AllowHeaders = []string{
+		"Origin", "Content-Length", "Content-Type", "Authorization",
+		"X-Requested-With", "Access-Control-Allow-Origin",
+	}
 	config.AllowCredentials = true
 	router.Use(cors.New(config))
 
@@ -34,7 +43,6 @@ func SetupRouter(router *gin.Engine, db persistence.DBConn, jwtConfig *JWTConfig
 	contentRepo := persistence.NewContentRepository(db.GetDB())
 	commentRepo := persistence.NewCommentRepository(db.GetDB())
 	ratingRepo := persistence.NewRatingRepository(db.GetDB())
-	// bookmarkRepo の削除
 
 	// ユースケースの初期化
 	userUseCase := usecase.NewUserUseCase(userRepo)
@@ -42,7 +50,6 @@ func SetupRouter(router *gin.Engine, db persistence.DBConn, jwtConfig *JWTConfig
 	contentUseCase := usecase.NewContentUseCase(contentRepo, categoryRepo, userRepo)
 	commentUseCase := usecase.NewCommentUseCase(commentRepo, contentRepo, userRepo)
 	ratingUseCase := usecase.NewRatingUseCase(ratingRepo, contentRepo)
-	// bookmarkUseCase の削除
 
 	// ハンドラーの初期化
 	userHandler := NewUserHandler(userUseCase)
@@ -50,7 +57,6 @@ func SetupRouter(router *gin.Engine, db persistence.DBConn, jwtConfig *JWTConfig
 	contentHandler := NewContentHandler(contentUseCase)
 	commentHandler := NewCommentHandler(commentUseCase)
 	ratingHandler := NewRatingHandler(ratingUseCase)
-	// bookmarkHandler の削除
 
 	// ユーザーAPI
 	userRoutes := api.Group("/users")
@@ -123,6 +129,10 @@ func SetupRouter(router *gin.Engine, db persistence.DBConn, jwtConfig *JWTConfig
 	})
 
 	log.Println("✅ API server configured with rating-only functionality")
+	log.Println("🌐 CORS enabled for:")
+	log.Println("  - http://localhost:3000")
+	log.Println("  - http://localhost:3001")
+	log.Println("  - http://localhost:3002")
 	log.Println("📊 Rating endpoints:")
 	log.Println("  GET    /api/contents/:id/ratings")
 	log.Println("  GET    /api/contents/:id/ratings/average")

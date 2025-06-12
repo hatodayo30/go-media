@@ -13,6 +13,7 @@ import MyPostsPage from './pages/MyPostsPage';
 import ProfilePage from './pages/ProfilePage';
 import ContentDetailPage from './pages/ContentDetailPage';
 import EditContentPage from './pages/EditContentPage';
+import SearchPage from './pages/SearchPage';
 
 // プライベートルートのコンポーネント
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -69,6 +70,12 @@ const App: React.FC = () => {
           <Route path="/edit/:id" element={
             <PrivateRoute>
               <EditContentPage />
+            </PrivateRoute>
+          } />
+
+          <Route path="/search" element={
+            <PrivateRoute>
+              <SearchPage />
             </PrivateRoute>
           } />
           

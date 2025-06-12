@@ -32,13 +32,12 @@ interface Rating {
   content?: Content;
 }
 
-type TabType = 'my-posts' | 'liked' | 'bookmarked';
+type TabType = 'my-posts' | 'good'; // 'liked' → 'good' に変更、'bookmarked' 削除
 
 const MyPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('my-posts');
   const [myPosts, setMyPosts] = useState<Content[]>([]);
-  const [likedContents, setLikedContents] = useState<Content[]>([]);
-  const [bookmarkedContents, setBookmarkedContents] = useState<Content[]>([]);
+  const [goodContents, setGoodContents] = useState<Content[]>([]); // likedContents → goodContents
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<'all' | 'published' | 'draft'>('all');
@@ -55,10 +54,8 @@ const MyPage: React.FC = () => {
       
       if (activeTab === 'my-posts') {
         await fetchMyPosts();
-      } else if (activeTab === 'liked') {
-        await fetchLikedContents();
-      } else if (activeTab === 'bookmarked') {
-        await fetchBookmarkedContents();
+      } else if (activeTab === 'good') { // 'liked' → 'good'
+        await fetchGoodContents(); // fetchLikedContents → fetchGoodContents
       }
       
     } catch (err: any) {
@@ -71,70 +68,126 @@ const MyPage: React.FC = () => {
 
   const fetchMyPosts = async () => {
     console.log('📥 マイ投稿を取得中...');
-    const response = await api.getContents();
-    console.log('📝 マイ投稿レスポンス:', response);
-    
-    if (response.data && response.data.contents) {
-      setMyPosts(response.data.contents);
-      console.log(`📋 投稿数: ${response.data.contents.length}`);
-    } else {
-      setMyPosts([]);
-    }
-  };
-
-  const fetchLikedContents = async () => {
-    console.log('👍 いいねした記事を取得中...');
     
     try {
       // 現在のユーザー情報を取得
       const userResponse = await api.getCurrentUser();
-      const userId = userResponse.data?.id || userResponse.id;
+      console.log('👤 ユーザー情報:', userResponse);
+      
+      // 🚨 デバッグ: レスポンス構造を詳細に確認
+      console.log('🔍 userResponse.data:', userResponse.data);
+      console.log('🔍 userResponse.data.user:', userResponse.data?.user);
+      console.log('🔍 typeof userResponse.data:', typeof userResponse.data);
+      
+      // レスポンス構造: {data: {user: {...}}, status: 'success'}
+      const currentUser = userResponse.data?.user || userResponse.user || userResponse.data || userResponse;
+      const currentUserId = currentUser?.id;
+      
+      console.log('🔍 抽出されたユーザー:', currentUser);
+      console.log('🔍 抽出されたユーザーID:', currentUserId);
+      console.log('🔍 typeof currentUserId:', typeof currentUserId);
+      
+      if (!currentUserId) {
+        console.error('❌ ユーザーID抽出失敗. 完全なレスポンス:', JSON.stringify(userResponse, null, 2));
+        throw new Error('ユーザーIDを取得できませんでした');
+      }
+      
+      // 全コンテンツを取得
+      const response = await api.getContents();
+      console.log('📝 全コンテンツレスポンス:', response);
+      
+      const allContents = response.data?.contents || response.contents || [];
+      
+      // 現在のユーザーが作成したコンテンツのみフィルタリング
+      const myContents = allContents.filter((content: Content) => {
+        console.log(`🔍 コンテンツフィルタ: ID=${content.id}, author_id=${content.author_id}, currentUserId=${currentUserId}, match=${content.author_id === currentUserId}`);
+        return content.author_id === currentUserId;
+      });
+      
+      setMyPosts(myContents);
+      console.log(`📋 マイ投稿数: ${myContents.length} (全体: ${allContents.length})`);
+      
+    } catch (error) {
+      console.error('❌ マイ投稿取得エラー:', error);
+      setMyPosts([]);
+      throw error;
+    }
+  };
+
+  const fetchGoodContents = async () => {
+    console.log('👍 グッドした記事を取得中...');
+    
+    try {
+      // 現在のユーザー情報を取得
+      const userResponse = await api.getCurrentUser();
+      console.log('👤 GOOD用ユーザー情報レスポンス:', userResponse);
+      
+      // 🔧 正しいユーザーID抽出方法
+      const currentUser = userResponse.data?.user || userResponse.user || userResponse.data || userResponse;
+      const userId = currentUser?.id;
+      
+      console.log('🔍 GOOD用抽出されたユーザー:', currentUser);
+      console.log('🔍 GOOD用抽出されたユーザーID:', userId);
+      console.log('🔍 typeof userId:', typeof userId);
       
       if (!userId) {
+        console.error('❌ GOOD用ユーザーIDが見つかりません. 完全なレスポンス:', JSON.stringify(userResponse, null, 2));
         throw new Error('ユーザー情報を取得できませんでした');
       }
-
+  
       // ユーザーの評価一覧を取得
+      console.log(`📊 ユーザーID ${userId} の評価を取得中...`);
       const ratingsResponse = await api.getRatingsByUser(userId.toString());
       console.log('📊 ユーザー評価レスポンス:', ratingsResponse);
       
       const ratings = ratingsResponse.data?.ratings || ratingsResponse.ratings || [];
+      console.log('📊 評価一覧:', ratings);
+      console.log('📊 評価一覧の長さ:', ratings.length);
       
-      // いいね（value = 1）のみをフィルター
-      const likedRatings = ratings.filter((rating: Rating) => rating.value === 1);
+      // グッド（value = 1）のみをフィルター
+      const goodRatings = ratings.filter((rating: Rating) => {
+        console.log(`🔍 評価チェック: ID=${rating.id}, value=${rating.value}, content_id=${rating.content_id}, user_id=${rating.user_id}`);
+        return rating.value === 1;
+      });
       
-      // 各いいねに対応するコンテンツを取得
-      const likedContentsPromises = likedRatings.map(async (rating: Rating) => {
+      console.log('👍 グッド評価:', goodRatings);
+      console.log('👍 グッド評価の数:', goodRatings.length);
+      
+      if (goodRatings.length === 0) {
+        console.log('📭 グッドした記事はありません');
+        setGoodContents([]);
+        return;
+      }
+      
+      // 各グッドに対応するコンテンツを取得
+      const goodContentsPromises = goodRatings.map(async (rating: Rating) => {
         try {
+          console.log(`📄 コンテンツ ${rating.content_id} を取得中...`);
           const contentResponse = await api.getContentById(rating.content_id.toString());
-          return contentResponse.data?.content || contentResponse.content || contentResponse;
+          console.log(`📄 コンテンツ ${rating.content_id} レスポンス:`, contentResponse);
+          
+          const content = contentResponse.data?.content || contentResponse.content || contentResponse;
+          console.log(`📄 コンテンツ ${rating.content_id} データ:`, content);
+          return content;
         } catch (error) {
-          console.error(`コンテンツ ${rating.content_id} の取得に失敗:`, error);
+          console.error(`❌ コンテンツ ${rating.content_id} の取得に失敗:`, error);
           return null;
         }
       });
       
-      const likedContentsResults = await Promise.all(likedContentsPromises);
-      const validLikedContents = likedContentsResults.filter(content => content !== null);
+      const goodContentsResults = await Promise.all(goodContentsPromises);
+      const validGoodContents = goodContentsResults.filter(content => content !== null);
       
-      setLikedContents(validLikedContents);
-      console.log(`👍 いいねした記事数: ${validLikedContents.length}`);
+      setGoodContents(validGoodContents);
+      console.log(`✅ グッドした記事数: ${validGoodContents.length}`);
       
     } catch (error) {
-      console.error('❌ いいねした記事の取得エラー:', error);
-      setLikedContents([]);
+      console.error('❌ グッドした記事の取得エラー:', error);
+      setGoodContents([]);
+      throw error;
     }
   };
-
-  const fetchBookmarkedContents = async () => {
-    console.log('🔖 ブックマークした記事を取得中...');
-    
-    // TODO: ブックマークAPI実装後に実装
-    // 現在は空の配列を設定
-    setBookmarkedContents([]);
-    console.log('📌 ブックマーク機能は今後実装予定');
-  };
-
+  
   const handleDelete = async (id: number) => {
     if (!window.confirm('この投稿を削除しますか？')) {
       return;
@@ -202,19 +255,12 @@ const MyPage: React.FC = () => {
           description: '自分が作成した記事一覧',
           count: myPosts.length
         };
-      case 'liked':
+      case 'good': // 'liked' → 'good'
         return {
-          title: 'いいねした記事',
+          title: 'グッドした記事', // 'いいねした記事' → 'グッドした記事'
           icon: '👍',
-          description: 'いいねした記事一覧',
-          count: likedContents.length
-        };
-      case 'bookmarked':
-        return {
-          title: 'ブックマーク',
-          icon: '🔖',
-          description: 'ブックマークした記事一覧',
-          count: bookmarkedContents.length
+          description: 'グッドした記事一覧', // 'いいねした記事一覧' → 'グッドした記事一覧'
+          count: goodContents.length // likedContents → goodContents
         };
     }
   };
@@ -230,10 +276,8 @@ const MyPage: React.FC = () => {
     switch (activeTab) {
       case 'my-posts':
         return filteredPosts;
-      case 'liked':
-        return likedContents;
-      case 'bookmarked':
-        return bookmarkedContents;
+      case 'good': // 'liked' → 'good'
+        return goodContents; // likedContents → goodContents
       default:
         return [];
     }
@@ -262,7 +306,7 @@ const MyPage: React.FC = () => {
               marginBottom: '0.75rem'
             }}>
               <Link 
-                to={`/content/${content.id}`}
+                to={`/contents/${content.id}`} 
                 style={{
                   fontSize: '1.25rem', 
                   fontWeight: '600',
@@ -475,7 +519,7 @@ const MyPage: React.FC = () => {
         overflow: 'hidden'
       }}>
         <div style={{ display: 'flex' }}>
-          {(['my-posts', 'liked', 'bookmarked'] as TabType[]).map((tab) => {
+          {(['my-posts', 'good'] as TabType[]).map((tab) => { // 'bookmarked' 削除
             const tabInfo = getTabInfo(tab);
             const isActive = activeTab === tab;
             
@@ -596,11 +640,6 @@ const MyPage: React.FC = () => {
             >
               新規投稿を作成
             </Link>
-          )}
-          {activeTab === 'bookmarked' && (
-            <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
-              📌 ブックマーク機能は今後実装予定です
-            </div>
           )}
         </div>
       ) : (
