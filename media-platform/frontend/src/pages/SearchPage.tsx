@@ -1,6 +1,33 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
+
+// 型定義
+interface User {
+  id: number;
+  username: string;
+  email: string;
+  bio: string;
+  role: string;
+}
+
+interface Content {
+  id: number;
+  title: string;
+  body: string;
+  type: string;
+  author?: User;
+  category?: any;
+  status: string;
+  view_count: number;
+  created_at: string;
+}
+
+interface Category {
+  id: number;
+  name: string;
+  description?: string;
+}
 
 interface SearchFilters {
   query: string;
@@ -10,610 +37,576 @@ interface SearchFilters {
   sort_by?: 'date' | 'popularity' | 'rating';
 }
 
-interface Content {
-  id: number;
-  title: string;
-  content?: string;
-  body?: string;
-  status: string;
-  category_id: number;
-  author_id: number;
-  view_count: number;
-  created_at: string;
-  updated_at: string;
-  author?: {
-    id: number;
-    username: string;
-  };
-  category?: {
-    id: number;
-    name: string;
-  };
-}
-
-interface Category {
-  id: number;
-  name: string;
-  description?: string;
-}
-
-interface Author {
-  id: number;
-  username: string;
-}
-
 const SearchPage: React.FC = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
+  const [user, setUser] = useState<User | null>(null);
+  const [searchResults, setSearchResults] = useState<Content[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [authors, setAuthors] = useState<User[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   
-  // 検索状態
   const [filters, setFilters] = useState<SearchFilters>({
-    query: searchParams.get('q') || '',
-    category_id: searchParams.get('category') ? parseInt(searchParams.get('category')!) : undefined,
-    author_id: searchParams.get('author') ? parseInt(searchParams.get('author')!) : undefined,
-    date_range: searchParams.get('start') && searchParams.get('end') ? {
-      start: searchParams.get('start')!,
-      end: searchParams.get('end')!
-    } : undefined,
-    sort_by: (searchParams.get('sort') as 'date' | 'popularity' | 'rating') || 'date'
+    query: '',
+    category_id: undefined,
+    author_id: undefined,
+    date_range: undefined,
+    sort_by: 'date'
   });
 
-  // データ状態
-  const [results, setResults] = useState<Content[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [authors, setAuthors] = useState<Author[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [totalResults, setTotalResults] = useState(0);
-  const [showFilters, setShowFilters] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  // 検索実行
-  const performSearch = useCallback(async () => {
-    if (!filters.query.trim()) {
-      setResults([]);
-      setTotalResults(0);
+  useEffect(() => {
+    fetchInitialData();
+    
+    // URLクエリパラメータから検索条件を取得
+    const urlParams = new URLSearchParams(location.search);
+    const query = urlParams.get('q');
+    if (query) {
+      setFilters(prev => ({ ...prev, query }));
+      performSearch({ ...filters, query });
+    }
+  }, []);
+
+  const fetchInitialData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        window.location.href = '/login';
+        return;
+      }
+
+      const [userRes, categoriesRes, authorsRes] = await Promise.all([
+        api.getCurrentUser(),
+        api.getCategories(),
+        api.getUsers() // 著者リスト取得用のAPI（実装が必要）
+      ]);
+
+      setUser(userRes.data || userRes);
+      setCategories(categoriesRes.data?.categories || categoriesRes.categories || categoriesRes || []);
+      setAuthors(authorsRes.data?.users || authorsRes.users || authorsRes || []);
+    } catch (error) {
+      console.error('初期データの取得に失敗しました:', error);
+      if ((error as any)?.response?.status === 401) {
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+      }
+    }
+  };
+
+  const performSearch = async (searchFilters: SearchFilters) => {
+    if (!searchFilters.query.trim()) {
+      setSearchResults([]);
       return;
     }
 
     try {
       setLoading(true);
-      setError('');
-      console.log('🔍 検索実行:', filters);
-
-      // 基本検索
-      const searchResponse = await api.searchContents(filters.query);
-      console.log('📥 検索レスポンス:', searchResponse);
       
-      let searchResults = searchResponse.data?.contents || searchResponse.contents || [];
+      // APIパラメータを構築
+      const params: any = {
+        q: searchFilters.query,
+        sort_by: searchFilters.sort_by || 'date'
+      };
 
-      // フィルタリング適用
-      if (filters.category_id) {
-        searchResults = searchResults.filter((content: Content) => 
-          content.category_id === filters.category_id
-        );
+      if (searchFilters.category_id) {
+        params.category_id = searchFilters.category_id;
+      }
+      if (searchFilters.author_id) {
+        params.author_id = searchFilters.author_id;
+      }
+      if (searchFilters.date_range) {
+        params.date_start = searchFilters.date_range.start;
+        params.date_end = searchFilters.date_range.end;
       }
 
-      if (filters.author_id) {
-        searchResults = searchResults.filter((content: Content) => 
-          content.author_id === filters.author_id
-        );
-      }
-
-      if (filters.date_range) {
-        const startDate = new Date(filters.date_range.start);
-        const endDate = new Date(filters.date_range.end);
-        searchResults = searchResults.filter((content: Content) => {
-          const contentDate = new Date(content.created_at);
-          return contentDate >= startDate && contentDate <= endDate;
-        });
-      }
-
-      // ソート適用
-      switch (filters.sort_by) {
-        case 'date':
-          searchResults.sort((a: Content, b: Content) => 
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-          );
-          break;
-        case 'popularity':
-          searchResults.sort((a: Content, b: Content) => b.view_count - a.view_count);
-          break;
-        case 'rating':
-          // TODO: 評価データを組み込んだソート（今後実装）
-          searchResults.sort((a: Content, b: Content) => 
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-          );
-          break;
-      }
-
-      setResults(searchResults);
-      setTotalResults(searchResults.length);
-
-    } catch (err: any) {
-      console.error('❌ 検索エラー:', err);
-      setError('検索に失敗しました');
+      // 拡張された検索APIを使用（実装が必要）
+      const response = await api.searchContents(params);
+      setSearchResults(response.data?.contents || response.contents || response || []);
+      
+      // URLを更新
+      const urlParams = new URLSearchParams();
+      urlParams.set('q', searchFilters.query);
+      if (searchFilters.category_id) urlParams.set('category', searchFilters.category_id.toString());
+      if (searchFilters.author_id) urlParams.set('author', searchFilters.author_id.toString());
+      if (searchFilters.sort_by) urlParams.set('sort', searchFilters.sort_by);
+      
+      navigate(`/search?${urlParams.toString()}`, { replace: true });
+      
+    } catch (error) {
+      console.error('検索エラー:', error);
+      setSearchResults([]);
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  };
 
-  // カテゴリ・著者データ取得
-  useEffect(() => {
-    const fetchMetadata = async () => {
-      try {
-        // カテゴリ一覧取得
-        const categoriesResponse = await api.getCategories();
-        setCategories(categoriesResponse.data?.categories || categoriesResponse.categories || []);
-
-        // 著者一覧取得（全ユーザー）
-        const authorsResponse = await api.getAllUsers();
-        setAuthors(authorsResponse.data?.users || authorsResponse.users || []);
-
-      } catch (err) {
-        console.error('❌ メタデータ取得エラー:', err);
-      }
-    };
-
-    fetchMetadata();
-  }, []);
-
-  // 検索実行（フィルター変更時）
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      performSearch();
-    }, 500); // デバウンス
-
-    return () => clearTimeout(timeoutId);
-  }, [performSearch]);
-
-  // URLパラメータ更新
-  useEffect(() => {
-    const params = new URLSearchParams();
-    if (filters.query) params.set('q', filters.query);
-    if (filters.category_id) params.set('category', filters.category_id.toString());
-    if (filters.author_id) params.set('author', filters.author_id.toString());
-    if (filters.date_range) {
-      params.set('start', filters.date_range.start);
-      params.set('end', filters.date_range.end);
-    }
-    if (filters.sort_by) params.set('sort', filters.sort_by);
-
-    setSearchParams(params);
-  }, [filters, setSearchParams]);
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    performSearch(filters);
+  };
 
   const handleFilterChange = (key: keyof SearchFilters, value: any) => {
-    setFilters(prev => ({
-      ...prev,
-      [key]: value
-    }));
+    const newFilters = { ...filters, [key]: value };
+    setFilters(newFilters);
+    
+    // リアルタイム検索（クエリがある場合）
+    if (newFilters.query.trim()) {
+      performSearch(newFilters);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    window.location.href = '/login';
   };
 
   const clearFilters = () => {
     setFilters({
-      query: filters.query, // 検索キーワードは保持
+      query: '',
+      category_id: undefined,
+      author_id: undefined,
+      date_range: undefined,
       sort_by: 'date'
     });
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ja-JP', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-
-  const getHighlightedText = (text: string, query: string) => {
-    if (!query.trim()) return text;
-    const regex = new RegExp(`(${query})`, 'gi');
-    return text.replace(regex, '<mark style="background-color: #fef08a;">$1</mark>');
+    setSearchResults([]);
+    navigate('/search', { replace: true });
   };
 
   return (
-    <div style={{ 
-      maxWidth: '1200px', 
-      margin: '0 auto', 
-      padding: '2rem',
-      backgroundColor: '#f9fafb',
-      minHeight: '100vh'
-    }}>
+    <div style={{ minHeight: '100vh', backgroundColor: '#f9fafb' }}>
       {/* ヘッダー */}
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        marginBottom: '2rem',
+      <header style={{
         backgroundColor: 'white',
-        padding: '1.5rem',
-        borderRadius: '8px',
-        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+        borderBottom: '1px solid #e5e7eb',
+        padding: '1rem 0'
       }}>
-        <h1 style={{ 
-          fontSize: '2rem', 
-          fontWeight: 'bold',
-          margin: 0,
-          color: '#374151'
-        }}>
-          🔍 記事検索
-        </h1>
-        <Link 
-          to="/dashboard"
-          style={{
-            padding: '0.75rem 1.5rem',
-            backgroundColor: '#6b7280',
-            color: 'white',
-            textDecoration: 'none',
-            borderRadius: '6px',
-            fontSize: '0.875rem',
-            fontWeight: '500'
-          }}
-        >
-          ダッシュボードに戻る
-        </Link>
-      </div>
-
-      {/* 検索バー */}
-      <div style={{
-        backgroundColor: 'white',
-        padding: '1.5rem',
-        borderRadius: '8px',
-        marginBottom: '1rem',
-        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
-      }}>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <div style={{ flex: 1 }}>
-            <input
-              type="text"
-              value={filters.query}
-              onChange={(e) => handleFilterChange('query', e.target.value)}
-              placeholder="記事を検索..."
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                fontSize: '1rem'
-              }}
-            />
-          </div>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            style={{
-              padding: '0.75rem 1rem',
-              backgroundColor: showFilters ? '#3b82f6' : '#f3f4f6',
-              color: showFilters ? 'white' : '#374151',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '0.875rem'
-            }}
-          >
-            🔧 フィルター
-          </button>
-        </div>
-
-        {/* 検索結果サマリー */}
-        {filters.query && (
-          <div style={{ marginTop: '1rem', fontSize: '0.875rem', color: '#6b7280' }}>
-            「{filters.query}」の検索結果: {totalResults}件
-            {loading && <span> (検索中...)</span>}
-          </div>
-        )}
-      </div>
-
-      {/* 高度なフィルター */}
-      {showFilters && (
         <div style={{
-          backgroundColor: 'white',
-          padding: '1.5rem',
-          borderRadius: '8px',
-          marginBottom: '1rem',
-          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+          maxWidth: '1200px',
+          margin: '0 auto',
+          padding: '0 1rem'
         }}>
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-            gap: '1rem',
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
             marginBottom: '1rem'
           }}>
-            {/* カテゴリフィルター */}
             <div>
-              <label style={{ 
-                display: 'block', 
-                marginBottom: '0.5rem', 
-                fontSize: '0.875rem',
-                fontWeight: '500',
-                color: '#374151'
-              }}>
-                📁 カテゴリ
-              </label>
-              <select
-                value={filters.category_id || ''}
-                onChange={(e) => handleFilterChange('category_id', 
-                  e.target.value ? parseInt(e.target.value) : undefined
-                )}
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  fontSize: '0.875rem'
-                }}
-              >
-                <option value="">すべてのカテゴリ</option>
-                {categories.map(category => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
+              <Link to="/dashboard" style={{ textDecoration: 'none', color: 'inherit' }}>
+                <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 'bold' }}>
+                  メディアプラットフォーム
+                </h1>
+              </Link>
             </div>
-
-            {/* 著者フィルター */}
-            <div>
-              <label style={{ 
-                display: 'block', 
-                marginBottom: '0.5rem', 
-                fontSize: '0.875rem',
-                fontWeight: '500',
-                color: '#374151'
-              }}>
-                ✍️ 著者
-              </label>
-              <select
-                value={filters.author_id || ''}
-                onChange={(e) => handleFilterChange('author_id', 
-                  e.target.value ? parseInt(e.target.value) : undefined
-                )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                こんにちは、{user?.username}さん
+              </span>
+              <button
+                onClick={handleLogout}
                 style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  border: '1px solid #d1d5db',
+                  backgroundColor: '#ef4444',
+                  color: 'white',
+                  border: 'none',
+                  padding: '0.5rem 1rem',
                   borderRadius: '6px',
+                  cursor: 'pointer',
                   fontSize: '0.875rem'
                 }}
               >
-                <option value="">すべての著者</option>
-                {authors.map(author => (
-                  <option key={author.id} value={author.id}>
-                    {author.username}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* ソートオプション */}
-            <div>
-              <label style={{ 
-                display: 'block', 
-                marginBottom: '0.5rem', 
-                fontSize: '0.875rem',
-                fontWeight: '500',
-                color: '#374151'
-              }}>
-                📊 並び順
-              </label>
-              <select
-                value={filters.sort_by || 'date'}
-                onChange={(e) => handleFilterChange('sort_by', e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  fontSize: '0.875rem'
-                }}
-              >
-                <option value="date">新しい順</option>
-                <option value="popularity">人気順 (閲覧数)</option>
-                <option value="rating">評価順</option>
-              </select>
+                ログアウト
+              </button>
             </div>
           </div>
 
-          {/* 日付範囲フィルター */}
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ 
-              display: 'block', 
-              marginBottom: '0.5rem', 
+          {/* ナビゲーション */}
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <Link to="/dashboard" style={{
+              padding: '0.75rem 1.5rem',
+              backgroundColor: '#6b7280',
+              color: 'white',
+              textDecoration: 'none',
+              borderRadius: '6px',
               fontSize: '0.875rem',
-              fontWeight: '500',
-              color: '#374151'
+              fontWeight: '500'
             }}>
-              📅 投稿日期間
-            </label>
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-              <input
-                type="date"
-                value={filters.date_range?.start || ''}
-                onChange={(e) => handleFilterChange('date_range', 
-                  e.target.value ? { 
-                    start: e.target.value, 
-                    end: filters.date_range?.end || e.target.value 
-                  } : undefined
-                )}
-                style={{
-                  padding: '0.5rem',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  fontSize: '0.875rem'
-                }}
-              />
-              <span style={{ color: '#6b7280' }}>〜</span>
-              <input
-                type="date"
-                value={filters.date_range?.end || ''}
-                onChange={(e) => handleFilterChange('date_range', 
-                  e.target.value ? { 
-                    start: filters.date_range?.start || e.target.value, 
-                    end: e.target.value 
-                  } : undefined
-                )}
-                style={{
-                  padding: '0.5rem',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  fontSize: '0.875rem'
-                }}
-              />
-            </div>
-          </div>
-
-          {/* フィルタークリア */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button
-              onClick={clearFilters}
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: '#f3f4f6',
-                color: '#374151',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '0.875rem'
-              }}
-            >
-              🔄 フィルターをクリア
-            </button>
+              🏠 ダッシュボード
+            </Link>
+            <Link to="/create" style={{
+              padding: '0.75rem 1.5rem',
+              backgroundColor: '#3b82f6',
+              color: 'white',
+              textDecoration: 'none',
+              borderRadius: '6px',
+              fontSize: '0.875rem',
+              fontWeight: '500'
+            }}>
+              ✏️ 新規投稿
+            </Link>
+            <Link to="/my-posts" style={{
+              padding: '0.75rem 1.5rem',
+              backgroundColor: '#8b5cf6',
+              color: 'white',
+              textDecoration: 'none',
+              borderRadius: '6px',
+              fontSize: '0.875rem',
+              fontWeight: '500'
+            }}>
+              📄 マイ投稿
+            </Link>
           </div>
         </div>
-      )}
+      </header>
 
-      {/* エラー表示 */}
-      {error && (
-        <div style={{
-          backgroundColor: '#fee2e2',
-          border: '1px solid #fca5a5',
-          color: '#dc2626',
-          padding: '1rem',
-          borderRadius: '6px',
-          marginBottom: '1rem'
-        }}>
-          ❌ {error}
-        </div>
-      )}
-
-      {/* 検索結果 */}
-      {filters.query && !loading && (
-        <div style={{ display: 'grid', gap: '1rem' }}>
-          {results.length === 0 ? (
-            <div style={{
-              backgroundColor: 'white',
-              padding: '3rem',
-              borderRadius: '8px',
-              textAlign: 'center',
-              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
-            }}>
-              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔍</div>
-              <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem', color: '#374151' }}>
-                検索結果が見つかりません
-              </h3>
-              <p style={{ color: '#6b7280', marginBottom: '1.5rem' }}>
-                検索キーワードやフィルターを変更してお試しください
-              </p>
-            </div>
-          ) : (
-            results.map((content) => (
-              <div
-                key={content.id}
+      <div style={{
+        maxWidth: '1200px',
+        margin: '0 auto',
+        padding: '2rem 1rem'
+      }}>
+        {/* 検索ヘッダー */}
+        <div style={{ marginBottom: '2rem' }}>
+          <h2 style={{ margin: '0 0 1rem 0', fontSize: '1.875rem', fontWeight: 'bold' }}>
+            🔍 コンテンツ検索
+          </h2>
+          
+          {/* 検索フォーム */}
+          <form onSubmit={handleSearch} style={{
+            backgroundColor: 'white',
+            padding: '2rem',
+            borderRadius: '8px',
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+            marginBottom: '1rem'
+          }}>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
+              <input
+                type="text"
+                placeholder="記事のタイトルや内容を検索..."
+                value={filters.query}
+                onChange={(e) => handleFilterChange('query', e.target.value)}
                 style={{
-                  backgroundColor: 'white',
-                  padding: '1.5rem',
-                  borderRadius: '8px',
-                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
-                  border: '1px solid #e5e7eb'
+                  flex: 1,
+                  padding: '0.75rem 1rem',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '1rem'
+                }}
+              />
+              <button
+                type="submit"
+                disabled={loading}
+                style={{
+                  backgroundColor: '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  padding: '0.75rem 1.5rem',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '1rem',
+                  fontWeight: '500',
+                  opacity: loading ? 0.7 : 1
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ 
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '1rem',
-                      marginBottom: '0.75rem'
-                    }}>
-                      <Link 
-                        to={`/contents/${content.id}`}
-                        style={{
-                          fontSize: '1.25rem', 
-                          fontWeight: '600',
-                          margin: 0,
-                          color: '#374151',
-                          textDecoration: 'none'
-                        }}
-                        dangerouslySetInnerHTML={{
-                          __html: getHighlightedText(content.title, filters.query)
-                        }}
-                      />
-                      
-                      {content.category && (
-                        <span style={{
-                          backgroundColor: '#dbeafe',
-                          color: '#1d4ed8',
-                          padding: '0.25rem 0.75rem',
-                          borderRadius: '9999px',
-                          fontSize: '0.75rem',
-                          fontWeight: '500'
-                        }}>
-                          📁 {content.category.name}
-                        </span>
-                      )}
-                    </div>
-                    
-                    <div style={{ 
-                      color: '#6b7280', 
-                      fontSize: '0.875rem',
-                      marginBottom: '0.75rem',
-                      display: 'flex',
-                      gap: '1rem'
-                    }}>
-                      <span>✍️ {content.author?.username || '不明'}</span>
-                      <span>📅 {formatDate(content.created_at)}</span>
-                      <span>👁️ {content.view_count} 回閲覧</span>
-                    </div>
+                {loading ? '検索中...' : '🔍 検索'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowFilters(!showFilters)}
+                style={{
+                  backgroundColor: '#6b7280',
+                  color: 'white',
+                  border: 'none',
+                  padding: '0.75rem 1rem',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '0.875rem'
+                }}
+              >
+                🔧 フィルター
+              </button>
+            </div>
 
-                    {/* コンテンツのプレビュー */}
-                    <div 
-                      style={{ 
-                        color: '#374151',
-                        fontSize: '0.875rem',
-                        lineHeight: '1.5',
-                        marginBottom: '1rem'
-                      }}
-                      dangerouslySetInnerHTML={{
-                        __html: getHighlightedText(
-                          (content.content || content.body || '').substring(0, 200),
-                          filters.query
-                        )
-                      }}
-                    />
-                    {(content.content || content.body || '').length > 200 && '...'}
-                  </div>
+            {/* 詳細フィルター */}
+            {showFilters && (
+              <div style={{
+                borderTop: '1px solid #e5e7eb',
+                paddingTop: '1rem',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: '1rem'
+              }}>
+                {/* カテゴリフィルター */}
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: '500' }}>
+                    📁 カテゴリ
+                  </label>
+                  <select
+                    value={filters.category_id || ''}
+                    onChange={(e) => handleFilterChange('category_id', e.target.value ? parseInt(e.target.value) : undefined)}
+                    style={{
+                      width: '100%',
+                      padding: '0.5rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px'
+                    }}
+                  >
+                    <option value="">すべてのカテゴリ</option>
+                    {categories.map(category => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 著者フィルター */}
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: '500' }}>
+                    ✍️ 著者
+                  </label>
+                  <select
+                    value={filters.author_id || ''}
+                    onChange={(e) => handleFilterChange('author_id', e.target.value ? parseInt(e.target.value) : undefined)}
+                    style={{
+                      width: '100%',
+                      padding: '0.5rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px'
+                    }}
+                  >
+                    <option value="">すべての著者</option>
+                    {authors.map(author => (
+                      <option key={author.id} value={author.id}>
+                        {author.username}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* ソート */}
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: '500' }}>
+                    📊 並び順
+                  </label>
+                  <select
+                    value={filters.sort_by || 'date'}
+                    onChange={(e) => handleFilterChange('sort_by', e.target.value as 'date' | 'popularity' | 'rating')}
+                    style={{
+                      width: '100%',
+                      padding: '0.5rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px'
+                    }}
+                  >
+                    <option value="date">新着順</option>
+                    <option value="popularity">人気順</option>
+                    <option value="rating">評価順</option>
+                  </select>
+                </div>
+
+                {/* フィルタークリア */}
+                <div style={{ display: 'flex', alignItems: 'end' }}>
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    style={{
+                      backgroundColor: '#ef4444',
+                      color: 'white',
+                      border: 'none',
+                      padding: '0.5rem 1rem',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '0.875rem',
+                      width: '100%'
+                    }}
+                  >
+                    🗑️ クリア
+                  </button>
                 </div>
               </div>
-            ))
+            )}
+          </form>
+        </div>
+
+        {/* 検索結果 */}
+        <div>
+          {filters.query && (
+            <div style={{ marginBottom: '1rem' }}>
+              <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                「{filters.query}」の検索結果: {searchResults.length}件
+              </p>
+            </div>
+          )}
+
+          {loading ? (
+            <div style={{
+              textAlign: 'center',
+              padding: '4rem 2rem',
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+            }}>
+              <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>🔍</div>
+              <p>検索中...</p>
+            </div>
+          ) : searchResults.length > 0 ? (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+              gap: '1.5rem'
+            }}>
+              {searchResults.map((content) => (
+                <div key={content.id} style={{
+                  backgroundColor: 'white',
+                  borderRadius: '8px',
+                  padding: '1.5rem',
+                  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+                  transition: 'all 0.2s',
+                  cursor: 'pointer',
+                  border: '1px solid #e5e7eb'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '1rem'
+                  }}>
+                    <span style={{
+                      fontSize: '0.75rem',
+                      backgroundColor: '#dbeafe',
+                      color: '#1d4ed8',
+                      padding: '0.25rem 0.75rem',
+                      borderRadius: '9999px',
+                      fontWeight: '500'
+                    }}>
+                      📁 {content.category?.name || 'カテゴリなし'}
+                    </span>
+                    <span style={{ 
+                      fontSize: '0.75rem', 
+                      color: '#6b7280',
+                      backgroundColor: '#f3f4f6',
+                      padding: '0.25rem 0.5rem',
+                      borderRadius: '4px'
+                    }}>
+                      👁️ {content.view_count}
+                    </span>
+                  </div>
+                  
+                  <h3 style={{
+                    margin: '0 0 0.75rem 0',
+                    fontSize: '1.125rem',
+                    fontWeight: '600',
+                    color: '#1f2937',
+                    lineHeight: '1.4'
+                  }}>
+                    <Link 
+                      to={`/contents/${content.id}`}
+                      style={{ 
+                        textDecoration: 'none', 
+                        color: 'inherit',
+                        transition: 'color 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = '#3b82f6';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = 'inherit';
+                      }}
+                    >
+                      {content.title}
+                    </Link>
+                  </h3>
+                  
+                  <p style={{
+                    margin: '0 0 1rem 0',
+                    color: '#6b7280',
+                    fontSize: '0.875rem',
+                    lineHeight: '1.5',
+                    overflow: 'hidden',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 3,
+                    WebkitBoxOrient: 'vertical'
+                  }}>
+                    {content.body.substring(0, 120)}...
+                  </p>
+                  
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    fontSize: '0.75rem',
+                    color: '#6b7280',
+                    borderTop: '1px solid #f3f4f6',
+                    paddingTop: '0.75rem'
+                  }}>
+                    <span style={{ fontWeight: '500' }}>
+                      ✍️ {content.author?.username || '不明'}
+                    </span>
+                    <span>
+                      📅 {new Date(content.created_at).toLocaleDateString('ja-JP')}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : filters.query ? (
+            <div style={{
+              textAlign: 'center',
+              padding: '4rem 2rem',
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+            }}>
+              <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>🔍</div>
+              <h3 style={{ margin: '0 0 1rem 0', color: '#6b7280', fontSize: '1.25rem' }}>
+                検索結果が見つかりませんでした
+              </h3>
+              <p style={{ margin: '0 0 2rem 0', color: '#9ca3af' }}>
+                別のキーワードで検索してみるか、フィルターを調整してください。
+              </p>
+              <button
+                onClick={clearFilters}
+                style={{
+                  backgroundColor: '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  padding: '1rem 2rem',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '1rem',
+                  fontWeight: '500'
+                }}
+              >
+                🗑️ 検索条件をクリア
+              </button>
+            </div>
+          ) : (
+            <div style={{
+              textAlign: 'center',
+              padding: '4rem 2rem',
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+            }}>
+              <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>🔍</div>
+              <h3 style={{ margin: '0 0 1rem 0', color: '#6b7280', fontSize: '1.25rem' }}>
+                検索キーワードを入力してください
+              </h3>
+              <p style={{ margin: 0, color: '#9ca3af' }}>
+                記事のタイトルや内容で検索できます。フィルターで絞り込みも可能です。
+              </p>
+            </div>
           )}
         </div>
-      )}
-
-      {/* 初期状態（検索前） */}
-      {!filters.query && (
-        <div style={{
-          backgroundColor: 'white',
-          padding: '3rem',
-          borderRadius: '8px',
-          textAlign: 'center',
-          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
-        }}>
-          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔍</div>
-          <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem', color: '#374151' }}>
-            記事を検索
-          </h3>
-          <p style={{ color: '#6b7280', marginBottom: '1.5rem' }}>
-            キーワードを入力して記事を検索してください
-          </p>
-        </div>
-      )}
+      </div>
     </div>
   );
 };
