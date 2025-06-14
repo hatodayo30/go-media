@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 
 // 一時的に型定義（後で types/index.ts から import）
@@ -35,6 +35,9 @@ const DashboardPage: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchUserAndData();
@@ -94,6 +97,14 @@ const DashboardPage: React.FC = () => {
     }
   };
 
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      // 検索ページに遷移
+      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     window.location.href = '/login';
@@ -125,19 +136,71 @@ const DashboardPage: React.FC = () => {
           margin: '0 auto',
           padding: '0 1rem'
         }}>
-          {/* トップヘッダー：タイトルとユーザー情報 */}
+          {/* トップヘッダー：タイトル、検索バー、ユーザー情報 */}
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: '1rem'
+            marginBottom: '1rem',
+            gap: '1rem'
           }}>
-            <div>
+            <div style={{ flexShrink: 0 }}>
               <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 'bold' }}>
                 メディアプラットフォーム
               </h1>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            
+            {/* 検索バー */}
+            <div style={{ flex: 1, maxWidth: '400px' }}>
+              <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: '0.5rem' }}>
+                <input
+                  type="text"
+                  placeholder="記事を検索..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{
+                    flex: 1,
+                    padding: '0.5rem 1rem',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    fontSize: '0.875rem'
+                  }}
+                />
+                <button
+                  type="submit"
+                  style={{
+                    backgroundColor: '#3b82f6',
+                    color: 'white',
+                    border: 'none',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '0.875rem',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  🔍
+                </button>
+                <Link
+                  to="/search"
+                  style={{
+                    backgroundColor: '#6b7280',
+                    color: 'white',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '6px',
+                    textDecoration: 'none',
+                    fontSize: '0.875rem',
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  詳細検索
+                </Link>
+              </form>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexShrink: 0 }}>
               <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
                 こんにちは、{user?.username}さん ({user?.role})
               </span>
@@ -235,6 +298,25 @@ const DashboardPage: React.FC = () => {
             >
               👤 プロフィール
             </Link>
+
+            {/* 検索ボタン（モバイル用） */}
+            <Link 
+              to="/search"
+              style={{
+                padding: '0.75rem 1.5rem',
+                backgroundColor: '#10b981',
+                color: 'white',
+                textDecoration: 'none',
+                borderRadius: '6px',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}
+            >
+              🔍 検索
+            </Link>
           </div>
         </div>
       </header>
@@ -323,6 +405,22 @@ const DashboardPage: React.FC = () => {
                 👤 ログイン: {user?.role}
               </div>
             </div>
+          </div>
+
+          {/* クイック検索ヒント */}
+          <div style={{
+            backgroundColor: '#fef3c7',
+            borderRadius: '8px',
+            padding: '1rem',
+            marginTop: '1rem',
+            border: '1px solid #fcd34d'
+          }}>
+            <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.875rem', fontWeight: '600', color: '#92400e' }}>
+              💡 検索のヒント
+            </h4>
+            <p style={{ margin: 0, fontSize: '0.75rem', color: '#92400e', lineHeight: '1.4' }}>
+              上部の検索バーから素早く検索、「詳細検索」でフィルターを使用できます。
+            </p>
           </div>
         </aside>
 

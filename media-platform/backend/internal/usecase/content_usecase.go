@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	domainErrors "media-platform/internal/domain/errors"
+	"strings"
 	"time"
 
 	"media-platform/internal/domain/model"
@@ -52,6 +54,8 @@ func (u *ContentUseCase) GetContentByID(ctx context.Context, id int64) (*model.C
 
 // GetContents は条件に合うコンテンツの一覧を取得します
 func (u *ContentUseCase) GetContents(ctx context.Context, query *model.ContentQuery) ([]*model.ContentResponse, int, error) {
+	log.Printf("🔍 ContentUseCase.GetContents: %+v", query)
+
 	// デフォルト値の設定
 	if query.Limit <= 0 {
 		query.Limit = 10
@@ -66,12 +70,14 @@ func (u *ContentUseCase) GetContents(ctx context.Context, query *model.ContentQu
 	// コンテンツの取得
 	contents, err := u.contentRepo.FindAll(ctx, query)
 	if err != nil {
+		log.Printf("❌ ContentUseCase.GetContents FindAll error: %v", err)
 		return nil, 0, err
 	}
 
 	// トータル件数の取得
 	totalCount, err := u.contentRepo.CountAll(ctx, query)
 	if err != nil {
+		log.Printf("❌ ContentUseCase.GetContents CountAll error: %v", err)
 		return nil, 0, err
 	}
 
@@ -81,11 +87,14 @@ func (u *ContentUseCase) GetContents(ctx context.Context, query *model.ContentQu
 		responses = append(responses, content.ToResponse())
 	}
 
+	log.Printf("✅ ContentUseCase.GetContents完了: %d件（全%d件中）", len(responses), totalCount)
 	return responses, totalCount, nil
 }
 
 // GetPublishedContents は公開済みのコンテンツの一覧を取得します
 func (u *ContentUseCase) GetPublishedContents(ctx context.Context, limit, offset int) ([]*model.ContentResponse, error) {
+	log.Printf("📚 ContentUseCase.GetPublishedContents: limit=%d, offset=%d", limit, offset)
+
 	// デフォルト値の設定
 	if limit <= 0 {
 		limit = 10
@@ -100,6 +109,7 @@ func (u *ContentUseCase) GetPublishedContents(ctx context.Context, limit, offset
 	// 公開済みコンテンツの取得
 	contents, err := u.contentRepo.FindPublished(ctx, limit, offset)
 	if err != nil {
+		log.Printf("❌ ContentUseCase.GetPublishedContents error: %v", err)
 		return nil, err
 	}
 
@@ -109,6 +119,7 @@ func (u *ContentUseCase) GetPublishedContents(ctx context.Context, limit, offset
 		responses = append(responses, content.ToResponse())
 	}
 
+	log.Printf("✅ ContentUseCase.GetPublishedContents完了: %d件", len(responses))
 	return responses, nil
 }
 
@@ -211,8 +222,10 @@ func (u *ContentUseCase) GetTrendingContents(ctx context.Context, limit int) ([]
 	return responses, nil
 }
 
-// SearchContents はキーワードでコンテンツを検索します
+// SearchContents はキーワードでコンテンツを検索します（拡張版）
 func (u *ContentUseCase) SearchContents(ctx context.Context, keyword string, limit, offset int) ([]*model.ContentResponse, error) {
+	log.Printf("🔍 ContentUseCase.SearchContents: keyword=%s, limit=%d, offset=%d", keyword, limit, offset)
+
 	// デフォルト値の設定
 	if limit <= 0 {
 		limit = 10
@@ -226,13 +239,99 @@ func (u *ContentUseCase) SearchContents(ctx context.Context, keyword string, lim
 
 	// キーワードが空の場合は公開済みコンテンツを返す
 	if keyword == "" {
+		log.Println("🔍 キーワードが空のため、公開済みコンテンツを返します")
 		return u.GetPublishedContents(ctx, limit, offset)
 	}
 
-	// コンテンツ検索
+	// ContentQueryを構築して既存のGetContentsメソッドを活用
+	publishedStatus := "published"
+	query := &model.ContentQuery{
+		Limit:       limit,
+		Offset:      offset,
+		SearchQuery: &keyword,
+		Status:      &publishedStatus, // 公開済みのみ検索
+	}
+
+	log.Printf("🔍 ContentQuery構築: %+v", query)
+
+	// 既存のGetContentsメソッドを使用（検索機能付き）
+	responses, _, err := u.GetContents(ctx, query)
+	if err != nil {
+		log.Printf("❌ ContentUseCase.SearchContents GetContents error: %v", err)
+
+		// PostgreSQL全文検索エラーの場合、フォールバック検索を試行
+		if isSearchError(err) {
+			log.Println("🔄 検索エラー検出、フォールバック検索を実行")
+			fallbackResponses, fallbackErr := u.fallbackSearch(ctx, keyword, limit, offset)
+			if fallbackErr != nil {
+				return nil, fallbackErr
+			}
+			return fallbackResponses, nil
+		}
+
+		return nil, err
+	}
+
+	log.Printf("✅ ContentUseCase.SearchContents完了: %d件", len(responses))
+	return responses, nil
+}
+
+// SearchContentsAdvanced は拡張された検索機能を提供します（新規追加）
+func (u *ContentUseCase) SearchContentsAdvanced(ctx context.Context, query *model.ContentQuery) ([]*model.ContentResponse, int, error) {
+	log.Printf("🔍 ContentUseCase.SearchContentsAdvanced: %+v", query)
+
+	// デフォルト値の設定
+	if query.Limit <= 0 {
+		query.Limit = 10
+	}
+	if query.Limit > 100 {
+		query.Limit = 100
+	}
+	if query.Offset < 0 {
+		query.Offset = 0
+	}
+
+	// 公開済みコンテンツのみを対象とする（検索の場合）
+	if query.Status == nil {
+		publishedStatus := "published"
+		query.Status = &publishedStatus
+	}
+
+	// 既存のGetContentsメソッドを活用
+	responses, totalCount, err := u.GetContents(ctx, query)
+	if err != nil {
+		log.Printf("❌ ContentUseCase.SearchContentsAdvanced error: %v", err)
+
+		// 検索エラーの場合のフォールバック
+		if isSearchError(err) && query.SearchQuery != nil {
+			log.Println("🔄 高度な検索でエラー、フォールバック検索を実行")
+			fallbackResponses, fallbackErr := u.fallbackSearch(ctx, *query.SearchQuery, query.Limit, query.Offset)
+			if fallbackErr != nil {
+				return nil, 0, fallbackErr
+			}
+			// フォールバック検索では正確なtotalCountが取得できないため、取得件数を返す
+			return fallbackResponses, len(fallbackResponses), nil
+		}
+
+		return nil, 0, err
+	}
+
+	log.Printf("✅ ContentUseCase.SearchContentsAdvanced完了: %d件（全%d件中）", len(responses), totalCount)
+	return responses, totalCount, nil
+}
+
+// fallbackSearch はPostgreSQL全文検索エラー時のフォールバック検索です
+func (u *ContentUseCase) fallbackSearch(ctx context.Context, keyword string, limit, offset int) ([]*model.ContentResponse, error) {
+	log.Printf("🔄 ContentUseCase.fallbackSearch実行: keyword=%s", keyword)
+
+	// リポジトリの基本的な検索メソッドを使用
 	contents, err := u.contentRepo.Search(ctx, keyword, limit, offset)
 	if err != nil {
-		return nil, err
+		log.Printf("❌ ContentUseCase.fallbackSearch error: %v", err)
+
+		// フォールバック検索も失敗した場合、公開済みコンテンツを返す
+		log.Println("🔄 フォールバック検索も失敗、公開済みコンテンツを返します")
+		return u.GetPublishedContents(ctx, limit, offset)
 	}
 
 	// レスポンスの作成
@@ -241,7 +340,52 @@ func (u *ContentUseCase) SearchContents(ctx context.Context, keyword string, lim
 		responses = append(responses, content.ToResponse())
 	}
 
+	log.Printf("✅ ContentUseCase.fallbackSearch完了: %d件", len(responses))
 	return responses, nil
+}
+
+// isSearchError は検索関連のエラーかどうかを判定します
+func isSearchError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errMsg := err.Error()
+	searchErrors := []string{
+		"text search configuration",
+		"to_tsvector",
+		"to_tsquery",
+		"ts_rank",
+		"検索に失敗",
+		"search failed",
+	}
+
+	for _, searchErr := range searchErrors {
+		if strings.Contains(errMsg, searchErr) {
+			log.Printf("🔍 検索エラー検出: %s", searchErr)
+			return true
+		}
+	}
+
+	return false
+}
+
+// カテゴリの存在チェック（修正）
+func (u *ContentUseCase) categoryExists(ctx context.Context, categoryID int64) (bool, error) {
+	category, err := u.categoryRepo.FindByID(ctx, categoryID) // 正しいメソッド名
+	if err != nil {
+		return false, err
+	}
+	return category != nil, nil
+}
+
+// ユーザーの存在チェック
+func (u *ContentUseCase) userExists(ctx context.Context, userID int64) (bool, error) {
+	user, err := u.userRepo.Find(ctx, userID)
+	if err != nil {
+		return false, err
+	}
+	return user != nil, nil
 }
 
 // CreateContent は新しいコンテンツを作成します
@@ -422,22 +566,4 @@ func (u *ContentUseCase) DeleteContent(ctx context.Context, id int64, userID int
 
 	// コンテンツの削除
 	return u.contentRepo.Delete(ctx, id)
-}
-
-// カテゴリの存在チェック
-func (u *ContentUseCase) categoryExists(ctx context.Context, categoryID int64) (bool, error) {
-	category, err := u.contentRepo.Find(ctx, categoryID)
-	if err != nil {
-		return false, err
-	}
-	return category != nil, nil
-}
-
-// ユーザーの存在チェック
-func (u *ContentUseCase) userExists(ctx context.Context, userID int64) (bool, error) {
-	user, err := u.userRepo.Find(ctx, userID)
-	if err != nil {
-		return false, err
-	}
-	return user != nil, nil
 }

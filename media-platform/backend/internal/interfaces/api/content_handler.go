@@ -2,8 +2,10 @@ package api
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"media-platform/internal/domain/model"
 	"media-platform/internal/usecase"
@@ -221,22 +223,53 @@ func (h *ContentHandler) GetTrendingContents(c *gin.Context) {
 	})
 }
 
-// SearchContents はキーワードでコンテンツを検索するハンドラです
+// SearchContents はキーワードでコンテンツを検索するハンドラです（既存UseCase活用版）
 func (h *ContentHandler) SearchContents(c *gin.Context) {
+	log.Println("🔍 検索リクエスト受信")
+
 	// 検索キーワードの取得
 	keyword := c.Query("q")
+	if keyword == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "検索キーワードが必要です",
+		})
+		return
+	}
+
+	// 拡張パラメータの取得
+	sortBy := c.DefaultQuery("sort_by", "date")
+	categoryIDStr := c.Query("category_id")
+	authorIDStr := c.Query("author_id")
 
 	// ページネーションパラメータの取得
 	limit, offset := h.getPaginationParams(c)
 
+	log.Printf("📝 検索パラメータ: keyword=%s, sort_by=%s, category_id=%s, author_id=%s, limit=%d, offset=%d",
+		keyword, sortBy, categoryIDStr, authorIDStr, limit, offset)
+
+	// 🔍 拡張検索パラメータがある場合は高度な検索を使用
+	hasAdvancedParams := categoryIDStr != "" || authorIDStr != "" || sortBy != "date"
+
+	if hasAdvancedParams {
+		log.Println("🔍 高度な検索パラメータ検出、ContentQueryを使用")
+		h.handleAdvancedSearch(c, keyword, sortBy, categoryIDStr, authorIDStr, limit, offset)
+		return
+	}
+
+	// 🔍 基本検索：既存のSearchContentsメソッドを使用
+	log.Println("🔍 基本検索を実行")
 	contents, err := h.contentUseCase.SearchContents(c.Request.Context(), keyword, limit, offset)
 	if err != nil {
+		log.Printf("❌ 基本検索エラー: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status": "error",
 			"error":  "コンテンツの検索に失敗しました: " + err.Error(),
 		})
 		return
 	}
+
+	log.Printf("✅ 基本検索完了: %d件", len(contents))
 
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
@@ -247,6 +280,97 @@ func (h *ContentHandler) SearchContents(c *gin.Context) {
 				"offset": offset,
 			},
 			"query": keyword,
+		},
+	})
+}
+
+// handleAdvancedSearch は拡張検索パラメータがある場合の処理です
+func (h *ContentHandler) handleAdvancedSearch(c *gin.Context, keyword, sortBy, categoryIDStr, authorIDStr string, limit, offset int) {
+	log.Println("🔍 高度な検索処理開始")
+
+	// ContentQueryを構築
+	publishedStatus := "published"
+	query := &model.ContentQuery{
+		Limit:       limit,
+		Offset:      offset,
+		SearchQuery: &keyword,
+		Status:      &publishedStatus,
+		SortBy:      &sortBy,
+	}
+
+	// カテゴリフィルター
+	if categoryIDStr != "" {
+		if categoryID, err := strconv.ParseInt(categoryIDStr, 10, 64); err == nil {
+			query.CategoryID = &categoryID
+			log.Printf("🔍 カテゴリフィルター追加: %d", categoryID)
+		} else {
+			log.Printf("⚠️ 無効なカテゴリID: %s", categoryIDStr)
+		}
+	}
+
+	// 著者フィルター
+	if authorIDStr != "" {
+		if authorID, err := strconv.ParseInt(authorIDStr, 10, 64); err == nil {
+			query.AuthorID = &authorID
+			log.Printf("🔍 著者フィルター追加: %d", authorID)
+		} else {
+			log.Printf("⚠️ 無効な著者ID: %s", authorIDStr)
+		}
+	}
+
+	log.Printf("🔍 ContentQuery構築完了: %+v", query)
+
+	// 🔍 UseCaseのSearchContentsAdvancedメソッドを使用（新規追加が必要）
+	// または既存のGetContentsメソッドを直接使用
+	contents, totalCount, err := h.contentUseCase.GetContents(c.Request.Context(), query)
+	if err != nil {
+		log.Printf("❌ 高度な検索エラー: %v", err)
+
+		// エラー時は基本検索にフォールバック
+		log.Println("🔄 基本検索にフォールバック")
+		fallbackContents, fallbackErr := h.contentUseCase.SearchContents(c.Request.Context(), keyword, limit, offset)
+		if fallbackErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status": "error",
+				"error":  "コンテンツの検索に失敗しました: " + fallbackErr.Error(),
+			})
+			return
+		}
+
+		log.Printf("✅ フォールバック検索完了: %d件", len(fallbackContents))
+
+		c.JSON(http.StatusOK, gin.H{
+			"status": "success",
+			"data": gin.H{
+				"contents": fallbackContents,
+				"pagination": gin.H{
+					"total":  len(fallbackContents), // 正確な件数は不明
+					"limit":  limit,
+					"offset": offset,
+				},
+				"query":    keyword,
+				"fallback": true,
+				"message":  "一部の検索機能が制限されています",
+			},
+		})
+		return
+	}
+
+	log.Printf("✅ 高度な検索完了: %d件（全%d件中）", len(contents), totalCount)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data": gin.H{
+			"contents": contents,
+			"pagination": gin.H{
+				"total":  totalCount,
+				"limit":  limit,
+				"offset": offset,
+			},
+			"query":       keyword,
+			"category_id": categoryIDStr,
+			"author_id":   authorIDStr,
+			"sort_by":     sortBy,
 		},
 	})
 }
@@ -614,6 +738,31 @@ func (h *ContentHandler) getPaginationParams(c *gin.Context) (int, int) {
 	}
 
 	return limit, offset
+}
+
+// isPostgreSQLTextSearchError はPostgreSQLの全文検索エラーかどうかを判定します
+func isPostgreSQLTextSearchError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errMsg := err.Error()
+	// PostgreSQLの日本語全文検索関連エラーを検出
+	textSearchErrors := []string{
+		"text search configuration \"japanese\" does not exist",
+		"to_tsvector",
+		"to_tsquery",
+		"ts_rank",
+	}
+
+	for _, searchErr := range textSearchErrors {
+		if strings.Contains(errMsg, searchErr) {
+			log.Printf("🔍 PostgreSQL全文検索エラー検出: %s", searchErr)
+			return true
+		}
+	}
+
+	return false
 }
 
 // ヘルパーメソッド：ユーザー認証情報をコンテキストから取得

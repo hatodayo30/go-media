@@ -64,6 +64,46 @@ apiClient.interceptors.response.use(
   }
 );
 
+// TypeScript型定義
+export interface SearchFilters {
+  q: string;
+  category_id?: number;
+  author_id?: number;
+  date_start?: string;
+  date_end?: string;
+  sort_by?: 'date' | 'popularity' | 'rating';
+  page?: number;
+  limit?: number;
+}
+
+export interface SearchResult {
+  contents: any[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface SearchSuggestion {
+  id: number;
+  text: string;
+  type: 'content' | 'category' | 'author';
+  count: number;
+}
+
+export interface SearchHistory {
+  id: number;
+  query: string;
+  created_at: string;
+  result_count: number;
+}
+
+export interface PopularKeyword {
+  keyword: string;
+  count: number;
+  trend: 'up' | 'down' | 'stable';
+}
+
 // API関数の定義
 export const api = {
   // 認証関連
@@ -93,6 +133,14 @@ export const api = {
     return response.data;
   },
 
+  // 🔍 新規追加: 検索機能で使用するユーザー一覧（著者フィルター用）
+  getUsers: async () => {
+    console.log('👥 ユーザー一覧取得（著者フィルター用）');
+    const response = await apiClient.get('/api/users');
+    console.log('✅ ユーザー一覧レスポンス:', response.data);
+    return response.data;
+  },
+
   // カテゴリ関連
   getCategories: async () => {
     const response = await apiClient.get('/api/categories');
@@ -116,6 +164,7 @@ export const api = {
     console.log('📥 API レスポンス:', response.data);
     return response.data;
   },
+
   getPublishedContents: async () => {
     const response = await apiClient.get('/api/contents/published');
     return response.data;
@@ -126,8 +175,51 @@ export const api = {
     return response.data;
   },
 
-  searchContents: async (query: string) => {
-    const response = await apiClient.get('/api/contents/search', { params: { q: query } });
+  // 🔍 拡張: 検索機能対応
+  searchContents: async (params: SearchFilters | string) => {
+    console.log('🔍 検索リクエスト:', params);
+    
+    let searchParams: URLSearchParams;
+    
+    // 文字列の場合（従来の互換性維持）
+    if (typeof params === 'string') {
+      searchParams = new URLSearchParams({ q: params });
+    } else {
+      // オブジェクトの場合（新しい拡張機能）
+      searchParams = new URLSearchParams();
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          searchParams.append(key, value.toString());
+        }
+      });
+    }
+
+    console.log('📤 検索パラメータ:', searchParams.toString());
+    const response = await apiClient.get(`/api/contents/search?${searchParams.toString()}`);
+    console.log('✅ 検索レスポンス:', response.data);
+    return response.data;
+  },
+
+  // 🔍 新規追加: 高度な検索（将来の拡張用）
+  advancedSearch: async (searchQuery: {
+    query?: string;
+    title?: string;
+    content?: string;
+    tags?: string[];
+    categories?: number[];
+    authors?: number[];
+    dateRange?: {
+      start: string;
+      end: string;
+    };
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+    page?: number;
+    limit?: number;
+  }) => {
+    console.log('🔍 高度な検索リクエスト:', searchQuery);
+    const response = await apiClient.post('/api/contents/advanced-search', searchQuery);
+    console.log('✅ 高度な検索レスポンス:', response.data);
     return response.data;
   },
 
@@ -164,6 +256,97 @@ export const api = {
   deleteContent: async (id: string) => {
     const response = await apiClient.delete(`/api/contents/${id}`);
     return response.data;
+  },
+
+  // 🔍 新規追加: 検索履歴関連
+  saveSearchHistory: async (query: string) => {
+    console.log('💾 検索履歴保存:', query);
+    try {
+      const response = await apiClient.post('/api/search/history', { query });
+      console.log('✅ 検索履歴保存成功:', response.data);
+      return response.data;
+    } catch (error) {
+      console.warn('⚠️ 検索履歴保存は未実装またはエラー:', error);
+      // エラーでも処理を続行（検索履歴は必須機能ではないため）
+      return null;
+    }
+  },
+
+  getSearchHistory: async () => {
+    console.log('📚 検索履歴取得');
+    try {
+      const response = await apiClient.get('/api/search/history');
+      console.log('✅ 検索履歴取得成功:', response.data);
+      return response.data;
+    } catch (error) {
+      console.warn('⚠️ 検索履歴取得は未実装またはエラー:', error);
+      return { history: [] }; // 空の配列を返す
+    }
+  },
+
+  // 🔍 新規追加: 人気検索キーワード
+  getPopularSearchKeywords: async () => {
+    console.log('🔥 人気検索キーワード取得');
+    try {
+      const response = await apiClient.get('/api/search/popular');
+      console.log('✅ 人気検索キーワード取得成功:', response.data);
+      return response.data;
+    } catch (error) {
+      console.warn('⚠️ 人気検索キーワード取得は未実装またはエラー:', error);
+      return { keywords: [] }; // 空の配列を返す
+    }
+  },
+
+  // 🔍 新規追加: 検索候補（オートコンプリート用）
+  getSearchSuggestions: async (query: string) => {
+    console.log('💡 検索候補取得:', query);
+    try {
+      const response = await apiClient.get(`/api/search/suggestions?q=${encodeURIComponent(query)}`);
+      console.log('✅ 検索候補取得成功:', response.data);
+      return response.data;
+    } catch (error) {
+      console.warn('⚠️ 検索候補取得は未実装またはエラー:', error);
+      return { suggestions: [] }; // 空の配列を返す
+    }
+  },
+
+  // 🔍 新規追加: 統計情報
+  getCategoryStats: async () => {
+    console.log('📊 カテゴリ統計取得');
+    try {
+      const response = await apiClient.get('/api/categories/stats');
+      console.log('✅ カテゴリ統計取得成功:', response.data);
+      return response.data;
+    } catch (error) {
+      console.warn('⚠️ カテゴリ統計取得は未実装またはエラー:', error);
+      // 既存のカテゴリ取得で代替
+      const categories = await api.getCategories();
+      return { 
+        stats: categories.map((cat: any) => ({ 
+          ...cat, 
+          content_count: 0 
+        })) 
+      };
+    }
+  },
+
+  getAuthorStats: async () => {
+    console.log('📊 著者統計取得');
+    try {
+      const response = await apiClient.get('/api/authors/stats');
+      console.log('✅ 著者統計取得成功:', response.data);
+      return response.data;
+    } catch (error) {
+      console.warn('⚠️ 著者統計取得は未実装またはエラー:', error);
+      // 既存のユーザー取得で代替
+      const users = await api.getUsers();
+      return { 
+        stats: users.map((user: any) => ({ 
+          ...user, 
+          content_count: 0 
+        })) 
+      };
+    }
   },
 
   // コメント関連
@@ -262,6 +445,94 @@ export const api = {
     const response = await apiClient.get('/health');
     return response.data;
   },
+};
+
+// 🔍 検索関連のユーティリティ関数
+export const searchUtils = {
+  // 検索クエリの正規化
+  normalizeQuery: (query: string): string => {
+    return query.trim().toLowerCase().replace(/\s+/g, ' ');
+  },
+
+  // 日付範囲のバリデーション
+  validateDateRange: (start: string, end: string): boolean => {
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    return startDate <= endDate;
+  },
+
+  // 検索パラメータの構築
+  buildSearchParams: (filters: SearchFilters): URLSearchParams => {
+    const params = new URLSearchParams();
+    
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        if (Array.isArray(value)) {
+          value.forEach((item: any) => {
+            params.append(`${key}[]`, item.toString());
+          });
+        } else {
+          params.append(key, value.toString());
+        }
+      }
+    });
+
+    return params;
+  },
+
+  // 検索結果のハイライト（HTML文字列作成用）
+  highlightSearchTerms: (text: string, query: string): string => {
+    if (!query) return text;
+    
+    const terms = query.split(' ').filter(term => term.length > 0);
+    let highlightedText = text;
+    
+    terms.forEach(term => {
+      const regex = new RegExp(`(${term})`, 'gi');
+      highlightedText = highlightedText.replace(regex, '<mark>$1</mark>');
+    });
+    
+    return highlightedText;
+  },
+
+  // 検索クエリの分析
+  analyzeQuery: (query: string) => {
+    const trimmed = query.trim();
+    return {
+      isEmpty: trimmed.length === 0,
+      wordCount: trimmed.split(' ').filter(word => word.length > 0).length,
+      hasSpecialChars: /[!@#$%^&*(),.?":{}|<>]/.test(trimmed),
+      isLongQuery: trimmed.length > 100
+    };
+  }
+};
+
+// 🔍 検索エラーハンドリング用のユーティリティ
+export const searchErrorHandler = {
+  handleSearchError: (error: any) => {
+    console.error('🔍 検索エラー:', error);
+    
+    if (error.response) {
+      switch (error.response.status) {
+        case 400:
+          throw new Error('検索パラメータが不正です');
+        case 401:
+          throw new Error('認証が必要です');
+        case 404:
+          throw new Error('検索結果が見つかりませんでした');
+        case 429:
+          throw new Error('検索回数の上限に達しました。しばらく待ってから再試行してください');
+        case 500:
+          throw new Error('サーバーエラーが発生しました');
+        default:
+          throw new Error('検索中にエラーが発生しました');
+      }
+    } else if (error.request) {
+      throw new Error('ネットワークエラーが発生しました');
+    } else {
+      throw new Error('予期せぬエラーが発生しました');
+    }
+  }
 };
 
 export default apiClient;
