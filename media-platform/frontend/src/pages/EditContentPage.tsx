@@ -1,26 +1,28 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { api } from "../services/api";
-import {
-  Category,
-  Content,
-  UpdateContentRequest,
-  ContentStatus,
-  normalizeContent,
-} from "../types";
 
-interface EditFormData {
+interface Category {
+  id: number;
+  name: string;
+  description?: string;
+}
+
+interface Content {
+  id: number;
   title: string;
-  body: string;
-  category_id: string;
-  status: ContentStatus;
+  content?: string;
+  body?: string;
+  status: string;
+  category_id: number;
+  author_id: number;
 }
 
 const EditContentPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const [formData, setFormData] = useState<EditFormData>({
+  const [formData, setFormData] = useState({
     title: "",
     body: "",
     category_id: "",
@@ -33,7 +35,7 @@ const EditContentPage: React.FC = () => {
   const [error, setError] = useState("");
   const [originalContent, setOriginalContent] = useState<Content | null>(null);
 
-  // fetchContentAndCategoriesをuseCallbackでメモ化
+  // useCallbackを使用してfetchContentAndCategoriesをメモ化
   const fetchContentAndCategories = useCallback(async () => {
     if (!id) return;
 
@@ -49,19 +51,23 @@ const EditContentPage: React.FC = () => {
       console.log("📥 コンテンツレスポンス:", contentRes);
       console.log("📥 カテゴリレスポンス:", categoriesRes);
 
-      // 正規化関数を使用してコンテンツデータを統一
-      const normalizedContent = normalizeContent(contentRes);
-      const categoriesData: Category[] = categoriesRes || [];
+      const contentData =
+        contentRes.data?.content || contentRes.content || contentRes;
+      const categoriesData =
+        categoriesRes.data?.categories ||
+        categoriesRes.categories ||
+        categoriesRes ||
+        [];
 
-      setOriginalContent(normalizedContent);
+      setOriginalContent(contentData);
       setCategories(categoriesData);
 
       // フォームにデータを設定
       setFormData({
-        title: normalizedContent.title || "",
-        body: normalizedContent.body || "",
-        category_id: normalizedContent.category_id?.toString() || "",
-        status: (normalizedContent.status as ContentStatus) || "draft",
+        title: contentData.title || "",
+        body: contentData.content || contentData.body || "",
+        category_id: contentData.category_id?.toString() || "",
+        status: contentData.status || "draft",
       });
     } catch (err: any) {
       console.error("❌ データ取得エラー:", err);
@@ -75,78 +81,103 @@ const EditContentPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id]); // idが依存配列に含まれる
 
   useEffect(() => {
     if (id) {
       fetchContentAndCategories();
     }
-  }, [id, fetchContentAndCategories]);
+  }, [id, fetchContentAndCategories]); // fetchContentAndCategoriesを依存配列に含める
 
-  const handleSubmit = async (e: React.FormEvent, isDraft: boolean = false) => {
-    e.preventDefault();
+  // useCallbackを使用してhandleSubmitをメモ化
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent, isDraft: boolean = false) => {
+      e.preventDefault();
 
-    // バリデーション
-    if (!formData.title.trim()) {
-      setError("タイトルを入力してください");
-      return;
-    }
-
-    if (!formData.body.trim()) {
-      setError("本文を入力してください");
-      return;
-    }
-
-    if (!formData.category_id) {
-      setError("カテゴリを選択してください");
-      return;
-    }
-
-    try {
-      setSaving(true);
-      setError("");
-
-      // UpdateContentRequest型を使用
-      const submitData: UpdateContentRequest = {
-        title: formData.title.trim(),
-        body: formData.body.trim(),
-        category_id: parseInt(formData.category_id),
-        status: isDraft ? "draft" : "published",
-      };
-
-      console.log("💾 コンテンツを更新中...", submitData);
-
-      const response: Content = await api.updateContent(id!, submitData);
-      console.log("✅ 更新レスポンス:", response);
-
-      alert(isDraft ? "下書きを保存しました！" : "コンテンツを公開しました！");
-      navigate("/my-posts");
-    } catch (err: any) {
-      console.error("❌ 保存エラー:", err);
-
-      if (err.response?.data?.error) {
-        setError(err.response.data.error);
-      } else if (err.response?.status === 403) {
-        setError("この記事を編集する権限がありません");
-      } else {
-        setError("保存に失敗しました");
+      // バリデーション
+      if (!formData.title.trim()) {
+        setError("タイトルを入力してください");
+        return;
       }
-    } finally {
-      setSaving(false);
-    }
-  };
 
-  const handleChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >
-  ) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
+      if (!formData.body.trim()) {
+        setError("本文を入力してください");
+        return;
+      }
+
+      if (!formData.category_id) {
+        setError("カテゴリを選択してください");
+        return;
+      }
+
+      try {
+        setSaving(true);
+        setError("");
+
+        const submitData = {
+          title: formData.title.trim(),
+          content: formData.body.trim(),
+          category_id: parseInt(formData.category_id),
+          status: isDraft ? "draft" : "published",
+        };
+
+        console.log("💾 コンテンツを更新中...", submitData);
+
+        const response = await api.updateContent(id!, submitData);
+        console.log("✅ 更新レスポンス:", response);
+
+        alert(
+          isDraft ? "下書きを保存しました！" : "コンテンツを公開しました！"
+        );
+        navigate("/my-posts");
+      } catch (err: any) {
+        console.error("❌ 保存エラー:", err);
+
+        if (err.response?.data?.error) {
+          setError(err.response.data.error);
+        } else if (err.response?.status === 403) {
+          setError("この記事を編集する権限がありません");
+        } else {
+          setError("保存に失敗しました");
+        }
+      } finally {
+        setSaving(false);
+      }
+    },
+    [formData, id, navigate]
+  ); // formData、id、navigateが依存配列に含まれる
+
+  // useCallbackを使用してhandleChangeをメモ化
+  const handleChange = useCallback(
+    (
+      e: React.ChangeEvent<
+        HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+      >
+    ) => {
+      const { name, value } = e.target;
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+      }));
+    },
+    []
+  ); // 依存関係なし（関数型更新を使用）
+
+  // useCallbackを使用してhandleDraftSaveをメモ化
+  const handleDraftSave = useCallback(
+    (e: React.MouseEvent<HTMLButtonElement>) => {
+      handleSubmit(e as any, true);
+    },
+    [handleSubmit]
+  );
+
+  // useCallbackを使用してhandlePublishをメモ化
+  const handlePublish = useCallback(
+    (e: React.FormEvent) => {
+      handleSubmit(e, false);
+    },
+    [handleSubmit]
+  );
 
   if (loading) {
     return (
@@ -295,7 +326,7 @@ const EditContentPage: React.FC = () => {
           boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
         }}
       >
-        <form onSubmit={(e) => handleSubmit(e, false)}>
+        <form onSubmit={handlePublish}>
           <div style={{ marginBottom: "1.5rem" }}>
             <label
               style={{
@@ -441,7 +472,7 @@ const EditContentPage: React.FC = () => {
           >
             <button
               type="button"
-              onClick={(e) => handleSubmit(e, true)}
+              onClick={handleDraftSave}
               disabled={saving}
               style={{
                 padding: "0.75rem 2rem",
