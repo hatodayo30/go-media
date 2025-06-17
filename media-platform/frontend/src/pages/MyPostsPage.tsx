@@ -1,47 +1,38 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../services/api";
+import {
+  Content,
+  Rating,
+  User,
+  normalizeContent,
+  normalizeUser,
+} from "../types";
 
-interface Content {
-  id: number;
-  title: string;
-  content?: string;
-  body?: string;
-  status: string;
-  category_id: number;
-  author_id: number;
-  view_count: number;
-  created_at: string;
-  updated_at: string;
-  category?: {
-    id: number;
-    name: string;
-  };
-  author?: {
-    id: number;
-    username: string;
-  };
-}
-
-interface Rating {
-  id: number;
-  user_id: number;
-  content_id: number;
-  value: number;
-  created_at: string;
-  content?: Content;
-}
-
-type TabType = "my-posts" | "good"; // 'liked' → 'good' に変更、'bookmarked' 削除
+type TabType = "my-posts" | "good";
 
 const MyPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>("my-posts");
   const [myPosts, setMyPosts] = useState<Content[]>([]);
-  const [goodContents, setGoodContents] = useState<Content[]>([]); // likedContents → goodContents
+  const [goodContents, setGoodContents] = useState<Content[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<"all" | "published" | "draft">("all");
   const navigate = useNavigate();
+
+  // ローカルストレージからユーザーIDを取得
+  const getCurrentUserId = useCallback(() => {
+    try {
+      const userStr = localStorage.getItem("user");
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        return user.id;
+      }
+    } catch (error) {
+      console.error("ユーザー情報の取得に失敗:", error);
+    }
+    return null;
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -55,8 +46,7 @@ const MyPage: React.FC = () => {
       if (activeTab === "my-posts") {
         await fetchMyPosts();
       } else if (activeTab === "good") {
-        // 'liked' → 'good'
-        await fetchGoodContents(); // fetchLikedContents → fetchGoodContents
+        await fetchGoodContents();
       }
     } catch (err: any) {
       console.error("❌ データ取得エラー:", err);
@@ -70,57 +60,23 @@ const MyPage: React.FC = () => {
     console.log("📥 マイ投稿を取得中...");
 
     try {
-      // 現在のユーザー情報を取得
-      const userResponse = await api.getCurrentUser();
-      console.log("👤 ユーザー情報:", userResponse);
-
-      // 🚨 デバッグ: レスポンス構造を詳細に確認
-      console.log("🔍 userResponse.data:", userResponse.data);
-      console.log("🔍 userResponse.data.user:", userResponse.data?.user);
-      console.log("🔍 typeof userResponse.data:", typeof userResponse.data);
-
-      // レスポンス構造: {data: {user: {...}}, status: 'success'}
-      const currentUser =
-        userResponse.data?.user ||
-        userResponse.user ||
-        userResponse.data ||
-        userResponse;
-      const currentUserId = currentUser?.id;
-
-      console.log("🔍 抽出されたユーザー:", currentUser);
-      console.log("🔍 抽出されたユーザーID:", currentUserId);
-      console.log("🔍 typeof currentUserId:", typeof currentUserId);
+      const currentUserId = getCurrentUserId();
 
       if (!currentUserId) {
-        console.error(
-          "❌ ユーザーID抽出失敗. 完全なレスポンス:",
-          JSON.stringify(userResponse, null, 2)
-        );
         throw new Error("ユーザーIDを取得できませんでした");
       }
 
-      // 全コンテンツを取得
-      const response = await api.getContents();
-      console.log("📝 全コンテンツレスポンス:", response);
+      console.log("🔍 現在のユーザーID:", currentUserId);
 
-      const allContents = response.data?.contents || response.contents || [];
+      // 現在のユーザーの投稿を取得
+      const response = await api.getContents({ author_id: currentUserId });
+      console.log("📝 マイ投稿レスポンス:", response);
 
-      // 現在のユーザーが作成したコンテンツのみフィルタリング
-      const myContents = allContents.filter((content: Content) => {
-        console.log(
-          `🔍 コンテンツフィルタ: ID=${content.id}, author_id=${
-            content.author_id
-          }, currentUserId=${currentUserId}, match=${
-            content.author_id === currentUserId
-          }`
-        );
-        return content.author_id === currentUserId;
-      });
+      const contents = response.data || [];
+      const normalizedContents = contents.map(normalizeContent);
 
-      setMyPosts(myContents);
-      console.log(
-        `📋 マイ投稿数: ${myContents.length} (全体: ${allContents.length})`
-      );
+      setMyPosts(normalizedContents);
+      console.log(`📋 マイ投稿数: ${normalizedContents.length}`);
     } catch (error) {
       console.error("❌ マイ投稿取得エラー:", error);
       setMyPosts([]);
@@ -132,50 +88,36 @@ const MyPage: React.FC = () => {
     console.log("👍 グッドした記事を取得中...");
 
     try {
-      // 現在のユーザー情報を取得
-      const userResponse = await api.getCurrentUser();
-      console.log("👤 GOOD用ユーザー情報レスポンス:", userResponse);
+      const currentUserId = getCurrentUserId();
 
-      // 🔧 正しいユーザーID抽出方法
-      const currentUser =
-        userResponse.data?.user ||
-        userResponse.user ||
-        userResponse.data ||
-        userResponse;
-      const userId = currentUser?.id;
-
-      console.log("🔍 GOOD用抽出されたユーザー:", currentUser);
-      console.log("🔍 GOOD用抽出されたユーザーID:", userId);
-      console.log("🔍 typeof userId:", typeof userId);
-
-      if (!userId) {
-        console.error(
-          "❌ GOOD用ユーザーIDが見つかりません. 完全なレスポンス:",
-          JSON.stringify(userResponse, null, 2)
-        );
-        throw new Error("ユーザー情報を取得できませんでした");
+      if (!currentUserId) {
+        throw new Error("ユーザーIDを取得できませんでした");
       }
 
+      console.log("🔍 GOOD用ユーザーID:", currentUserId);
+
       // ユーザーの評価一覧を取得
-      console.log(`📊 ユーザーID ${userId} の評価を取得中...`);
-      const ratingsResponse = await api.getRatingsByUser(userId.toString());
+      const ratingsResponse = await api.getRatingsByUser(
+        currentUserId.toString()
+      );
       console.log("📊 ユーザー評価レスポンス:", ratingsResponse);
 
       const ratings =
-        ratingsResponse.data?.ratings || ratingsResponse.ratings || [];
+        ratingsResponse.data?.ratings ||
+        ratingsResponse.ratings ||
+        ratingsResponse ||
+        [];
       console.log("📊 評価一覧:", ratings);
-      console.log("📊 評価一覧の長さ:", ratings.length);
 
       // グッド（value = 1）のみをフィルター
       const goodRatings = ratings.filter((rating: Rating) => {
         console.log(
-          `🔍 評価チェック: ID=${rating.id}, value=${rating.value}, content_id=${rating.content_id}, user_id=${rating.user_id}`
+          `🔍 評価チェック: ID=${rating.id}, value=${rating.value}, content_id=${rating.content_id}`
         );
         return rating.value === 1;
       });
 
       console.log("👍 グッド評価:", goodRatings);
-      console.log("👍 グッド評価の数:", goodRatings.length);
 
       if (goodRatings.length === 0) {
         console.log("📭 グッドした記事はありません");
@@ -190,17 +132,12 @@ const MyPage: React.FC = () => {
           const contentResponse = await api.getContentById(
             rating.content_id.toString()
           );
-          console.log(
-            `📄 コンテンツ ${rating.content_id} レスポンス:`,
-            contentResponse
-          );
 
           const content =
             contentResponse.data?.content ||
             contentResponse.content ||
             contentResponse;
-          console.log(`📄 コンテンツ ${rating.content_id} データ:`, content);
-          return content;
+          return normalizeContent(content);
         } catch (error) {
           console.error(
             `❌ コンテンツ ${rating.content_id} の取得に失敗:`,
@@ -213,7 +150,7 @@ const MyPage: React.FC = () => {
       const goodContentsResults = await Promise.all(goodContentsPromises);
       const validGoodContents = goodContentsResults.filter(
         (content) => content !== null
-      );
+      ) as Content[];
 
       setGoodContents(validGoodContents);
       console.log(`✅ グッドした記事数: ${validGoodContents.length}`);
@@ -260,7 +197,7 @@ const MyPage: React.FC = () => {
     }
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDate = useCallback((dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("ja-JP", {
       year: "numeric",
@@ -269,9 +206,9 @@ const MyPage: React.FC = () => {
       hour: "2-digit",
       minute: "2-digit",
     });
-  };
+  }, []);
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = useCallback((status: string) => {
     switch (status) {
       case "published":
         return { bg: "#dcfce7", color: "#15803d", text: "公開中" };
@@ -280,26 +217,29 @@ const MyPage: React.FC = () => {
       default:
         return { bg: "#f3f4f6", color: "#6b7280", text: status };
     }
-  };
+  }, []);
 
-  const getTabInfo = (tab: TabType) => {
-    switch (tab) {
-      case "my-posts":
-        return {
-          title: "マイ投稿",
-          icon: "📄",
-          description: "自分が作成した記事一覧",
-          count: myPosts.length,
-        };
-      case "good": // 'liked' → 'good'
-        return {
-          title: "グッドした記事", // 'いいねした記事' → 'グッドした記事'
-          icon: "👍",
-          description: "グッドした記事一覧", // 'いいねした記事一覧' → 'グッドした記事一覧'
-          count: goodContents.length, // likedContents → goodContents
-        };
-    }
-  };
+  const getTabInfo = useCallback(
+    (tab: TabType) => {
+      switch (tab) {
+        case "my-posts":
+          return {
+            title: "マイ投稿",
+            icon: "📄",
+            description: "自分が作成した記事一覧",
+            count: myPosts.length,
+          };
+        case "good":
+          return {
+            title: "グッドした記事",
+            icon: "👍",
+            description: "グッドした記事一覧",
+            count: goodContents.length,
+          };
+      }
+    },
+    [myPosts.length, goodContents.length]
+  );
 
   const filteredPosts =
     activeTab === "my-posts"
@@ -309,182 +249,194 @@ const MyPage: React.FC = () => {
         })
       : [];
 
-  const getCurrentContents = () => {
+  const getCurrentContents = useCallback(() => {
     switch (activeTab) {
       case "my-posts":
         return filteredPosts;
-      case "good": // 'liked' → 'good'
-        return goodContents; // likedContents → goodContents
+      case "good":
+        return goodContents;
       default:
         return [];
     }
-  };
+  }, [activeTab, filteredPosts, goodContents]);
 
-  const renderContentCard = (content: Content, showAuthor: boolean = false) => {
-    const statusInfo = getStatusColor(content.status);
+  const renderContentCard = useCallback(
+    (content: Content, showAuthor: boolean = false) => {
+      const statusInfo = getStatusColor(content.status);
 
-    return (
-      <div
-        key={content.id}
-        style={{
-          backgroundColor: "white",
-          padding: "1.5rem",
-          borderRadius: "8px",
-          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
-          border: "1px solid #e5e7eb",
-        }}
-      >
+      return (
         <div
+          key={content.id}
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
+            backgroundColor: "white",
+            padding: "1.5rem",
+            borderRadius: "8px",
+            boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
+            border: "1px solid #e5e7eb",
           }}
         >
-          <div style={{ flex: 1 }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "1rem",
-                marginBottom: "0.75rem",
-              }}
-            >
-              <Link
-                to={`/contents/${content.id}`}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+            }}
+          >
+            <div style={{ flex: 1 }}>
+              <div
                 style={{
-                  fontSize: "1.25rem",
-                  fontWeight: "600",
-                  margin: 0,
-                  color: "#374151",
-                  textDecoration: "none",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "1rem",
+                  marginBottom: "0.75rem",
                 }}
               >
-                {content.title}
-              </Link>
-              {activeTab === "my-posts" && (
-                <span
+                <Link
+                  to={`/content/${content.id}`}
                   style={{
-                    backgroundColor: statusInfo.bg,
-                    color: statusInfo.color,
-                    padding: "0.25rem 0.75rem",
-                    borderRadius: "9999px",
-                    fontSize: "0.75rem",
-                    fontWeight: "500",
+                    fontSize: "1.25rem",
+                    fontWeight: "600",
+                    margin: 0,
+                    color: "#374151",
+                    textDecoration: "none",
                   }}
                 >
-                  {statusInfo.text}
+                  {content.title}
+                </Link>
+                {activeTab === "my-posts" && (
+                  <span
+                    style={{
+                      backgroundColor: statusInfo.bg,
+                      color: statusInfo.color,
+                      padding: "0.25rem 0.75rem",
+                      borderRadius: "9999px",
+                      fontSize: "0.75rem",
+                      fontWeight: "500",
+                    }}
+                  >
+                    {statusInfo.text}
+                  </span>
+                )}
+              </div>
+
+              <div
+                style={{
+                  color: "#6b7280",
+                  fontSize: "0.875rem",
+                  marginBottom: "0.75rem",
+                  display: "flex",
+                  gap: "1rem",
+                }}
+              >
+                <span>
+                  📅 {formatDate(content.updated_at || content.created_at)}
                 </span>
-              )}
-            </div>
+                {showAuthor && content.author && (
+                  <span>✍️ {content.author.username}</span>
+                )}
+                <span>👁️ {content.view_count} 回閲覧</span>
+              </div>
 
-            <div
-              style={{
-                color: "#6b7280",
-                fontSize: "0.875rem",
-                marginBottom: "0.75rem",
-                display: "flex",
-                gap: "1rem",
-              }}
-            >
-              <span>📅 {formatDate(content.updated_at)}</span>
-              {showAuthor && content.author && (
-                <span>✍️ {content.author.username}</span>
-              )}
-              <span>👁️ {content.view_count} 回閲覧</span>
-            </div>
-
-            {/* コンテンツのプレビュー */}
-            <div
-              style={{
-                color: "#374151",
-                fontSize: "0.875rem",
-                lineHeight: "1.5",
-                marginBottom: "1rem",
-              }}
-            >
-              {(content.content || content.body || "").substring(0, 150)}
-              {(content.content || content.body || "").length > 150 && "..."}
-            </div>
-          </div>
-
-          {/* アクションボタン（マイ投稿のみ） */}
-          {activeTab === "my-posts" && (
-            <div
-              style={{
-                display: "flex",
-                gap: "0.5rem",
-                marginLeft: "1rem",
-                flexWrap: "wrap",
-              }}
-            >
-              <button
-                onClick={() => navigate(`/edit/${content.id}`)}
+              {/* コンテンツのプレビュー */}
+              <div
                 style={{
-                  padding: "0.5rem 1rem",
-                  backgroundColor: "#f3f4f6",
                   color: "#374151",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "6px",
                   fontSize: "0.875rem",
-                  cursor: "pointer",
+                  lineHeight: "1.5",
+                  marginBottom: "1rem",
                 }}
               >
-                ✏️ 編集
-              </button>
-
-              {content.status === "draft" ? (
-                <button
-                  onClick={() => handleStatusChange(content.id, "published")}
-                  style={{
-                    padding: "0.5rem 1rem",
-                    backgroundColor: "#10b981",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    fontSize: "0.875rem",
-                    cursor: "pointer",
-                  }}
-                >
-                  🚀 公開
-                </button>
-              ) : (
-                <button
-                  onClick={() => handleStatusChange(content.id, "draft")}
-                  style={{
-                    padding: "0.5rem 1rem",
-                    backgroundColor: "#f59e0b",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    fontSize: "0.875rem",
-                    cursor: "pointer",
-                  }}
-                >
-                  📝 下書きに戻す
-                </button>
-              )}
-
-              <button
-                onClick={() => handleDelete(content.id)}
-                style={{
-                  padding: "0.5rem 1rem",
-                  backgroundColor: "#ef4444",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  fontSize: "0.875rem",
-                  cursor: "pointer",
-                }}
-              >
-                🗑️ 削除
-              </button>
+                {content.body.substring(0, 150)}
+                {content.body.length > 150 && "..."}
+              </div>
             </div>
-          )}
+
+            {/* アクションボタン（マイ投稿のみ） */}
+            {activeTab === "my-posts" && (
+              <div
+                style={{
+                  display: "flex",
+                  gap: "0.5rem",
+                  marginLeft: "1rem",
+                  flexWrap: "wrap",
+                }}
+              >
+                <button
+                  onClick={() => navigate(`/edit/${content.id}`)}
+                  style={{
+                    padding: "0.5rem 1rem",
+                    backgroundColor: "#f3f4f6",
+                    color: "#374151",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "6px",
+                    fontSize: "0.875rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  ✏️ 編集
+                </button>
+
+                {content.status === "draft" ? (
+                  <button
+                    onClick={() => handleStatusChange(content.id, "published")}
+                    style={{
+                      padding: "0.5rem 1rem",
+                      backgroundColor: "#10b981",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "6px",
+                      fontSize: "0.875rem",
+                      cursor: "pointer",
+                    }}
+                  >
+                    🚀 公開
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleStatusChange(content.id, "draft")}
+                    style={{
+                      padding: "0.5rem 1rem",
+                      backgroundColor: "#f59e0b",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "6px",
+                      fontSize: "0.875rem",
+                      cursor: "pointer",
+                    }}
+                  >
+                    📝 下書きに戻す
+                  </button>
+                )}
+
+                <button
+                  onClick={() => handleDelete(content.id)}
+                  style={{
+                    padding: "0.5rem 1rem",
+                    backgroundColor: "#ef4444",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    fontSize: "0.875rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  🗑️ 削除
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-    );
-  };
+      );
+    },
+    [
+      activeTab,
+      formatDate,
+      getStatusColor,
+      navigate,
+      handleDelete,
+      handleStatusChange,
+    ]
+  );
 
   if (loading) {
     return (
@@ -583,7 +535,6 @@ const MyPage: React.FC = () => {
       >
         <div style={{ display: "flex" }}>
           {(["my-posts", "good"] as TabType[]).map((tab) => {
-            // 'bookmarked' 削除
             const tabInfo = getTabInfo(tab);
             const isActive = activeTab === tab;
 

@@ -1,21 +1,22 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { api } from "../services/api";
-
-interface Category {
-  id: number;
-  name: string;
-  description?: string;
-}
+import {
+  Category,
+  CreateContentRequest,
+  ContentStatus,
+  ContentType,
+  Content,
+} from "../types";
 
 const CreateContentPage: React.FC = () => {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<CreateContentRequest>({
     title: "",
     body: "",
     type: "article",
     category_id: 0,
-    status: "draft" as "draft" | "published",
+    status: "draft",
   });
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
@@ -23,11 +24,8 @@ const CreateContentPage: React.FC = () => {
   const [success, setSuccess] = useState("");
   const [pageLoading, setPageLoading] = useState(true);
 
-  useEffect(() => {
-    fetchInitialData();
-  }, []);
-
-  const fetchInitialData = async () => {
+  // fetchInitialDataをuseCallbackでメモ化
+  const fetchInitialData = useCallback(async () => {
     try {
       // 認証チェック
       const token = localStorage.getItem("token");
@@ -38,15 +36,10 @@ const CreateContentPage: React.FC = () => {
       }
 
       console.log("📂 カテゴリ取得開始...");
-      const categoriesRes = await api.getCategories();
+      const categoriesRes: Category[] = await api.getCategories();
 
       console.log("📂 カテゴリ取得結果:", categoriesRes);
-      setCategories(
-        categoriesRes.data?.categories ||
-          categoriesRes.categories ||
-          categoriesRes ||
-          []
-      );
+      setCategories(categoriesRes || []);
 
       console.log("✅ 初期化完了");
       setPageLoading(false);
@@ -55,7 +48,11 @@ const CreateContentPage: React.FC = () => {
       setError("初期化に失敗しました");
       setPageLoading(false);
     }
-  };
+  }, [navigate]);
+
+  useEffect(() => {
+    fetchInitialData();
+  }, [fetchInitialData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,7 +91,7 @@ const CreateContentPage: React.FC = () => {
       console.log("🌐 API リクエスト送信開始");
       console.log("📤 送信データ:", JSON.stringify(formData, null, 2));
 
-      const response = await api.createContent(formData);
+      const response: Content = await api.createContent(formData);
       console.log("✅ API レスポンス受信:", response);
 
       setSuccess(
@@ -164,7 +161,7 @@ const CreateContentPage: React.FC = () => {
     }));
   };
 
-  const handleStatusChange = (status: "draft" | "published") => {
+  const handleStatusChange = (status: ContentStatus) => {
     console.log("🔄 ステータス変更:", status);
     setFormData((prev) => ({
       ...prev,
@@ -418,9 +415,9 @@ const CreateContentPage: React.FC = () => {
                     fontSize: "1rem",
                   }}
                 >
-                  <option value="article">記事</option>
-                  <option value="tutorial">チュートリアル</option>
-                  <option value="news">ニュース</option>
+                  <option value={ContentType.ARTICLE}>記事</option>
+                  <option value={ContentType.TUTORIAL}>チュートリアル</option>
+                  <option value={ContentType.NEWS}>ニュース</option>
                   <option value="review">レビュー</option>
                 </select>
               </div>
@@ -481,20 +478,26 @@ const CreateContentPage: React.FC = () => {
               <div style={{ display: "flex", gap: "1rem" }}>
                 <button
                   type="button"
-                  onClick={() => handleStatusChange("draft")}
+                  onClick={() => handleStatusChange(ContentStatus.DRAFT)}
                   style={{
                     padding: "0.75rem 1.5rem",
                     border:
-                      formData.status === "draft"
+                      formData.status === ContentStatus.DRAFT
                         ? "2px solid #3b82f6"
                         : "1px solid #d1d5db",
                     borderRadius: "6px",
                     backgroundColor:
-                      formData.status === "draft" ? "#dbeafe" : "white",
-                    color: formData.status === "draft" ? "#1d4ed8" : "#374151",
+                      formData.status === ContentStatus.DRAFT
+                        ? "#dbeafe"
+                        : "white",
+                    color:
+                      formData.status === ContentStatus.DRAFT
+                        ? "#1d4ed8"
+                        : "#374151",
                     cursor: "pointer",
                     fontSize: "0.875rem",
-                    fontWeight: formData.status === "draft" ? "600" : "400",
+                    fontWeight:
+                      formData.status === ContentStatus.DRAFT ? "600" : "400",
                     transition: "all 0.2s ease-in-out",
                   }}
                 >
@@ -502,21 +505,28 @@ const CreateContentPage: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleStatusChange("published")}
+                  onClick={() => handleStatusChange(ContentStatus.PUBLISHED)}
                   style={{
                     padding: "0.75rem 1.5rem",
                     border:
-                      formData.status === "published"
+                      formData.status === ContentStatus.PUBLISHED
                         ? "2px solid #059669"
                         : "1px solid #d1d5db",
                     borderRadius: "6px",
                     backgroundColor:
-                      formData.status === "published" ? "#dcfce7" : "white",
+                      formData.status === ContentStatus.PUBLISHED
+                        ? "#dcfce7"
+                        : "white",
                     color:
-                      formData.status === "published" ? "#166534" : "#374151",
+                      formData.status === ContentStatus.PUBLISHED
+                        ? "#166534"
+                        : "#374151",
                     cursor: "pointer",
                     fontSize: "0.875rem",
-                    fontWeight: formData.status === "published" ? "600" : "400",
+                    fontWeight:
+                      formData.status === ContentStatus.PUBLISHED
+                        ? "600"
+                        : "400",
                     transition: "all 0.2s ease-in-out",
                   }}
                 >
@@ -531,7 +541,9 @@ const CreateContentPage: React.FC = () => {
                 }}
               >
                 現在選択中:{" "}
-                {formData.status === "published" ? "今すぐ公開" : "下書き保存"}
+                {formData.status === ContentStatus.PUBLISHED
+                  ? "今すぐ公開"
+                  : "下書き保存"}
               </div>
             </div>
 
@@ -575,7 +587,7 @@ const CreateContentPage: React.FC = () => {
               >
                 {loading
                   ? "作成中..."
-                  : formData.status === "published"
+                  : formData.status === ContentStatus.PUBLISHED
                   ? "✨ 公開する"
                   : "📝 下書き保存"}
               </button>

@@ -1,28 +1,26 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { api } from "../services/api";
+import {
+  Category,
+  Content,
+  UpdateContentRequest,
+  ContentStatus,
+  normalizeContent,
+} from "../types";
 
-interface Category {
-  id: number;
-  name: string;
-  description?: string;
-}
-
-interface Content {
-  id: number;
+interface EditFormData {
   title: string;
-  content?: string;
-  body?: string;
-  status: string;
-  category_id: number;
-  author_id: number;
+  body: string;
+  category_id: string;
+  status: ContentStatus;
 }
 
 const EditContentPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<EditFormData>({
     title: "",
     body: "",
     category_id: "",
@@ -35,42 +33,35 @@ const EditContentPage: React.FC = () => {
   const [error, setError] = useState("");
   const [originalContent, setOriginalContent] = useState<Content | null>(null);
 
-  useEffect(() => {
-    if (id) {
-      fetchContentAndCategories();
-    }
-  }, [id]);
+  // fetchContentAndCategoriesをuseCallbackでメモ化
+  const fetchContentAndCategories = useCallback(async () => {
+    if (!id) return;
 
-  const fetchContentAndCategories = async () => {
     try {
       setLoading(true);
       console.log(`📄 コンテンツ ${id} と カテゴリを取得中...`);
 
       const [contentRes, categoriesRes] = await Promise.all([
-        api.getContentById(id!),
+        api.getContentById(id),
         api.getCategories(),
       ]);
 
       console.log("📥 コンテンツレスポンス:", contentRes);
       console.log("📥 カテゴリレスポンス:", categoriesRes);
 
-      const contentData =
-        contentRes.data?.content || contentRes.content || contentRes;
-      const categoriesData =
-        categoriesRes.data?.categories ||
-        categoriesRes.categories ||
-        categoriesRes ||
-        [];
+      // 正規化関数を使用してコンテンツデータを統一
+      const normalizedContent = normalizeContent(contentRes);
+      const categoriesData: Category[] = categoriesRes || [];
 
-      setOriginalContent(contentData);
+      setOriginalContent(normalizedContent);
       setCategories(categoriesData);
 
       // フォームにデータを設定
       setFormData({
-        title: contentData.title || "",
-        body: contentData.content || contentData.body || "",
-        category_id: contentData.category_id?.toString() || "",
-        status: contentData.status || "draft",
+        title: normalizedContent.title || "",
+        body: normalizedContent.body || "",
+        category_id: normalizedContent.category_id?.toString() || "",
+        status: (normalizedContent.status as ContentStatus) || "draft",
       });
     } catch (err: any) {
       console.error("❌ データ取得エラー:", err);
@@ -84,7 +75,13 @@ const EditContentPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    if (id) {
+      fetchContentAndCategories();
+    }
+  }, [id, fetchContentAndCategories]);
 
   const handleSubmit = async (e: React.FormEvent, isDraft: boolean = false) => {
     e.preventDefault();
@@ -109,16 +106,17 @@ const EditContentPage: React.FC = () => {
       setSaving(true);
       setError("");
 
-      const submitData = {
+      // UpdateContentRequest型を使用
+      const submitData: UpdateContentRequest = {
         title: formData.title.trim(),
-        content: formData.body.trim(),
+        body: formData.body.trim(),
         category_id: parseInt(formData.category_id),
         status: isDraft ? "draft" : "published",
       };
 
       console.log("💾 コンテンツを更新中...", submitData);
 
-      const response = await api.updateContent(id!, submitData);
+      const response: Content = await api.updateContent(id!, submitData);
       console.log("✅ 更新レスポンス:", response);
 
       alert(isDraft ? "下書きを保存しました！" : "コンテンツを公開しました！");

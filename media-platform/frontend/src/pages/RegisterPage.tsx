@@ -1,124 +1,157 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { api } from '../services/api';
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { api } from "../services/api";
+import { AuthResponse, RegisterRequest } from "../types";
 
 const RegisterPage: React.FC = () => {
   const [formData, setFormData] = useState({
-    username: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    bio: ''
+    username: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
   });
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
 
-    // バリデーション
-    if (formData.password !== formData.confirmPassword) {
-      setError('パスワードが一致しません');
-      setLoading(false);
-      return;
+  const validateForm = (): boolean => {
+    if (!formData.username.trim()) {
+      setError("ユーザー名を入力してください");
+      return false;
+    }
+
+    if (!formData.email.trim()) {
+      setError("メールアドレスを入力してください");
+      return false;
     }
 
     if (formData.password.length < 6) {
-      setError('パスワードは6文字以上で入力してください');
-      setLoading(false);
-      return;
+      setError("パスワードは6文字以上で入力してください");
+      return false;
     }
 
-    if (!formData.username.trim()) {
-      setError('ユーザー名を入力してください');
-      setLoading(false);
-      return;
+    if (formData.password !== formData.confirmPassword) {
+      setError("パスワードが一致しません");
+      return false;
     }
+
+    return true;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    if (!validateForm()) return;
+
+    setLoading(true);
 
     try {
-      console.log('Register attempt:', formData);
-      
-      // API通信
-      const response = await api.register({
+      const registerData: RegisterRequest = {
         username: formData.username,
         email: formData.email,
         password: formData.password,
-        bio: formData.bio || undefined
-      });
-      
-      console.log('Register response:', response);
-      
-      // 登録成功
-      alert('登録が完了しました！ログインページに移動します。');
-      navigate('/login');
-      
+      };
+
+      const response: AuthResponse = await api.register(registerData);
+
+      // 登録成功後、自動的にログイン状態にする
+      if (response.token) {
+        localStorage.setItem("token", response.token);
+
+        if (response.user) {
+          localStorage.setItem("user", JSON.stringify(response.user));
+        }
+
+        navigate("/dashboard");
+      } else {
+        setError("登録は成功しましたが、ログインに失敗しました");
+      }
     } catch (err: any) {
-      console.error('Register error:', err);
-      
+      console.error("登録エラー:", err);
+
       if (err.response) {
-        // サーバーからのエラーレスポンス
-        const errorMessage = err.response.data?.error || err.response.data?.message || `エラー: ${err.response.status}`;
+        const errorMessage =
+          err.response.data?.error ||
+          err.response.data?.message ||
+          `エラー: ${err.response.status}`;
         setError(errorMessage);
       } else if (err.request) {
-        // ネットワークエラー
-        setError('サーバーに接続できません。APIサーバーが起動しているか確認してください。');
+        setError(
+          "サーバーに接続できません。APIサーバーが起動しているか確認してください。"
+        );
       } else {
-        // その他のエラー
-        setError('登録に失敗しました');
+        setError("アカウント作成に失敗しました");
       }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
   return (
-    <div style={{ 
-      minHeight: '100vh', 
-      display: 'flex', 
-      alignItems: 'center', 
-      justifyContent: 'center',
-      backgroundColor: '#f9fafb',
-      padding: '2rem'
-    }}>
-      <div style={{
-        maxWidth: '400px',
-        width: '100%',
-        backgroundColor: 'white',
-        padding: '2rem',
-        borderRadius: '8px',
-        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
-      }}>
-        <h2 style={{ textAlign: 'center', marginBottom: '2rem', fontSize: '2rem' }}>
-          新規登録
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#f9fafb",
+        padding: "2rem",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: "400px",
+          width: "100%",
+          backgroundColor: "white",
+          padding: "2rem",
+          borderRadius: "8px",
+          boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+        }}
+      >
+        <h2
+          style={{
+            textAlign: "center",
+            marginBottom: "2rem",
+            fontSize: "2rem",
+          }}
+        >
+          アカウント作成
         </h2>
+
         <form onSubmit={handleSubmit}>
           {error && (
-            <div style={{
-              backgroundColor: '#fee2e2',
-              border: '1px solid #fca5a5',
-              color: '#dc2626',
-              padding: '0.75rem',
-              borderRadius: '6px',
-              marginBottom: '1rem'
-            }}>
+            <div
+              style={{
+                backgroundColor: "#fee2e2",
+                border: "1px solid #fca5a5",
+                color: "#dc2626",
+                padding: "0.75rem",
+                borderRadius: "6px",
+                marginBottom: "1rem",
+              }}
+            >
               {error}
             </div>
           )}
-          
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
-              ユーザー名 *
+
+          <div style={{ marginBottom: "1rem" }}>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "0.5rem",
+                fontWeight: "500",
+              }}
+            >
+              ユーザー名
             </label>
             <input
               type="text"
@@ -127,19 +160,25 @@ const RegisterPage: React.FC = () => {
               value={formData.username}
               onChange={handleChange}
               style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                fontSize: '1rem'
+                width: "100%",
+                padding: "0.75rem",
+                border: "1px solid #d1d5db",
+                borderRadius: "6px",
+                fontSize: "1rem",
               }}
-              placeholder="ユーザー名を入力"
+              placeholder="ユーザー名"
             />
           </div>
 
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
-              メールアドレス *
+          <div style={{ marginBottom: "1rem" }}>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "0.5rem",
+                fontWeight: "500",
+              }}
+            >
+              メールアドレス
             </label>
             <input
               type="email"
@@ -148,19 +187,25 @@ const RegisterPage: React.FC = () => {
               value={formData.email}
               onChange={handleChange}
               style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                fontSize: '1rem'
+                width: "100%",
+                padding: "0.75rem",
+                border: "1px solid #d1d5db",
+                borderRadius: "6px",
+                fontSize: "1rem",
               }}
-              placeholder="メールアドレスを入力"
+              placeholder="メールアドレス"
             />
           </div>
 
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
-              パスワード *
+          <div style={{ marginBottom: "1rem" }}>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "0.5rem",
+                fontWeight: "500",
+              }}
+            >
+              パスワード
             </label>
             <input
               type="password"
@@ -169,19 +214,25 @@ const RegisterPage: React.FC = () => {
               value={formData.password}
               onChange={handleChange}
               style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                fontSize: '1rem'
+                width: "100%",
+                padding: "0.75rem",
+                border: "1px solid #d1d5db",
+                borderRadius: "6px",
+                fontSize: "1rem",
               }}
-              placeholder="パスワードを入力（6文字以上）"
+              placeholder="パスワード（6文字以上）"
             />
           </div>
 
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
-              パスワード確認 *
+          <div style={{ marginBottom: "1.5rem" }}>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "0.5rem",
+                fontWeight: "500",
+              }}
+            >
+              パスワード確認
             </label>
             <input
               type="password"
@@ -190,34 +241,13 @@ const RegisterPage: React.FC = () => {
               value={formData.confirmPassword}
               onChange={handleChange}
               style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                fontSize: '1rem'
+                width: "100%",
+                padding: "0.75rem",
+                border: "1px solid #d1d5db",
+                borderRadius: "6px",
+                fontSize: "1rem",
               }}
-              placeholder="パスワードを再入力"
-            />
-          </div>
-
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
-              自己紹介
-            </label>
-            <textarea
-              name="bio"
-              rows={3}
-              value={formData.bio}
-              onChange={handleChange}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                fontSize: '1rem',
-                resize: 'vertical'
-              }}
-              placeholder="簡単な自己紹介（任意）"
+              placeholder="パスワード確認"
             />
           </div>
 
@@ -225,23 +255,26 @@ const RegisterPage: React.FC = () => {
             type="submit"
             disabled={loading}
             style={{
-              width: '100%',
-              backgroundColor: '#3b82f6',
-              color: 'white',
-              padding: '0.75rem',
-              border: 'none',
-              borderRadius: '6px',
-              fontSize: '1rem',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.6 : 1
+              width: "100%",
+              backgroundColor: "#3b82f6",
+              color: "white",
+              padding: "0.75rem",
+              border: "none",
+              borderRadius: "6px",
+              fontSize: "1rem",
+              cursor: loading ? "not-allowed" : "pointer",
+              opacity: loading ? 0.6 : 1,
             }}
           >
-            {loading ? '登録中...' : '登録'}
+            {loading ? "アカウント作成中..." : "アカウント作成"}
           </button>
 
-          <div style={{ textAlign: 'center', marginTop: '1rem' }}>
-            <Link to="/login" style={{ color: '#3b82f6', textDecoration: 'none' }}>
-              すでにアカウントをお持ちの方はこちら
+          <div style={{ textAlign: "center", marginTop: "1rem" }}>
+            <Link
+              to="/login"
+              style={{ color: "#3b82f6", textDecoration: "none" }}
+            >
+              既にアカウントをお持ちの方はこちら
             </Link>
           </div>
         </form>
