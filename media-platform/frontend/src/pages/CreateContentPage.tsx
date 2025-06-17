@@ -1,22 +1,21 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { api } from "../services/api";
-import {
-  Category,
-  CreateContentRequest,
-  ContentStatus,
-  ContentType,
-  Content,
-} from "../types";
+
+interface Category {
+  id: number;
+  name: string;
+  description?: string;
+}
 
 const CreateContentPage: React.FC = () => {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState<CreateContentRequest>({
+  const [formData, setFormData] = useState({
     title: "",
     body: "",
     type: "article",
     category_id: 0,
-    status: "draft",
+    status: "draft" as "draft" | "published",
   });
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
@@ -24,7 +23,7 @@ const CreateContentPage: React.FC = () => {
   const [success, setSuccess] = useState("");
   const [pageLoading, setPageLoading] = useState(true);
 
-  // fetchInitialDataをuseCallbackでメモ化
+  // useCallbackを使用して関数をメモ化
   const fetchInitialData = useCallback(async () => {
     try {
       // 認証チェック
@@ -36,10 +35,15 @@ const CreateContentPage: React.FC = () => {
       }
 
       console.log("📂 カテゴリ取得開始...");
-      const categoriesRes: Category[] = await api.getCategories();
+      const categoriesRes = await api.getCategories();
 
       console.log("📂 カテゴリ取得結果:", categoriesRes);
-      setCategories(categoriesRes || []);
+      setCategories(
+        categoriesRes.data?.categories ||
+          categoriesRes.categories ||
+          categoriesRes ||
+          []
+      );
 
       console.log("✅ 初期化完了");
       setPageLoading(false);
@@ -48,126 +52,134 @@ const CreateContentPage: React.FC = () => {
       setError("初期化に失敗しました");
       setPageLoading(false);
     }
-  }, [navigate]);
+  }, [navigate]); // navigateが依存配列に含まれる
 
   useEffect(() => {
     fetchInitialData();
-  }, [fetchInitialData]);
+  }, [fetchInitialData]); // fetchInitialDataを依存配列に含める
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log("🚀 フォーム送信開始");
-    console.log("📝 フォームデータ:", formData);
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      console.log("🚀 フォーム送信開始");
+      console.log("📝 フォームデータ:", formData);
 
-    setError("");
-    setSuccess("");
-    setLoading(true);
+      setError("");
+      setSuccess("");
+      setLoading(true);
 
-    // バリデーション
-    if (!formData.title.trim()) {
-      console.log("❌ バリデーションエラー: タイトル未入力");
-      setError("タイトルを入力してください");
-      setLoading(false);
-      return;
-    }
+      // バリデーション
+      if (!formData.title.trim()) {
+        console.log("❌ バリデーションエラー: タイトル未入力");
+        setError("タイトルを入力してください");
+        setLoading(false);
+        return;
+      }
 
-    if (!formData.body.trim()) {
-      console.log("❌ バリデーションエラー: 本文未入力");
-      setError("本文を入力してください");
-      setLoading(false);
-      return;
-    }
+      if (!formData.body.trim()) {
+        console.log("❌ バリデーションエラー: 本文未入力");
+        setError("本文を入力してください");
+        setLoading(false);
+        return;
+      }
 
-    if (!formData.category_id) {
-      console.log("❌ バリデーションエラー: カテゴリ未選択");
-      setError("カテゴリを選択してください");
-      setLoading(false);
-      return;
-    }
+      if (!formData.category_id) {
+        console.log("❌ バリデーションエラー: カテゴリ未選択");
+        setError("カテゴリを選択してください");
+        setLoading(false);
+        return;
+      }
 
-    console.log("✅ バリデーション通過");
+      console.log("✅ バリデーション通過");
 
-    try {
-      console.log("🌐 API リクエスト送信開始");
-      console.log("📤 送信データ:", JSON.stringify(formData, null, 2));
+      try {
+        console.log("🌐 API リクエスト送信開始");
+        console.log("📤 送信データ:", JSON.stringify(formData, null, 2));
 
-      const response: Content = await api.createContent(formData);
-      console.log("✅ API レスポンス受信:", response);
+        const response = await api.createContent(formData);
+        console.log("✅ API レスポンス受信:", response);
 
-      setSuccess(
-        formData.status === "published"
-          ? "コンテンツが正常に公開されました！"
-          : "コンテンツが下書きとして保存されました！"
-      );
+        setSuccess(
+          formData.status === "published"
+            ? "コンテンツが正常に公開されました！"
+            : "コンテンツが下書きとして保存されました！"
+        );
 
-      console.log("🎉 作成成功、リダイレクト実行中...");
-      // 3秒後にダッシュボードにリダイレクト
-      setTimeout(() => {
-        navigate("/dashboard");
-      }, 2000);
-    } catch (err: any) {
-      console.error("❌ コンテンツ作成エラー:", err);
-      console.error("❌ エラー詳細:", {
-        message: err.message,
-        response: err.response,
-        request: err.request,
-        config: err.config,
-      });
+        console.log("🎉 作成成功、リダイレクト実行中...");
+        // 3秒後にダッシュボードにリダイレクト
+        setTimeout(() => {
+          navigate("/dashboard");
+        }, 2000);
+      } catch (err: any) {
+        console.error("❌ コンテンツ作成エラー:", err);
+        console.error("❌ エラー詳細:", {
+          message: err.message,
+          response: err.response,
+          request: err.request,
+          config: err.config,
+        });
 
-      // より詳細なエラーハンドリング
-      if (err.response) {
-        const statusCode = err.response.status;
-        const errorData = err.response.data;
+        // より詳細なエラーハンドリング
+        if (err.response) {
+          const statusCode = err.response.status;
+          const errorData = err.response.data;
 
-        console.log(`❌ HTTPエラー ${statusCode}:`, errorData);
+          console.log(`❌ HTTPエラー ${statusCode}:`, errorData);
 
-        if (statusCode === 401) {
-          setError("認証が切れています。再度ログインしてください。");
-          setTimeout(() => navigate("/login"), 2000);
-        } else if (statusCode === 400) {
-          setError(errorData?.error || "リクエストデータが無効です");
-        } else if (statusCode === 500) {
+          if (statusCode === 401) {
+            setError("認証が切れています。再度ログインしてください。");
+            setTimeout(() => navigate("/login"), 2000);
+          } else if (statusCode === 400) {
+            setError(errorData?.error || "リクエストデータが無効です");
+          } else if (statusCode === 500) {
+            setError(
+              "サーバーエラーが発生しました。しばらく待ってから再度お試しください。"
+            );
+          } else {
+            setError(
+              errorData?.error || `エラーが発生しました (${statusCode})`
+            );
+          }
+        } else if (err.request) {
+          console.log("❌ ネットワークエラー:", err.request);
           setError(
-            "サーバーエラーが発生しました。しばらく待ってから再度お試しください。"
+            "サーバーに接続できません。ネットワーク接続を確認してください。"
           );
         } else {
-          setError(errorData?.error || `エラーが発生しました (${statusCode})`);
+          console.log("❌ その他のエラー:", err.message);
+          setError("コンテンツの作成に失敗しました");
         }
-      } else if (err.request) {
-        console.log("❌ ネットワークエラー:", err.request);
-        setError(
-          "サーバーに接続できません。ネットワーク接続を確認してください。"
-        );
-      } else {
-        console.log("❌ その他のエラー:", err.message);
-        setError("コンテンツの作成に失敗しました");
+      } finally {
+        setLoading(false);
+        console.log("🏁 処理完了");
       }
-    } finally {
-      setLoading(false);
-      console.log("🏁 処理完了");
-    }
-  };
+    },
+    [formData, navigate]
+  ); // formDataとnavigateが依存配列に含まれる
 
-  const handleChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >
-  ) => {
-    const { name, value } = e.target;
-    console.log(`📝 フィールド変更: ${name} = ${value}`);
-    setFormData((prev) => ({
-      ...prev,
-      [name]: name === "category_id" ? parseInt(value) : value,
-    }));
-  };
+  const handleChange = useCallback(
+    (
+      e: React.ChangeEvent<
+        HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+      >
+    ) => {
+      const { name, value } = e.target;
+      console.log(`📝 フィールド変更: ${name} = ${value}`);
+      setFormData((prev) => ({
+        ...prev,
+        [name]: name === "category_id" ? parseInt(value) : value,
+      }));
+    },
+    []
+  ); // 依存関係なし（setFormDataは関数型更新を使用）
 
-  const handleStatusChange = (status: ContentStatus) => {
+  const handleStatusChange = useCallback((status: "draft" | "published") => {
     console.log("🔄 ステータス変更:", status);
     setFormData((prev) => ({
       ...prev,
       status,
     }));
-  };
+  }, []); // 依存関係なし（setFormDataは関数型更新を使用）
 
   if (pageLoading) {
     return (
@@ -415,9 +427,9 @@ const CreateContentPage: React.FC = () => {
                     fontSize: "1rem",
                   }}
                 >
-                  <option value={ContentType.ARTICLE}>記事</option>
-                  <option value={ContentType.TUTORIAL}>チュートリアル</option>
-                  <option value={ContentType.NEWS}>ニュース</option>
+                  <option value="article">記事</option>
+                  <option value="tutorial">チュートリアル</option>
+                  <option value="news">ニュース</option>
                   <option value="review">レビュー</option>
                 </select>
               </div>
@@ -478,26 +490,20 @@ const CreateContentPage: React.FC = () => {
               <div style={{ display: "flex", gap: "1rem" }}>
                 <button
                   type="button"
-                  onClick={() => handleStatusChange(ContentStatus.DRAFT)}
+                  onClick={() => handleStatusChange("draft")}
                   style={{
                     padding: "0.75rem 1.5rem",
                     border:
-                      formData.status === ContentStatus.DRAFT
+                      formData.status === "draft"
                         ? "2px solid #3b82f6"
                         : "1px solid #d1d5db",
                     borderRadius: "6px",
                     backgroundColor:
-                      formData.status === ContentStatus.DRAFT
-                        ? "#dbeafe"
-                        : "white",
-                    color:
-                      formData.status === ContentStatus.DRAFT
-                        ? "#1d4ed8"
-                        : "#374151",
+                      formData.status === "draft" ? "#dbeafe" : "white",
+                    color: formData.status === "draft" ? "#1d4ed8" : "#374151",
                     cursor: "pointer",
                     fontSize: "0.875rem",
-                    fontWeight:
-                      formData.status === ContentStatus.DRAFT ? "600" : "400",
+                    fontWeight: formData.status === "draft" ? "600" : "400",
                     transition: "all 0.2s ease-in-out",
                   }}
                 >
@@ -505,28 +511,21 @@ const CreateContentPage: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleStatusChange(ContentStatus.PUBLISHED)}
+                  onClick={() => handleStatusChange("published")}
                   style={{
                     padding: "0.75rem 1.5rem",
                     border:
-                      formData.status === ContentStatus.PUBLISHED
+                      formData.status === "published"
                         ? "2px solid #059669"
                         : "1px solid #d1d5db",
                     borderRadius: "6px",
                     backgroundColor:
-                      formData.status === ContentStatus.PUBLISHED
-                        ? "#dcfce7"
-                        : "white",
+                      formData.status === "published" ? "#dcfce7" : "white",
                     color:
-                      formData.status === ContentStatus.PUBLISHED
-                        ? "#166534"
-                        : "#374151",
+                      formData.status === "published" ? "#166534" : "#374151",
                     cursor: "pointer",
                     fontSize: "0.875rem",
-                    fontWeight:
-                      formData.status === ContentStatus.PUBLISHED
-                        ? "600"
-                        : "400",
+                    fontWeight: formData.status === "published" ? "600" : "400",
                     transition: "all 0.2s ease-in-out",
                   }}
                 >
@@ -541,9 +540,7 @@ const CreateContentPage: React.FC = () => {
                 }}
               >
                 現在選択中:{" "}
-                {formData.status === ContentStatus.PUBLISHED
-                  ? "今すぐ公開"
-                  : "下書き保存"}
+                {formData.status === "published" ? "今すぐ公開" : "下書き保存"}
               </div>
             </div>
 
@@ -587,7 +584,7 @@ const CreateContentPage: React.FC = () => {
               >
                 {loading
                   ? "作成中..."
-                  : formData.status === ContentStatus.PUBLISHED
+                  : formData.status === "published"
                   ? "✨ 公開する"
                   : "📝 下書き保存"}
               </button>

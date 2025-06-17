@@ -1,13 +1,33 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../services/api";
-import {
-  User,
-  Content,
-  Category,
-  normalizeUser,
-  normalizeContent,
-} from "../types";
+
+// 一時的に型定義（後で types/index.ts から import）
+interface User {
+  id: number;
+  username: string;
+  email: string;
+  bio: string;
+  role: string;
+}
+
+interface Content {
+  id: number;
+  title: string;
+  body: string;
+  type: string;
+  author?: User;
+  category?: any;
+  status: string;
+  view_count: number;
+  created_at: string;
+}
+
+interface Category {
+  id: number;
+  name: string;
+  description?: string;
+}
 
 const DashboardPage: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -19,7 +39,7 @@ const DashboardPage: React.FC = () => {
 
   const navigate = useNavigate();
 
-  // fetchUserAndDataをuseCallbackでメモ化
+  // useCallbackを使用してfetchUserAndDataをメモ化
   const fetchUserAndData = useCallback(async () => {
     try {
       setLoading(true);
@@ -31,9 +51,8 @@ const DashboardPage: React.FC = () => {
         return;
       }
 
-      const userResponse: User = await api.getCurrentUser();
-      const normalizedUser = normalizeUser(userResponse);
-      setUser(normalizedUser);
+      const userResponse = await api.getCurrentUser();
+      setUser(userResponse.data || userResponse);
 
       // コンテンツとカテゴリを取得
       const [contentsRes, categoriesRes] = await Promise.all([
@@ -41,19 +60,16 @@ const DashboardPage: React.FC = () => {
         api.getCategories(),
       ]);
 
-      // 正規化関数を使用してデータを統一
-      const rawContents: Content[] =
-        contentsRes.data?.contents || contentsRes.contents || contentsRes || [];
-      const normalizedContents = rawContents.map(normalizeContent);
-
-      const rawCategories: Category[] =
+      // APIレスポンスの構造に合わせて修正
+      setContents(
+        contentsRes.data?.contents || contentsRes.contents || contentsRes || []
+      );
+      setCategories(
         categoriesRes.data?.categories ||
-        categoriesRes.categories ||
-        categoriesRes ||
-        [];
-
-      setContents(normalizedContents);
-      setCategories(rawCategories);
+          categoriesRes.categories ||
+          categoriesRes ||
+          []
+      );
     } catch (error) {
       console.error("データの取得に失敗しました:", error);
       // 認証エラーの場合はログインページへ
@@ -64,47 +80,97 @@ const DashboardPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, []); // 依存関係なし
 
   useEffect(() => {
     fetchUserAndData();
-  }, [fetchUserAndData]);
+  }, [fetchUserAndData]); // fetchUserAndDataを依存配列に含める
 
-  const handleCategoryFilter = async (categoryId: number | null) => {
-    try {
-      setSelectedCategory(categoryId);
+  // useCallbackを使用してhandleCategoryFilterをメモ化
+  const handleCategoryFilter = useCallback(
+    async (categoryId: number | null) => {
+      try {
+        setSelectedCategory(categoryId);
 
-      let filteredContents: Content[];
-      if (categoryId) {
-        const response = await api.getContentsByCategory(categoryId.toString());
-        const rawContents: Content[] =
-          response.data?.contents || response.contents || response || [];
-        filteredContents = rawContents.map(normalizeContent);
-      } else {
-        const response = await api.getPublishedContents();
-        const rawContents: Content[] =
-          response.data?.contents || response.contents || response || [];
-        filteredContents = rawContents.map(normalizeContent);
+        let filteredContents;
+        if (categoryId) {
+          filteredContents = await api.getContentsByCategory(
+            categoryId.toString()
+          );
+        } else {
+          filteredContents = await api.getPublishedContents();
+        }
+
+        // APIレスポンスの構造に合わせて修正
+        setContents(
+          filteredContents.data?.contents ||
+            filteredContents.contents ||
+            filteredContents ||
+            []
+        );
+      } catch (error) {
+        console.error("カテゴリフィルターエラー:", error);
       }
+    },
+    []
+  ); // 依存関係なし
 
-      setContents(filteredContents);
-    } catch (error) {
-      console.error("カテゴリフィルターエラー:", error);
-    }
-  };
+  // useCallbackを使用してhandleSearchSubmitをメモ化
+  const handleSearchSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      if (searchQuery.trim()) {
+        // 検索ページに遷移
+        navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      }
+    },
+    [searchQuery, navigate]
+  ); // searchQueryとnavigateが依存配列に含まれる
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      // 検索ページに遷移
-      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
-    }
-  };
-
-  const handleLogout = () => {
+  // useCallbackを使用してhandleLogoutをメモ化
+  const handleLogout = useCallback(() => {
     localStorage.removeItem("token");
     window.location.href = "/login";
-  };
+  }, []); // 依存関係なし
+
+  // useCallbackを使用してinput changeハンドラーをメモ化
+  const handleSearchInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setSearchQuery(e.target.value);
+    },
+    []
+  ); // 依存関係なし（関数型更新を使用）
+
+  // useCallbackを使用してマウスイベントハンドラーをメモ化
+  const handleCardMouseEnter = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.15)";
+      e.currentTarget.style.transform = "translateY(-2px)";
+    },
+    []
+  );
+
+  const handleCardMouseLeave = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      e.currentTarget.style.boxShadow = "0 1px 3px rgba(0, 0, 0, 0.1)";
+      e.currentTarget.style.transform = "translateY(0)";
+    },
+    []
+  );
+
+  const handleLinkMouseEnter = useCallback(
+    (e: React.MouseEvent<HTMLAnchorElement>) => {
+      e.currentTarget.style.color = "#3b82f6";
+    },
+    []
+  );
+
+  const handleLinkMouseLeave = useCallback(
+    (e: React.MouseEvent<HTMLAnchorElement>) => {
+      e.currentTarget.style.color = "inherit";
+    },
+    []
+  );
 
   if (loading) {
     return (
@@ -164,7 +230,7 @@ const DashboardPage: React.FC = () => {
                   type="text"
                   placeholder="記事を検索..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={handleSearchInputChange}
                   style={{
                     flex: 1,
                     padding: "0.5rem 1rem",
@@ -522,16 +588,8 @@ const DashboardPage: React.FC = () => {
                     cursor: "pointer",
                     border: "1px solid #e5e7eb",
                   }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow =
-                      "0 4px 12px rgba(0, 0, 0, 0.15)";
-                    e.currentTarget.style.transform = "translateY(-2px)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow =
-                      "0 1px 3px rgba(0, 0, 0, 0.1)";
-                    e.currentTarget.style.transform = "translateY(0)";
-                  }}
+                  onMouseEnter={handleCardMouseEnter}
+                  onMouseLeave={handleCardMouseLeave}
                 >
                   <div
                     style={{
@@ -582,12 +640,8 @@ const DashboardPage: React.FC = () => {
                         color: "inherit",
                         transition: "color 0.2s",
                       }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.color = "#3b82f6";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.color = "inherit";
-                      }}
+                      onMouseEnter={handleLinkMouseEnter}
+                      onMouseLeave={handleLinkMouseLeave}
                     >
                       {content.title}
                     </Link>

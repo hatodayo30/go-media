@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../services/api";
-import { AuthResponse, RegisterRequest } from "../types";
 
 const RegisterPage: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -9,91 +8,84 @@ const RegisterPage: React.FC = () => {
     email: "",
     password: "",
     confirmPassword: "",
+    bio: "",
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
 
-  const validateForm = (): boolean => {
-    if (!formData.username.trim()) {
-      setError("ユーザー名を入力してください");
-      return false;
-    }
-
-    if (!formData.email.trim()) {
-      setError("メールアドレスを入力してください");
-      return false;
+    // バリデーション
+    if (formData.password !== formData.confirmPassword) {
+      setError("パスワードが一致しません");
+      setLoading(false);
+      return;
     }
 
     if (formData.password.length < 6) {
       setError("パスワードは6文字以上で入力してください");
-      return false;
+      setLoading(false);
+      return;
     }
 
-    if (formData.password !== formData.confirmPassword) {
-      setError("パスワードが一致しません");
-      return false;
+    if (!formData.username.trim()) {
+      setError("ユーザー名を入力してください");
+      setLoading(false);
+      return;
     }
-
-    return true;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-
-    if (!validateForm()) return;
-
-    setLoading(true);
 
     try {
-      const registerData: RegisterRequest = {
+      console.log("Register attempt:", formData);
+
+      // API通信
+      const response = await api.register({
         username: formData.username,
         email: formData.email,
         password: formData.password,
-      };
+        bio: formData.bio || undefined,
+      });
 
-      const response: AuthResponse = await api.register(registerData);
+      console.log("Register response:", response);
 
-      // 登録成功後、自動的にログイン状態にする
-      if (response.token) {
-        localStorage.setItem("token", response.token);
-
-        if (response.user) {
-          localStorage.setItem("user", JSON.stringify(response.user));
-        }
-
-        navigate("/dashboard");
-      } else {
-        setError("登録は成功しましたが、ログインに失敗しました");
-      }
+      // 登録成功
+      alert("登録が完了しました！ログインページに移動します。");
+      navigate("/login");
     } catch (err: any) {
-      console.error("登録エラー:", err);
+      console.error("Register error:", err);
 
       if (err.response) {
+        // サーバーからのエラーレスポンス
         const errorMessage =
           err.response.data?.error ||
           err.response.data?.message ||
           `エラー: ${err.response.status}`;
         setError(errorMessage);
       } else if (err.request) {
+        // ネットワークエラー
         setError(
           "サーバーに接続できません。APIサーバーが起動しているか確認してください。"
         );
       } else {
-        setError("アカウント作成に失敗しました");
+        // その他のエラー
+        setError("登録に失敗しました");
       }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
   return (
@@ -124,9 +116,8 @@ const RegisterPage: React.FC = () => {
             fontSize: "2rem",
           }}
         >
-          アカウント作成
+          新規登録
         </h2>
-
         <form onSubmit={handleSubmit}>
           {error && (
             <div
@@ -151,7 +142,7 @@ const RegisterPage: React.FC = () => {
                 fontWeight: "500",
               }}
             >
-              ユーザー名
+              ユーザー名 *
             </label>
             <input
               type="text"
@@ -166,7 +157,7 @@ const RegisterPage: React.FC = () => {
                 borderRadius: "6px",
                 fontSize: "1rem",
               }}
-              placeholder="ユーザー名"
+              placeholder="ユーザー名を入力"
             />
           </div>
 
@@ -178,7 +169,7 @@ const RegisterPage: React.FC = () => {
                 fontWeight: "500",
               }}
             >
-              メールアドレス
+              メールアドレス *
             </label>
             <input
               type="email"
@@ -193,7 +184,7 @@ const RegisterPage: React.FC = () => {
                 borderRadius: "6px",
                 fontSize: "1rem",
               }}
-              placeholder="メールアドレス"
+              placeholder="メールアドレスを入力"
             />
           </div>
 
@@ -205,7 +196,7 @@ const RegisterPage: React.FC = () => {
                 fontWeight: "500",
               }}
             >
-              パスワード
+              パスワード *
             </label>
             <input
               type="password"
@@ -220,11 +211,11 @@ const RegisterPage: React.FC = () => {
                 borderRadius: "6px",
                 fontSize: "1rem",
               }}
-              placeholder="パスワード（6文字以上）"
+              placeholder="パスワードを入力（6文字以上）"
             />
           </div>
 
-          <div style={{ marginBottom: "1.5rem" }}>
+          <div style={{ marginBottom: "1rem" }}>
             <label
               style={{
                 display: "block",
@@ -232,7 +223,7 @@ const RegisterPage: React.FC = () => {
                 fontWeight: "500",
               }}
             >
-              パスワード確認
+              パスワード確認 *
             </label>
             <input
               type="password"
@@ -247,7 +238,34 @@ const RegisterPage: React.FC = () => {
                 borderRadius: "6px",
                 fontSize: "1rem",
               }}
-              placeholder="パスワード確認"
+              placeholder="パスワードを再入力"
+            />
+          </div>
+
+          <div style={{ marginBottom: "1.5rem" }}>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "0.5rem",
+                fontWeight: "500",
+              }}
+            >
+              自己紹介
+            </label>
+            <textarea
+              name="bio"
+              rows={3}
+              value={formData.bio}
+              onChange={handleChange}
+              style={{
+                width: "100%",
+                padding: "0.75rem",
+                border: "1px solid #d1d5db",
+                borderRadius: "6px",
+                fontSize: "1rem",
+                resize: "vertical",
+              }}
+              placeholder="簡単な自己紹介（任意）"
             />
           </div>
 
@@ -266,7 +284,7 @@ const RegisterPage: React.FC = () => {
               opacity: loading ? 0.6 : 1,
             }}
           >
-            {loading ? "アカウント作成中..." : "アカウント作成"}
+            {loading ? "登録中..." : "登録"}
           </button>
 
           <div style={{ textAlign: "center", marginTop: "1rem" }}>
@@ -274,7 +292,7 @@ const RegisterPage: React.FC = () => {
               to="/login"
               style={{ color: "#3b82f6", textDecoration: "none" }}
             >
-              既にアカウントをお持ちの方はこちら
+              すでにアカウントをお持ちの方はこちら
             </Link>
           </div>
         </form>

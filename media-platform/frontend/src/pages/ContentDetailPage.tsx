@@ -1,144 +1,171 @@
-import React, { useState, useEffect } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../services/api";
-import Comments from "../components/Comments";
-import ContentActions from "../components/ContentActions";
 
+// 型定義
 interface User {
   id: number;
   username: string;
   email: string;
+  bio: string;
   role: string;
-}
-
-interface Category {
-  id: number;
-  name: string;
-  description?: string;
-}
-
-interface Content {
-  id: number;
-  title: string;
-  content?: string;
-  body?: string;
-  status: string;
-  category_id: number;
-  author_id: number;
-  view_count: number;
   created_at: string;
-  updated_at: string;
-  author?: User;
-  category?: Category;
 }
 
-const ContentDetailPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const [content, setContent] = useState<Content | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+interface Follow {
+  id: number;
+  follower_id: number;
+  following_id: number;
+  created_at: string;
+  follower?: User;
+  following?: User;
+}
 
-  useEffect(() => {
-    if (id) {
-      fetchContent();
-      fetchCurrentUser();
-    }
-  }, [id]);
+interface FollowStats {
+  followers_count: number;
+  following_count: number;
+  is_following: boolean;
+}
 
-  const fetchContent = async () => {
+interface UserFollowProps {
+  userId: number;
+  currentUserId?: number;
+  showActions?: boolean;
+}
+
+const UserFollow: React.FC<UserFollowProps> = ({
+  userId,
+  currentUserId,
+  showActions = true,
+}) => {
+  const [followStats, setFollowStats] = useState<FollowStats>({
+    followers_count: 0,
+    following_count: 0,
+    is_following: false,
+  });
+  const [followers, setFollowers] = useState<Follow[]>([]);
+  const [following, setFollowing] = useState<Follow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<"followers" | "following">(
+    "followers"
+  );
+  const [showFollowList, setShowFollowList] = useState(false);
+
+  // fetchFollowStatsをuseCallbackでメモ化
+  const fetchFollowStats = useCallback(async () => {
     try {
       setLoading(true);
-      console.log(`📄 コンテンツ ${id} を取得中...`);
-
-      const response = await api.getContentById(id!);
-      console.log("📥 コンテンツレスポンス:", response);
-
-      const contentData =
-        response.data?.content || response.content || response;
-      setContent(contentData);
-    } catch (err: any) {
-      console.error("❌ コンテンツ取得エラー:", err);
-      if (err.response?.status === 404) {
-        setError("記事が見つかりませんでした");
-      } else {
-        setError("記事の取得に失敗しました");
-      }
+      const stats = await api.getFollowStats(userId, currentUserId);
+      setFollowStats(stats);
+    } catch (error) {
+      console.error("フォロー統計の取得に失敗しました:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId, currentUserId]);
 
-  const fetchCurrentUser = async () => {
+  // fetchFollowersをuseCallbackでメモ化
+  const fetchFollowers = useCallback(async () => {
     try {
-      const response = await api.getCurrentUser();
-      setCurrentUser(response.data || response);
-    } catch (err) {
-      console.error("ユーザー情報の取得に失敗:", err);
+      setLoading(true);
+      const followersList = await api.getFollowers(userId);
+      setFollowers(followersList);
+    } catch (error) {
+      console.error("フォロワー一覧の取得に失敗しました:", error);
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [userId]);
 
-  const handleEdit = () => {
-    navigate(`/edit/${id}`);
-  };
-
-  const handleDelete = async () => {
-    if (!window.confirm("この記事を削除しますか？")) {
-      return;
+  // fetchFollowingをuseCallbackでメモ化
+  const fetchFollowing = useCallback(async () => {
+    try {
+      setLoading(true);
+      const followingList = await api.getFollowing(userId);
+      setFollowing(followingList);
+    } catch (error) {
+      console.error("フォロー中一覧の取得に失敗しました:", error);
+    } finally {
+      setLoading(false);
     }
+  }, [userId]);
+
+  useEffect(() => {
+    fetchFollowStats();
+  }, [fetchFollowStats]);
+
+  const handleFollow = async () => {
+    if (!currentUserId || currentUserId === userId) return;
 
     try {
-      console.log(`🗑️ コンテンツ ${id} を削除中...`);
+      setFollowLoading(true);
 
-      await api.deleteContent(id!);
-      console.log("✅ 削除完了");
-
-      alert("記事を削除しました");
-      navigate("/dashboard");
-    } catch (err: any) {
-      console.error("❌ 削除エラー:", err);
-      alert("削除に失敗しました");
+      if (followStats.is_following) {
+        await api.unfollowUser(userId);
+        setFollowStats((prev) => ({
+          ...prev,
+          is_following: false,
+          followers_count: prev.followers_count - 1,
+        }));
+      } else {
+        await api.followUser(userId);
+        setFollowStats((prev) => ({
+          ...prev,
+          is_following: true,
+          followers_count: prev.followers_count + 1,
+        }));
+      }
+    } catch (error) {
+      console.error("フォロー操作に失敗しました:", error);
+    } finally {
+      setFollowLoading(false);
     }
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("ja-JP", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  const handleShowFollowList = (tab: "followers" | "following") => {
+    setActiveTab(tab);
+    setShowFollowList(true);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "published":
-        return { bg: "#dcfce7", color: "#15803d", text: "公開中" };
-      case "draft":
-        return { bg: "#fef3c7", color: "#92400e", text: "下書き" };
-      default:
-        return { bg: "#f3f4f6", color: "#6b7280", text: status };
+    if (tab === "followers") {
+      fetchFollowers();
+    } else {
+      fetchFollowing();
     }
   };
 
-  const canEdit = () => {
-    if (!currentUser || !content) return false;
-    return currentUser.id === content.author_id || currentUser.role === "admin";
+  const handleUserFollow = async (
+    targetUserId: number,
+    isCurrentlyFollowing: boolean
+  ) => {
+    if (!currentUserId) return;
+
+    try {
+      if (isCurrentlyFollowing) {
+        await api.unfollowUser(targetUserId);
+      } else {
+        await api.followUser(targetUserId);
+      }
+
+      // リストを再取得
+      if (activeTab === "followers") {
+        fetchFollowers();
+      } else {
+        fetchFollowing();
+      }
+    } catch (error) {
+      console.error("フォロー操作に失敗しました:", error);
+    }
   };
 
-  if (loading) {
+  if (loading && !showFollowList) {
     return (
       <div
         style={{
-          padding: "2rem",
-          textAlign: "center",
-          minHeight: "50vh",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+          padding: "1rem",
         }}
       >
         <div>読み込み中...</div>
@@ -146,317 +173,396 @@ const ContentDetailPage: React.FC = () => {
     );
   }
 
-  if (error || !content) {
-    return (
-      <div
-        style={{
-          maxWidth: "800px",
-          margin: "0 auto",
-          padding: "2rem",
-          textAlign: "center",
-        }}
-      >
-        <div
-          style={{
-            backgroundColor: "white",
-            padding: "3rem",
-            borderRadius: "8px",
-            boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
-          }}
-        >
-          <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>❌</div>
-          <h2 style={{ marginBottom: "1rem", color: "#374151" }}>
-            {error || "記事が見つかりませんでした"}
-          </h2>
-          <Link
-            to="/dashboard"
-            style={{
-              display: "inline-block",
-              padding: "0.75rem 1.5rem",
-              backgroundColor: "#3b82f6",
-              color: "white",
-              textDecoration: "none",
-              borderRadius: "6px",
-              fontSize: "0.875rem",
-              fontWeight: "500",
-            }}
-          >
-            ダッシュボードに戻る
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  const statusInfo = getStatusColor(content.status);
-
   return (
-    <div
-      style={{
-        maxWidth: "800px",
-        margin: "0 auto",
-        padding: "2rem",
-        backgroundColor: "#f9fafb",
-        minHeight: "100vh",
-      }}
-    >
-      {/* ナビゲーション */}
+    <div style={{ fontFamily: "Arial, sans-serif" }}>
+      {/* フォロー統計表示 */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           gap: "1rem",
-          marginBottom: "2rem",
-        }}
-      >
-        <Link
-          to="/dashboard"
-          style={{
-            color: "#6b7280",
-            textDecoration: "none",
-            fontSize: "0.875rem",
-          }}
-        >
-          ← ダッシュボード
-        </Link>
-        <span style={{ color: "#d1d5db" }}>/</span>
-        <span style={{ color: "#374151", fontSize: "0.875rem" }}>記事詳細</span>
-      </div>
-
-      {/* 記事ヘッダー */}
-      <div
-        style={{
+          padding: "1rem",
           backgroundColor: "white",
           borderRadius: "8px",
-          padding: "2rem",
+          boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
           marginBottom: "1rem",
-          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
         }}
       >
-        <div
+        {/* フォロワー数 */}
+        <button
+          onClick={() => handleShowFollowList("followers")}
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            marginBottom: "1rem",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            textAlign: "center",
+            padding: "0.5rem",
+            borderRadius: "6px",
+            transition: "background-color 0.2s",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = "#f3f4f6";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = "transparent";
           }}
         >
-          <div style={{ flex: 1 }}>
+          <div
+            style={{
+              fontSize: "1.25rem",
+              fontWeight: "bold",
+              color: "#1f2937",
+            }}
+          >
+            {followStats.followers_count}
+          </div>
+          <div style={{ fontSize: "0.875rem", color: "#6b7280" }}>
+            👥 フォロワー
+          </div>
+        </button>
+
+        {/* フォロー中数 */}
+        <button
+          onClick={() => handleShowFollowList("following")}
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            textAlign: "center",
+            padding: "0.5rem",
+            borderRadius: "6px",
+            transition: "background-color 0.2s",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = "#f3f4f6";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = "transparent";
+          }}
+        >
+          <div
+            style={{
+              fontSize: "1.25rem",
+              fontWeight: "bold",
+              color: "#1f2937",
+            }}
+          >
+            {followStats.following_count}
+          </div>
+          <div style={{ fontSize: "0.875rem", color: "#6b7280" }}>
+            ➡️ フォロー中
+          </div>
+        </button>
+
+        {/* フォローボタン */}
+        {showActions && currentUserId && currentUserId !== userId && (
+          <button
+            onClick={handleFollow}
+            disabled={followLoading}
+            style={{
+              marginLeft: "auto",
+              backgroundColor: followStats.is_following ? "#ef4444" : "#3b82f6",
+              color: "white",
+              border: "none",
+              padding: "0.75rem 1.5rem",
+              borderRadius: "6px",
+              cursor: followLoading ? "not-allowed" : "pointer",
+              fontSize: "0.875rem",
+              fontWeight: "500",
+              opacity: followLoading ? 0.7 : 1,
+              transition: "all 0.2s",
+            }}
+          >
+            {followLoading
+              ? "処理中..."
+              : followStats.is_following
+              ? "🚫 アンフォロー"
+              : "➕ フォロー"}
+          </button>
+        )}
+      </div>
+
+      {/* フォロー一覧モーダル */}
+      {showFollowList && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "white",
+              borderRadius: "8px",
+              padding: "1.5rem",
+              maxWidth: "500px",
+              width: "90%",
+              maxHeight: "80vh",
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            {/* ヘッダー */}
             <div
               style={{
                 display: "flex",
+                justifyContent: "space-between",
                 alignItems: "center",
-                gap: "1rem",
                 marginBottom: "1rem",
+                borderBottom: "1px solid #e5e7eb",
+                paddingBottom: "1rem",
               }}
             >
-              <span
+              <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: "600" }}>
+                {activeTab === "followers" ? "👥 フォロワー" : "➡️ フォロー中"}
+              </h3>
+              <button
+                onClick={() => setShowFollowList(false)}
                 style={{
-                  backgroundColor: statusInfo.bg,
-                  color: statusInfo.color,
-                  padding: "0.25rem 0.75rem",
-                  borderRadius: "9999px",
-                  fontSize: "0.75rem",
+                  background: "none",
+                  border: "none",
+                  fontSize: "1.5rem",
+                  cursor: "pointer",
+                  color: "#6b7280",
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* タブ */}
+            <div
+              style={{
+                display: "flex",
+                marginBottom: "1rem",
+                borderBottom: "1px solid #e5e7eb",
+              }}
+            >
+              <button
+                onClick={() => {
+                  setActiveTab("followers");
+                  fetchFollowers();
+                }}
+                style={{
+                  flex: 1,
+                  padding: "0.75rem",
+                  border: "none",
+                  backgroundColor:
+                    activeTab === "followers" ? "#3b82f6" : "transparent",
+                  color: activeTab === "followers" ? "white" : "#6b7280",
+                  cursor: "pointer",
+                  fontSize: "0.875rem",
                   fontWeight: "500",
                 }}
               >
-                {statusInfo.text}
-              </span>
-
-              {content.category && (
-                <span
-                  style={{
-                    backgroundColor: "#dbeafe",
-                    color: "#1d4ed8",
-                    padding: "0.25rem 0.75rem",
-                    borderRadius: "9999px",
-                    fontSize: "0.75rem",
-                    fontWeight: "500",
-                  }}
-                >
-                  📁 {content.category.name}
-                </span>
-              )}
+                フォロワー ({followStats.followers_count})
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab("following");
+                  fetchFollowing();
+                }}
+                style={{
+                  flex: 1,
+                  padding: "0.75rem",
+                  border: "none",
+                  backgroundColor:
+                    activeTab === "following" ? "#3b82f6" : "transparent",
+                  color: activeTab === "following" ? "white" : "#6b7280",
+                  cursor: "pointer",
+                  fontSize: "0.875rem",
+                  fontWeight: "500",
+                }}
+              >
+                フォロー中 ({followStats.following_count})
+              </button>
             </div>
 
-            <h1
-              style={{
-                fontSize: "2rem",
-                fontWeight: "bold",
-                margin: "0 0 1rem 0",
-                color: "#374151",
-                lineHeight: "1.3",
-              }}
-            >
-              {content.title}
-            </h1>
-
+            {/* ユーザーリスト */}
             <div
               style={{
-                display: "flex",
-                gap: "1.5rem",
-                fontSize: "0.875rem",
-                color: "#6b7280",
+                flex: 1,
+                overflowY: "auto",
+                maxHeight: "400px",
               }}
             >
-              <span>✍️ {content.author?.username || "不明"}</span>
-              <span>📅 {formatDate(content.created_at)}</span>
-              <span>👁️ {content.view_count} 回閲覧</span>
-              {content.updated_at !== content.created_at && (
-                <span>🔄 {formatDate(content.updated_at)} 更新</span>
+              {loading ? (
+                <div style={{ textAlign: "center", padding: "2rem" }}>
+                  読み込み中...
+                </div>
+              ) : (
+                <div>
+                  {(activeTab === "followers" ? followers : following).map(
+                    (follow) => {
+                      const user =
+                        activeTab === "followers"
+                          ? follow.follower
+                          : follow.following;
+                      if (!user) return null;
+
+                      return (
+                        <div
+                          key={follow.id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            padding: "0.75rem",
+                            borderBottom: "1px solid #f3f4f6",
+                            transition: "background-color 0.2s",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = "#f9fafb";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor =
+                              "transparent";
+                          }}
+                        >
+                          <div style={{ flex: 1 }}>
+                            <Link
+                              to={`/users/${user.id}`}
+                              style={{
+                                textDecoration: "none",
+                                color: "inherit",
+                              }}
+                            >
+                              <div
+                                style={{ fontWeight: "500", color: "#1f2937" }}
+                              >
+                                {user.username}
+                              </div>
+                              {user.bio && (
+                                <div
+                                  style={{
+                                    fontSize: "0.875rem",
+                                    color: "#6b7280",
+                                    marginTop: "0.25rem",
+                                  }}
+                                >
+                                  {user.bio.substring(0, 50)}
+                                  {user.bio.length > 50 ? "..." : ""}
+                                </div>
+                              )}
+                            </Link>
+                          </div>
+
+                          {/* フォローボタン（自分以外） */}
+                          {currentUserId && currentUserId !== user.id && (
+                            <FollowButton
+                              userId={user.id}
+                              currentUserId={currentUserId}
+                              onFollowChange={() =>
+                                handleUserFollow(user.id, false)
+                              }
+                            />
+                          )}
+                        </div>
+                      );
+                    }
+                  )}
+
+                  {(activeTab === "followers" ? followers : following)
+                    .length === 0 && (
+                    <div
+                      style={{
+                        textAlign: "center",
+                        padding: "2rem",
+                        color: "#6b7280",
+                      }}
+                    >
+                      {activeTab === "followers"
+                        ? "まだフォロワーがいません"
+                        : "まだ誰もフォローしていません"}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>
-
-          {/* アクションボタン */}
-          {canEdit() && (
-            <div style={{ display: "flex", gap: "0.5rem", marginLeft: "1rem" }}>
-              <button
-                onClick={handleEdit}
-                style={{
-                  padding: "0.5rem 1rem",
-                  backgroundColor: "#f3f4f6",
-                  color: "#374151",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "6px",
-                  fontSize: "0.875rem",
-                  cursor: "pointer",
-                }}
-              >
-                ✏️ 編集
-              </button>
-
-              <button
-                onClick={handleDelete}
-                style={{
-                  padding: "0.5rem 1rem",
-                  backgroundColor: "#ef4444",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  fontSize: "0.875rem",
-                  cursor: "pointer",
-                }}
-              >
-                🗑️ 削除
-              </button>
-            </div>
-          )}
         </div>
-      </div>
-
-      {/* 記事本文 */}
-      <div
-        style={{
-          backgroundColor: "white",
-          borderRadius: "8px",
-          padding: "2rem",
-          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
-          marginBottom: "2rem",
-        }}
-      >
-        <div
-          style={{
-            color: "#374151",
-            fontSize: "1rem",
-            lineHeight: "1.7",
-            whiteSpace: "pre-wrap",
-          }}
-        >
-          {content.content || content.body || "内容が設定されていません"}
-        </div>
-      </div>
-
-      {/* コメント機能 */}
-      <Comments contentId={content.id} />
-
-      {/* 🔧 グッド評価機能 */}
-      <div style={{ marginTop: "2rem" }}>
-        <h3
-          style={{
-            fontSize: "1.25rem",
-            fontWeight: "600",
-            marginBottom: "1rem",
-            color: "#374151",
-          }}
-        >
-          📊 この記事への反応
-        </h3>
-
-        <ContentActions
-          contentId={content.id}
-          size="medium"
-          showCounts={true}
-        />
-      </div>
-
-      {/* フッター */}
-      <div
-        style={{
-          backgroundColor: "white",
-          borderRadius: "8px",
-          padding: "1.5rem",
-          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
-          textAlign: "center",
-          marginTop: "2rem",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            gap: "1rem",
-            flexWrap: "wrap",
-          }}
-        >
-          <Link
-            to="/dashboard"
-            style={{
-              padding: "0.75rem 1.5rem",
-              backgroundColor: "#6b7280",
-              color: "white",
-              textDecoration: "none",
-              borderRadius: "6px",
-              fontSize: "0.875rem",
-              fontWeight: "500",
-            }}
-          >
-            📊 ダッシュボード
-          </Link>
-
-          <Link
-            to="/my-posts"
-            style={{
-              padding: "0.75rem 1.5rem",
-              backgroundColor: "#8b5cf6",
-              color: "white",
-              textDecoration: "none",
-              borderRadius: "6px",
-              fontSize: "0.875rem",
-              fontWeight: "500",
-            }}
-          >
-            📄 マイ投稿
-          </Link>
-
-          <Link
-            to="/create"
-            style={{
-              padding: "0.75rem 1.5rem",
-              backgroundColor: "#3b82f6",
-              color: "white",
-              textDecoration: "none",
-              borderRadius: "6px",
-              fontSize: "0.875rem",
-              fontWeight: "500",
-            }}
-          >
-            ✏️ 新規投稿
-          </Link>
-        </div>
-      </div>
+      )}
     </div>
   );
 };
 
-export default ContentDetailPage;
+// フォローボタンコンポーネント
+interface FollowButtonProps {
+  userId: number;
+  currentUserId: number;
+  onFollowChange?: () => void;
+}
+
+const FollowButton: React.FC<FollowButtonProps> = ({
+  userId,
+  currentUserId,
+  onFollowChange,
+}) => {
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  // checkFollowStatusをuseCallbackでメモ化
+  const checkFollowStatus = useCallback(async () => {
+    try {
+      const stats = await api.getFollowStats(userId, currentUserId);
+      setIsFollowing(stats.is_following);
+    } catch (error) {
+      console.error("フォロー状態の確認に失敗しました:", error);
+    }
+  }, [userId, currentUserId]);
+
+  useEffect(() => {
+    checkFollowStatus();
+  }, [checkFollowStatus]);
+
+  const handleFollow = async () => {
+    try {
+      setLoading(true);
+
+      if (isFollowing) {
+        await api.unfollowUser(userId);
+        setIsFollowing(false);
+      } else {
+        await api.followUser(userId);
+        setIsFollowing(true);
+      }
+
+      onFollowChange?.();
+    } catch (error) {
+      console.error("フォロー操作に失敗しました:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleFollow}
+      disabled={loading}
+      style={{
+        backgroundColor: isFollowing ? "#ef4444" : "#3b82f6",
+        color: "white",
+        border: "none",
+        padding: "0.5rem 1rem",
+        borderRadius: "6px",
+        cursor: loading ? "not-allowed" : "pointer",
+        fontSize: "0.75rem",
+        fontWeight: "500",
+        opacity: loading ? 0.7 : 1,
+        transition: "all 0.2s",
+      }}
+    >
+      {loading ? "..." : isFollowing ? "アンフォロー" : "フォロー"}
+    </button>
+  );
+};
+
+export default UserFollow;

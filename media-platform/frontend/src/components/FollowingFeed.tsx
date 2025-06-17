@@ -1,14 +1,34 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../services/api";
-import {
-  User,
-  Category,
-  Content,
-  FeedParams,
-  ApiResponse,
-  normalizeContent,
-} from "../types";
+
+// 型定義
+interface User {
+  id: number;
+  username: string;
+  email: string;
+  bio: string;
+  role: string;
+}
+
+interface Category {
+  id: number;
+  name: string;
+  description?: string;
+}
+
+interface Content {
+  id: number;
+  title: string;
+  body: string;
+  type: string;
+  author?: User;
+  category?: Category;
+  status: string;
+  view_count: number;
+  created_at: string;
+  published_at?: string;
+}
 
 interface FollowingFeedProps {
   currentUserId: number;
@@ -33,20 +53,12 @@ const FollowingFeed: React.FC<FollowingFeedProps> = ({ currentUserId }) => {
           setLoadingMore(true);
         }
 
-        // FeedParams型を使用してAPIを呼び出し
-        const feedParams: FeedParams = {
+        const response = await api.getFollowingFeed(currentUserId, {
           page: pageNum,
           limit: 10,
-        };
+        });
 
-        const response: ApiResponse<Content[]> = await api.getFollowingFeed(
-          currentUserId,
-          feedParams
-        );
-
-        // レスポンスからコンテンツを取得し、正規化
-        const rawContents = response.data?.contents || response.contents || [];
-        const newContents = rawContents.map(normalizeContent);
+        const newContents = response.data?.contents || response.contents || [];
 
         if (append) {
           setFeedContents((prev) => [...prev, ...newContents]);
@@ -65,11 +77,11 @@ const FollowingFeed: React.FC<FollowingFeedProps> = ({ currentUserId }) => {
       }
     },
     [currentUserId]
-  );
+  ); // currentUserIdを依存関係に追加
 
   useEffect(() => {
     fetchFollowingFeed(1);
-  }, [fetchFollowingFeed]);
+  }, [fetchFollowingFeed]); // fetchFollowingFeedを依存関係に追加
 
   const loadMore = () => {
     if (!loadingMore && hasMore) {

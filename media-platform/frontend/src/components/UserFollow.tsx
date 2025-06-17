@@ -1,7 +1,31 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../services/api";
-import { User, Follow, FollowStats, TabType } from "../types";
+
+// 型定義
+interface User {
+  id: number;
+  username: string;
+  email: string;
+  bio: string;
+  role: string;
+  created_at: string;
+}
+
+interface Follow {
+  id: number;
+  follower_id: number;
+  following_id: number;
+  created_at: string;
+  follower?: User;
+  following?: User;
+}
+
+interface FollowStats {
+  followers_count: number;
+  following_count: number;
+  is_following: boolean;
+}
 
 interface UserFollowProps {
   userId: number;
@@ -23,17 +47,16 @@ const UserFollow: React.FC<UserFollowProps> = ({
   const [following, setFollowing] = useState<Follow[]>([]);
   const [loading, setLoading] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabType>("followers");
+  const [activeTab, setActiveTab] = useState<"followers" | "following">(
+    "followers"
+  );
   const [showFollowList, setShowFollowList] = useState(false);
 
   // fetchFollowStatsをuseCallbackでメモ化
   const fetchFollowStats = useCallback(async () => {
     try {
       setLoading(true);
-      const stats: FollowStats = await api.getFollowStats(
-        userId,
-        currentUserId
-      );
+      const stats = await api.getFollowStats(userId, currentUserId);
       setFollowStats(stats);
     } catch (error) {
       console.error("フォロー統計の取得に失敗しました:", error);
@@ -46,7 +69,7 @@ const UserFollow: React.FC<UserFollowProps> = ({
   const fetchFollowers = useCallback(async () => {
     try {
       setLoading(true);
-      const followersList: Follow[] = await api.getFollowers(userId);
+      const followersList = await api.getFollowers(userId);
       setFollowers(followersList);
     } catch (error) {
       console.error("フォロワー一覧の取得に失敗しました:", error);
@@ -59,7 +82,7 @@ const UserFollow: React.FC<UserFollowProps> = ({
   const fetchFollowing = useCallback(async () => {
     try {
       setLoading(true);
-      const followingList: Follow[] = await api.getFollowing(userId);
+      const followingList = await api.getFollowing(userId);
       setFollowing(followingList);
     } catch (error) {
       console.error("フォロー中一覧の取得に失敗しました:", error);
@@ -100,7 +123,7 @@ const UserFollow: React.FC<UserFollowProps> = ({
     }
   };
 
-  const handleShowFollowList = (tab: TabType) => {
+  const handleShowFollowList = (tab: "followers" | "following") => {
     setActiveTab(tab);
     setShowFollowList(true);
 
@@ -380,7 +403,7 @@ const UserFollow: React.FC<UserFollowProps> = ({
                 <div>
                   {(activeTab === "followers" ? followers : following).map(
                     (follow) => {
-                      const user: User | undefined =
+                      const user =
                         activeTab === "followers"
                           ? follow.follower
                           : follow.following;
@@ -489,10 +512,7 @@ const FollowButton: React.FC<FollowButtonProps> = ({
   // checkFollowStatusをuseCallbackでメモ化
   const checkFollowStatus = useCallback(async () => {
     try {
-      const stats: FollowStats = await api.getFollowStats(
-        userId,
-        currentUserId
-      );
+      const stats = await api.getFollowStats(userId, currentUserId);
       setIsFollowing(stats.is_following);
     } catch (error) {
       console.error("フォロー状態の確認に失敗しました:", error);

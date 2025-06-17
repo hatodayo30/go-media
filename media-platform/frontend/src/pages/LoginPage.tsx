@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../services/api";
-import { AuthResponse } from "../types";
 
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState("");
@@ -22,20 +21,22 @@ const LoginPage: React.FC = () => {
       });
 
       // API通信
-      const response: AuthResponse = await api.login(email, password);
+      const response = await api.login(email, password);
       console.log("📥 ログインレスポンス（完全）:", response);
 
       // レスポンス構造の詳細確認
       console.log("🔍 レスポンス解析:", {
-        hasToken: !!response.token,
-        hasUser: !!response.user,
+        hasData: !!response.data,
+        hasToken: response.data && !!response.data.token,
+        hasUser: response.data && !!response.data.user,
+        status: response.status,
         responseKeys: Object.keys(response),
-        userKeys: response.user ? Object.keys(response.user) : null,
+        dataKeys: response.data ? Object.keys(response.data) : null,
       });
 
       // トークンを保存
-      if (response.token) {
-        const token = response.token;
+      if (response.data && response.data.token) {
+        const token = response.data.token;
         console.log("💾 トークン保存開始:", {
           tokenExists: !!token,
           tokenLength: token?.length,
@@ -53,9 +54,9 @@ const LoginPage: React.FC = () => {
         });
 
         // ユーザー情報も保存
-        if (response.user) {
-          localStorage.setItem("user", JSON.stringify(response.user));
-          console.log("👤 ユーザー情報保存:", response.user);
+        if (response.data.user) {
+          localStorage.setItem("user", JSON.stringify(response.data.user));
+          console.log("👤 ユーザー情報保存:", response.data.user);
         }
 
         console.log("🎉 ログイン成功 - ダッシュボードへリダイレクト");
@@ -72,6 +73,8 @@ const LoginPage: React.FC = () => {
         navigate("/dashboard");
       } else {
         console.error("❌ トークンが見つかりません:", {
+          hasData: !!response.data,
+          dataContent: response.data,
           fullResponse: response,
         });
         setError("ログインレスポンスが不正です");
