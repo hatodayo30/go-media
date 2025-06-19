@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../services/api";
 
@@ -24,11 +24,8 @@ const ProfilePage: React.FC = () => {
     bio: "",
   });
 
-  useEffect(() => {
-    fetchUserProfile();
-  }, []);
-
-  const fetchUserProfile = async () => {
+  // useCallbackを使用してfetchUserProfileをメモ化
+  const fetchUserProfile = useCallback(async () => {
     try {
       setLoading(true);
       console.log("👤 ユーザープロフィールを取得中...");
@@ -49,52 +46,83 @@ const ProfilePage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []); // 依存関係なし
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setSuccess("");
+  useEffect(() => {
+    fetchUserProfile();
+  }, [fetchUserProfile]); // fetchUserProfileを依存配列に含める
 
-    try {
-      console.log("💾 プロフィールを更新中...", formData);
+  // useCallbackを使用してhandleSubmitをメモ化
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      setError("");
+      setSuccess("");
 
-      const response = await api.updateUser(formData);
-      console.log("✅ プロフィール更新完了:", response);
+      try {
+        console.log("💾 プロフィールを更新中...", formData);
 
-      setUser(response.data || response);
-      setEditing(false);
-      setSuccess("プロフィールを更新しました");
-    } catch (err: any) {
-      console.error("❌ プロフィール更新エラー:", err);
-      if (err.response?.data?.error) {
-        setError(err.response.data.error);
-      } else {
-        setError("プロフィールの更新に失敗しました");
+        const response = await api.updateUser(formData);
+        console.log("✅ プロフィール更新完了:", response);
+
+        setUser(response.data || response);
+        setEditing(false);
+        setSuccess("プロフィールを更新しました");
+      } catch (err: any) {
+        console.error("❌ プロフィール更新エラー:", err);
+        if (err.response?.data?.error) {
+          setError(err.response.data.error);
+        } else {
+          setError("プロフィールの更新に失敗しました");
+        }
       }
+    },
+    [formData]
+  ); // formDataに依存
+
+  // useCallbackを使用してhandleChangeをメモ化
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      const { name, value } = e.target;
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+      }));
+    },
+    []
+  ); // 依存関係なし（関数型更新を使用）
+
+  // useCallbackを使用してhandleEditStartをメモ化
+  const handleEditStart = useCallback(() => {
+    setEditing(true);
+  }, []); // 依存関係なし
+
+  // useCallbackを使用してhandleCancelEditをメモ化
+  const handleCancelEdit = useCallback(() => {
+    if (user) {
+      setEditing(false);
+      setFormData({
+        username: user.username || "",
+        email: user.email || "",
+        bio: user.bio || "",
+      });
+      setError("");
+      setSuccess("");
     }
-  };
+  }, [user]); // userに依存
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const formatDate = (dateString: string) => {
+  // useCallbackを使用してformatDateをメモ化
+  const formatDate = useCallback((dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("ja-JP", {
       year: "numeric",
       month: "long",
       day: "numeric",
     });
-  };
+  }, []); // 純粋関数なので依存関係なし
 
-  const getRoleDisplay = (role: string) => {
+  // useCallbackを使用してgetRoleDisplayをメモ化
+  const getRoleDisplay = useCallback((role: string) => {
     switch (role) {
       case "admin":
         return { text: "管理者", color: "#dc2626", bg: "#fee2e2" };
@@ -105,7 +133,24 @@ const ProfilePage: React.FC = () => {
       default:
         return { text: role, color: "#6b7280", bg: "#f3f4f6" };
     }
-  };
+  }, []); // 純粋関数なので依存関係なし
+
+  // useCallbackを使用してマウスイベントハンドラーをメモ化
+  const handleCardMouseEnter = useCallback(
+    (e: React.MouseEvent<HTMLAnchorElement>) => {
+      e.currentTarget.style.transform = "translateY(-2px)";
+      e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.15)";
+    },
+    []
+  );
+
+  const handleCardMouseLeave = useCallback(
+    (e: React.MouseEvent<HTMLAnchorElement>) => {
+      e.currentTarget.style.transform = "translateY(0)";
+      e.currentTarget.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
+    },
+    []
+  );
 
   if (loading) {
     return (
@@ -435,7 +480,7 @@ const ProfilePage: React.FC = () => {
 
               <div style={{ textAlign: "center" }}>
                 <button
-                  onClick={() => setEditing(true)}
+                  onClick={handleEditStart}
                   style={{
                     padding: "0.75rem 2rem",
                     backgroundColor: "#3b82f6",
@@ -565,16 +610,7 @@ const ProfilePage: React.FC = () => {
               >
                 <button
                   type="button"
-                  onClick={() => {
-                    setEditing(false);
-                    setFormData({
-                      username: user.username || "",
-                      email: user.email || "",
-                      bio: user.bio || "",
-                    });
-                    setError("");
-                    setSuccess("");
-                  }}
+                  onClick={handleCancelEdit}
                   style={{
                     padding: "0.75rem 1.5rem",
                     backgroundColor: "#6b7280",
@@ -629,14 +665,8 @@ const ProfilePage: React.FC = () => {
             color: "inherit",
             transition: "transform 0.2s, box-shadow 0.2s",
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = "translateY(-2px)";
-            e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.15)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = "translateY(0)";
-            e.currentTarget.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
-          }}
+          onMouseEnter={handleCardMouseEnter}
+          onMouseLeave={handleCardMouseLeave}
         >
           <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>📄</div>
           <h3
@@ -665,14 +695,8 @@ const ProfilePage: React.FC = () => {
             color: "inherit",
             transition: "transform 0.2s, box-shadow 0.2s",
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = "translateY(-2px)";
-            e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.15)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = "translateY(0)";
-            e.currentTarget.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
-          }}
+          onMouseEnter={handleCardMouseEnter}
+          onMouseLeave={handleCardMouseLeave}
         >
           <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>📝</div>
           <h3
@@ -701,14 +725,8 @@ const ProfilePage: React.FC = () => {
             color: "inherit",
             transition: "transform 0.2s, box-shadow 0.2s",
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = "translateY(-2px)";
-            e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.15)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = "translateY(0)";
-            e.currentTarget.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
-          }}
+          onMouseEnter={handleCardMouseEnter}
+          onMouseLeave={handleCardMouseLeave}
         >
           <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>✏️</div>
           <h3
