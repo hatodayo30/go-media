@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 
@@ -14,79 +14,91 @@ const RegisterPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-
-    // バリデーション
+  // useCallbackを使用してバリデーション関数をメモ化
+  const validateForm = useCallback(() => {
     if (formData.password !== formData.confirmPassword) {
-      setError("パスワードが一致しません");
-      setLoading(false);
-      return;
+      return "パスワードが一致しません";
     }
 
     if (formData.password.length < 6) {
-      setError("パスワードは6文字以上で入力してください");
-      setLoading(false);
-      return;
+      return "パスワードは6文字以上で入力してください";
     }
 
     if (!formData.username.trim()) {
-      setError("ユーザー名を入力してください");
-      setLoading(false);
-      return;
+      return "ユーザー名を入力してください";
     }
 
-    try {
-      console.log("Register attempt:", formData);
+    return null;
+  }, [formData.password, formData.confirmPassword, formData.username]);
 
-      // API通信
-      const response = await api.register({
-        username: formData.username,
-        email: formData.email,
-        password: formData.password,
-        bio: formData.bio || undefined,
-      });
+  // useCallbackを使用してhandleSubmitをメモ化
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      setError("");
+      setLoading(true);
 
-      console.log("Register response:", response);
-
-      // 登録成功
-      alert("登録が完了しました！ログインページに移動します。");
-      navigate("/login");
-    } catch (err: any) {
-      console.error("Register error:", err);
-
-      if (err.response) {
-        // サーバーからのエラーレスポンス
-        const errorMessage =
-          err.response.data?.error ||
-          err.response.data?.message ||
-          `エラー: ${err.response.status}`;
-        setError(errorMessage);
-      } else if (err.request) {
-        // ネットワークエラー
-        setError(
-          "サーバーに接続できません。APIサーバーが起動しているか確認してください。"
-        );
-      } else {
-        // その他のエラー
-        setError("登録に失敗しました");
+      // バリデーション
+      const validationError = validateForm();
+      if (validationError) {
+        setError(validationError);
+        setLoading(false);
+        return;
       }
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
+      try {
+        console.log("Register attempt:", formData);
+
+        // API通信
+        const response = await api.register({
+          username: formData.username,
+          email: formData.email,
+          password: formData.password,
+          bio: formData.bio || undefined,
+        });
+
+        console.log("Register response:", response);
+
+        // 登録成功
+        alert("登録が完了しました！ログインページに移動します。");
+        navigate("/login");
+      } catch (err: any) {
+        console.error("Register error:", err);
+
+        if (err.response) {
+          // サーバーからのエラーレスポンス
+          const errorMessage =
+            err.response.data?.error ||
+            err.response.data?.message ||
+            `エラー: ${err.response.status}`;
+          setError(errorMessage);
+        } else if (err.request) {
+          // ネットワークエラー
+          setError(
+            "サーバーに接続できません。APIサーバーが起動しているか確認してください。"
+          );
+        } else {
+          // その他のエラー
+          setError("登録に失敗しました");
+        }
+      } finally {
+        setLoading(false);
+      }
+    },
+    [formData, validateForm, navigate]
+  ); // formData、validateForm、navigateに依存
+
+  // useCallbackを使用してhandleChangeをメモ化
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      const { name, value } = e.target;
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+      }));
+    },
+    []
+  ); // 依存関係なし（関数型更新を使用）
 
   return (
     <div
