@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 
@@ -43,30 +43,8 @@ const MyPage: React.FC = () => {
   const [filter, setFilter] = useState<"all" | "published" | "draft">("all");
   const navigate = useNavigate();
 
-  useEffect(() => {
-    fetchData();
-  }, [activeTab]);
-
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      setError("");
-
-      if (activeTab === "my-posts") {
-        await fetchMyPosts();
-      } else if (activeTab === "good") {
-        // 'liked' → 'good'
-        await fetchGoodContents(); // fetchLikedContents → fetchGoodContents
-      }
-    } catch (err: any) {
-      console.error("❌ データ取得エラー:", err);
-      setError("データの取得に失敗しました");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchMyPosts = async () => {
+  // useCallbackを使用してfetchMyPostsをメモ化
+  const fetchMyPosts = useCallback(async () => {
     console.log("📥 マイ投稿を取得中...");
 
     try {
@@ -126,9 +104,10 @@ const MyPage: React.FC = () => {
       setMyPosts([]);
       throw error;
     }
-  };
+  }, []); // 依存関係なし
 
-  const fetchGoodContents = async () => {
+  // useCallbackを使用してfetchGoodContentsをメモ化
+  const fetchGoodContents = useCallback(async () => {
     console.log("👍 グッドした記事を取得中...");
 
     try {
@@ -222,45 +201,87 @@ const MyPage: React.FC = () => {
       setGoodContents([]);
       throw error;
     }
-  };
+  }, []); // 依存関係なし
 
-  const handleDelete = async (id: number) => {
-    if (!window.confirm("この投稿を削除しますか？")) {
-      return;
-    }
-
+  // useCallbackを使用してfetchDataをメモ化
+  const fetchData = useCallback(async () => {
     try {
-      console.log(`🗑️ コンテンツ ${id} を削除中...`);
-      await api.deleteContent(id.toString());
-      console.log("✅ 削除完了");
+      setLoading(true);
+      setError("");
 
-      // 成功後、投稿一覧を更新
-      await fetchMyPosts();
-      alert("投稿を削除しました");
+      if (activeTab === "my-posts") {
+        await fetchMyPosts();
+      } else if (activeTab === "good") {
+        await fetchGoodContents();
+      }
     } catch (err: any) {
-      console.error("❌ 削除エラー:", err);
-      alert("削除に失敗しました");
+      console.error("❌ データ取得エラー:", err);
+      setError("データの取得に失敗しました");
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [activeTab, fetchMyPosts, fetchGoodContents]); // activeTabと関数に依存
 
-  const handleStatusChange = async (id: number, newStatus: string) => {
-    try {
-      console.log(
-        `🔄 コンテンツ ${id} のステータスを ${newStatus} に変更中...`
-      );
-      await api.updateContentStatus(id.toString(), newStatus);
-      console.log("✅ ステータス変更完了");
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]); // fetchDataを依存配列に含める
 
-      // 成功後、投稿一覧を更新
-      await fetchMyPosts();
-      alert(`投稿を${newStatus === "published" ? "公開" : "下書き"}にしました`);
-    } catch (err: any) {
-      console.error("❌ ステータス変更エラー:", err);
-      alert("ステータスの変更に失敗しました");
-    }
-  };
+  // useCallbackを使用してhandleDeleteをメモ化
+  const handleDelete = useCallback(
+    async (id: number) => {
+      if (!window.confirm("この投稿を削除しますか？")) {
+        return;
+      }
 
-  const formatDate = (dateString: string) => {
+      try {
+        console.log(`🗑️ コンテンツ ${id} を削除中...`);
+        await api.deleteContent(id.toString());
+        console.log("✅ 削除完了");
+
+        // 成功後、投稿一覧を更新
+        await fetchMyPosts();
+        alert("投稿を削除しました");
+      } catch (err: any) {
+        console.error("❌ 削除エラー:", err);
+        alert("削除に失敗しました");
+      }
+    },
+    [fetchMyPosts]
+  ); // fetchMyPostsに依存
+
+  // useCallbackを使用してhandleStatusChangeをメモ化
+  const handleStatusChange = useCallback(
+    async (id: number, newStatus: string) => {
+      try {
+        console.log(
+          `🔄 コンテンツ ${id} のステータスを ${newStatus} に変更中...`
+        );
+        await api.updateContentStatus(id.toString(), newStatus);
+        console.log("✅ ステータス変更完了");
+
+        // 成功後、投稿一覧を更新
+        await fetchMyPosts();
+        alert(
+          `投稿を${newStatus === "published" ? "公開" : "下書き"}にしました`
+        );
+      } catch (err: any) {
+        console.error("❌ ステータス変更エラー:", err);
+        alert("ステータスの変更に失敗しました");
+      }
+    },
+    [fetchMyPosts]
+  ); // fetchMyPostsに依存
+
+  // useCallbackを使用してhandleEditをメモ化
+  const handleEdit = useCallback(
+    (id: number) => {
+      navigate(`/edit/${id}`);
+    },
+    [navigate]
+  ); // navigateに依存
+
+  // useCallbackを使用してformatDateをメモ化
+  const formatDate = useCallback((dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("ja-JP", {
       year: "numeric",
@@ -269,9 +290,10 @@ const MyPage: React.FC = () => {
       hour: "2-digit",
       minute: "2-digit",
     });
-  };
+  }, []); // 純粋関数なので依存関係なし
 
-  const getStatusColor = (status: string) => {
+  // useCallbackを使用してgetStatusColorをメモ化
+  const getStatusColor = useCallback((status: string) => {
     switch (status) {
       case "published":
         return { bg: "#dcfce7", color: "#15803d", text: "公開中" };
@@ -280,211 +302,242 @@ const MyPage: React.FC = () => {
       default:
         return { bg: "#f3f4f6", color: "#6b7280", text: status };
     }
-  };
+  }, []); // 純粋関数なので依存関係なし
 
-  const getTabInfo = (tab: TabType) => {
-    switch (tab) {
-      case "my-posts":
-        return {
-          title: "マイ投稿",
-          icon: "📄",
-          description: "自分が作成した記事一覧",
-          count: myPosts.length,
-        };
-      case "good": // 'liked' → 'good'
-        return {
-          title: "グッドした記事", // 'いいねした記事' → 'グッドした記事'
-          icon: "👍",
-          description: "グッドした記事一覧", // 'いいねした記事一覧' → 'グッドした記事一覧'
-          count: goodContents.length, // likedContents → goodContents
-        };
-    }
-  };
+  // useCallbackを使用してgetTabInfoをメモ化
+  const getTabInfo = useCallback(
+    (tab: TabType) => {
+      switch (tab) {
+        case "my-posts":
+          return {
+            title: "マイ投稿",
+            icon: "📄",
+            description: "自分が作成した記事一覧",
+            count: myPosts.length,
+          };
+        case "good":
+          return {
+            title: "グッドした記事",
+            icon: "👍",
+            description: "グッドした記事一覧",
+            count: goodContents.length,
+          };
+      }
+    },
+    [myPosts.length, goodContents.length]
+  ); // データの長さに依存
 
-  const filteredPosts =
-    activeTab === "my-posts"
+  // useCallbackを使用してhandleTabChangeをメモ化
+  const handleTabChange = useCallback((tab: TabType) => {
+    setActiveTab(tab);
+  }, []); // 依存関係なし
+
+  // useCallbackを使用してhandleFilterChangeをメモ化
+  const handleFilterChange = useCallback(
+    (newFilter: "all" | "published" | "draft") => {
+      setFilter(newFilter);
+    },
+    []
+  ); // 依存関係なし
+
+  // メモ化されたフィルタリングロジック
+  const filteredPosts = React.useMemo(() => {
+    return activeTab === "my-posts"
       ? myPosts.filter((post) => {
           if (filter === "all") return true;
           return post.status === filter;
         })
       : [];
+  }, [activeTab, myPosts, filter]);
 
-  const getCurrentContents = () => {
+  // メモ化された現在のコンテンツ取得
+  const getCurrentContents = useCallback(() => {
     switch (activeTab) {
       case "my-posts":
         return filteredPosts;
-      case "good": // 'liked' → 'good'
-        return goodContents; // likedContents → goodContents
+      case "good":
+        return goodContents;
       default:
         return [];
     }
-  };
+  }, [activeTab, filteredPosts, goodContents]);
 
-  const renderContentCard = (content: Content, showAuthor: boolean = false) => {
-    const statusInfo = getStatusColor(content.status);
+  // useCallbackを使用してrenderContentCardをメモ化
+  const renderContentCard = useCallback(
+    (content: Content, showAuthor: boolean = false) => {
+      const statusInfo = getStatusColor(content.status);
 
-    return (
-      <div
-        key={content.id}
-        style={{
-          backgroundColor: "white",
-          padding: "1.5rem",
-          borderRadius: "8px",
-          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
-          border: "1px solid #e5e7eb",
-        }}
-      >
+      return (
         <div
+          key={content.id}
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
+            backgroundColor: "white",
+            padding: "1.5rem",
+            borderRadius: "8px",
+            boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
+            border: "1px solid #e5e7eb",
           }}
         >
-          <div style={{ flex: 1 }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "1rem",
-                marginBottom: "0.75rem",
-              }}
-            >
-              <Link
-                to={`/contents/${content.id}`}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+            }}
+          >
+            <div style={{ flex: 1 }}>
+              <div
                 style={{
-                  fontSize: "1.25rem",
-                  fontWeight: "600",
-                  margin: 0,
-                  color: "#374151",
-                  textDecoration: "none",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "1rem",
+                  marginBottom: "0.75rem",
                 }}
               >
-                {content.title}
-              </Link>
-              {activeTab === "my-posts" && (
-                <span
+                <Link
+                  to={`/contents/${content.id}`}
                   style={{
-                    backgroundColor: statusInfo.bg,
-                    color: statusInfo.color,
-                    padding: "0.25rem 0.75rem",
-                    borderRadius: "9999px",
-                    fontSize: "0.75rem",
-                    fontWeight: "500",
+                    fontSize: "1.25rem",
+                    fontWeight: "600",
+                    margin: 0,
+                    color: "#374151",
+                    textDecoration: "none",
                   }}
                 >
-                  {statusInfo.text}
-                </span>
-              )}
+                  {content.title}
+                </Link>
+                {activeTab === "my-posts" && (
+                  <span
+                    style={{
+                      backgroundColor: statusInfo.bg,
+                      color: statusInfo.color,
+                      padding: "0.25rem 0.75rem",
+                      borderRadius: "9999px",
+                      fontSize: "0.75rem",
+                      fontWeight: "500",
+                    }}
+                  >
+                    {statusInfo.text}
+                  </span>
+                )}
+              </div>
+
+              <div
+                style={{
+                  color: "#6b7280",
+                  fontSize: "0.875rem",
+                  marginBottom: "0.75rem",
+                  display: "flex",
+                  gap: "1rem",
+                }}
+              >
+                <span>📅 {formatDate(content.updated_at)}</span>
+                {showAuthor && content.author && (
+                  <span>✍️ {content.author.username}</span>
+                )}
+                <span>👁️ {content.view_count} 回閲覧</span>
+              </div>
+
+              {/* コンテンツのプレビュー */}
+              <div
+                style={{
+                  color: "#374151",
+                  fontSize: "0.875rem",
+                  lineHeight: "1.5",
+                  marginBottom: "1rem",
+                }}
+              >
+                {(content.content || content.body || "").substring(0, 150)}
+                {(content.content || content.body || "").length > 150 && "..."}
+              </div>
             </div>
 
-            <div
-              style={{
-                color: "#6b7280",
-                fontSize: "0.875rem",
-                marginBottom: "0.75rem",
-                display: "flex",
-                gap: "1rem",
-              }}
-            >
-              <span>📅 {formatDate(content.updated_at)}</span>
-              {showAuthor && content.author && (
-                <span>✍️ {content.author.username}</span>
-              )}
-              <span>👁️ {content.view_count} 回閲覧</span>
-            </div>
+            {/* アクションボタン（マイ投稿のみ） */}
+            {activeTab === "my-posts" && (
+              <div
+                style={{
+                  display: "flex",
+                  gap: "0.5rem",
+                  marginLeft: "1rem",
+                  flexWrap: "wrap",
+                }}
+              >
+                <button
+                  onClick={() => handleEdit(content.id)}
+                  style={{
+                    padding: "0.5rem 1rem",
+                    backgroundColor: "#f3f4f6",
+                    color: "#374151",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "6px",
+                    fontSize: "0.875rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  ✏️ 編集
+                </button>
 
-            {/* コンテンツのプレビュー */}
-            <div
-              style={{
-                color: "#374151",
-                fontSize: "0.875rem",
-                lineHeight: "1.5",
-                marginBottom: "1rem",
-              }}
-            >
-              {(content.content || content.body || "").substring(0, 150)}
-              {(content.content || content.body || "").length > 150 && "..."}
-            </div>
+                {content.status === "draft" ? (
+                  <button
+                    onClick={() => handleStatusChange(content.id, "published")}
+                    style={{
+                      padding: "0.5rem 1rem",
+                      backgroundColor: "#10b981",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "6px",
+                      fontSize: "0.875rem",
+                      cursor: "pointer",
+                    }}
+                  >
+                    🚀 公開
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleStatusChange(content.id, "draft")}
+                    style={{
+                      padding: "0.5rem 1rem",
+                      backgroundColor: "#f59e0b",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "6px",
+                      fontSize: "0.875rem",
+                      cursor: "pointer",
+                    }}
+                  >
+                    📝 下書きに戻す
+                  </button>
+                )}
+
+                <button
+                  onClick={() => handleDelete(content.id)}
+                  style={{
+                    padding: "0.5rem 1rem",
+                    backgroundColor: "#ef4444",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    fontSize: "0.875rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  🗑️ 削除
+                </button>
+              </div>
+            )}
           </div>
-
-          {/* アクションボタン（マイ投稿のみ） */}
-          {activeTab === "my-posts" && (
-            <div
-              style={{
-                display: "flex",
-                gap: "0.5rem",
-                marginLeft: "1rem",
-                flexWrap: "wrap",
-              }}
-            >
-              <button
-                onClick={() => navigate(`/edit/${content.id}`)}
-                style={{
-                  padding: "0.5rem 1rem",
-                  backgroundColor: "#f3f4f6",
-                  color: "#374151",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "6px",
-                  fontSize: "0.875rem",
-                  cursor: "pointer",
-                }}
-              >
-                ✏️ 編集
-              </button>
-
-              {content.status === "draft" ? (
-                <button
-                  onClick={() => handleStatusChange(content.id, "published")}
-                  style={{
-                    padding: "0.5rem 1rem",
-                    backgroundColor: "#10b981",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    fontSize: "0.875rem",
-                    cursor: "pointer",
-                  }}
-                >
-                  🚀 公開
-                </button>
-              ) : (
-                <button
-                  onClick={() => handleStatusChange(content.id, "draft")}
-                  style={{
-                    padding: "0.5rem 1rem",
-                    backgroundColor: "#f59e0b",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    fontSize: "0.875rem",
-                    cursor: "pointer",
-                  }}
-                >
-                  📝 下書きに戻す
-                </button>
-              )}
-
-              <button
-                onClick={() => handleDelete(content.id)}
-                style={{
-                  padding: "0.5rem 1rem",
-                  backgroundColor: "#ef4444",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  fontSize: "0.875rem",
-                  cursor: "pointer",
-                }}
-              >
-                🗑️ 削除
-              </button>
-            </div>
-          )}
         </div>
-      </div>
-    );
-  };
+      );
+    },
+    [
+      activeTab,
+      getStatusColor,
+      formatDate,
+      handleEdit,
+      handleStatusChange,
+      handleDelete,
+    ]
+  );
 
   if (loading) {
     return (
@@ -583,14 +636,13 @@ const MyPage: React.FC = () => {
       >
         <div style={{ display: "flex" }}>
           {(["my-posts", "good"] as TabType[]).map((tab) => {
-            // 'bookmarked' 削除
             const tabInfo = getTabInfo(tab);
             const isActive = activeTab === tab;
 
             return (
               <button
                 key={tab}
-                onClick={() => setActiveTab(tab)}
+                onClick={() => handleTabChange(tab)}
                 style={{
                   flex: 1,
                   padding: "1rem 1.5rem",
@@ -651,7 +703,7 @@ const MyPage: React.FC = () => {
             {(["all", "published", "draft"] as const).map((filterType) => (
               <button
                 key={filterType}
-                onClick={() => setFilter(filterType)}
+                onClick={() => handleFilterChange(filterType)}
                 style={{
                   padding: "0.5rem 1rem",
                   border: "1px solid #d1d5db",
