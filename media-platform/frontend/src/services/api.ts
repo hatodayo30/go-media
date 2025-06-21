@@ -316,7 +316,11 @@ export const api = {
       return response.data;
     } catch (error: any) {
       return {
-        data: { average: 0, count: 0 },
+        data: {
+          average: 0,
+          count: 0,
+          like_count: 0,
+        },
         success: false,
         message:
           error.response?.data?.message || "Failed to get average rating",
