@@ -1,543 +1,331 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../services/api";
+import type { User, ApiResponse, UpdateUserRequest } from "../types";
 
-interface Content {
-  id: number;
-  title: string;
-  content?: string;
-  body?: string;
-  status: string;
-  category_id: number;
-  author_id: number;
-  view_count: number;
-  created_at: string;
-  updated_at: string;
-  category?: {
-    id: number;
-    name: string;
-  };
-  author?: {
-    id: number;
-    username: string;
-  };
-}
-
-interface Rating {
-  id: number;
-  user_id: number;
-  content_id: number;
-  value: number;
-  created_at: string;
-  content?: Content;
-}
-
-type TabType = "my-posts" | "good"; // 'liked' → 'good' に変更、'bookmarked' 削除
-
-const MyPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<TabType>("my-posts");
-  const [myPosts, setMyPosts] = useState<Content[]>([]);
-  const [goodContents, setGoodContents] = useState<Content[]>([]); // likedContents → goodContents
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [filter, setFilter] = useState<"all" | "published" | "draft">("all");
+const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
 
-  // useCallbackを使用してfetchMyPostsをメモ化
-  const fetchMyPosts = useCallback(async () => {
-    console.log("📥 マイ投稿を取得中...");
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [formData, setFormData] = useState<UpdateUserRequest>({
+    username: "",
+    email: "",
+    bio: "",
+  });
 
-    try {
-      // 現在のユーザー情報を取得
-      const userResponse = await api.getCurrentUser();
-      console.log("👤 ユーザー情報:", userResponse);
-
-      // 🚨 デバッグ: レスポンス構造を詳細に確認
-      console.log("🔍 userResponse.data:", userResponse.data);
-      console.log("🔍 userResponse.data.user:", userResponse.data?.user);
-      console.log("🔍 typeof userResponse.data:", typeof userResponse.data);
-
-      // レスポンス構造: {data: {user: {...}}, status: 'success'}
-      const currentUser =
-        userResponse.data?.user ||
-        userResponse.user ||
-        userResponse.data ||
-        userResponse;
-      const currentUserId = currentUser?.id;
-
-      console.log("🔍 抽出されたユーザー:", currentUser);
-      console.log("🔍 抽出されたユーザーID:", currentUserId);
-      console.log("🔍 typeof currentUserId:", typeof currentUserId);
-
-      if (!currentUserId) {
-        console.error(
-          "❌ ユーザーID抽出失敗. 完全なレスポンス:",
-          JSON.stringify(userResponse, null, 2)
-        );
-        throw new Error("ユーザーIDを取得できませんでした");
-      }
-
-      // 全コンテンツを取得
-      const response = await api.getContents();
-      console.log("📝 全コンテンツレスポンス:", response);
-
-      const allContents = response.data?.contents || response.contents || [];
-
-      // 現在のユーザーが作成したコンテンツのみフィルタリング
-      const myContents = allContents.filter((content: Content) => {
-        console.log(
-          `🔍 コンテンツフィルタ: ID=${content.id}, author_id=${
-            content.author_id
-          }, currentUserId=${currentUserId}, match=${
-            content.author_id === currentUserId
-          }`
-        );
-        return content.author_id === currentUserId;
-      });
-
-      setMyPosts(myContents);
-      console.log(
-        `📋 マイ投稿数: ${myContents.length} (全体: ${allContents.length})`
-      );
-    } catch (error) {
-      console.error("❌ マイ投稿取得エラー:", error);
-      setMyPosts([]);
-      throw error;
+  // useCallbackで認証チェックをメモ化
+  const checkAuthentication = useCallback(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      console.log("❌ 認証なし、ログインページへリダイレクト");
+      navigate("/login");
+      return false;
     }
-  }, []); // 依存関係なし
+    return true;
+  }, [navigate]);
 
-  // useCallbackを使用してfetchGoodContentsをメモ化
-  const fetchGoodContents = useCallback(async () => {
-    console.log("👍 グッドした記事を取得中...");
-
-    try {
-      // 現在のユーザー情報を取得
-      const userResponse = await api.getCurrentUser();
-      console.log("👤 GOOD用ユーザー情報レスポンス:", userResponse);
-
-      // 🔧 正しいユーザーID抽出方法
-      const currentUser =
-        userResponse.data?.user ||
-        userResponse.user ||
-        userResponse.data ||
-        userResponse;
-      const userId = currentUser?.id;
-
-      console.log("🔍 GOOD用抽出されたユーザー:", currentUser);
-      console.log("🔍 GOOD用抽出されたユーザーID:", userId);
-      console.log("🔍 typeof userId:", typeof userId);
-
-      if (!userId) {
-        console.error(
-          "❌ GOOD用ユーザーIDが見つかりません. 完全なレスポンス:",
-          JSON.stringify(userResponse, null, 2)
-        );
-        throw new Error("ユーザー情報を取得できませんでした");
-      }
-
-      // ユーザーの評価一覧を取得
-      console.log(`📊 ユーザーID ${userId} の評価を取得中...`);
-      const ratingsResponse = await api.getRatingsByUser(userId.toString());
-      console.log("📊 ユーザー評価レスポンス:", ratingsResponse);
-
-      const ratings =
-        ratingsResponse.data?.ratings || ratingsResponse.ratings || [];
-      console.log("📊 評価一覧:", ratings);
-      console.log("📊 評価一覧の長さ:", ratings.length);
-
-      // グッド（value = 1）のみをフィルター
-      const goodRatings = ratings.filter((rating: Rating) => {
-        console.log(
-          `🔍 評価チェック: ID=${rating.id}, value=${rating.value}, content_id=${rating.content_id}, user_id=${rating.user_id}`
-        );
-        return rating.value === 1;
-      });
-
-      console.log("👍 グッド評価:", goodRatings);
-      console.log("👍 グッド評価の数:", goodRatings.length);
-
-      if (goodRatings.length === 0) {
-        console.log("📭 グッドした記事はありません");
-        setGoodContents([]);
-        return;
-      }
-
-      // 各グッドに対応するコンテンツを取得
-      const goodContentsPromises = goodRatings.map(async (rating: Rating) => {
-        try {
-          console.log(`📄 コンテンツ ${rating.content_id} を取得中...`);
-          const contentResponse = await api.getContentById(
-            rating.content_id.toString()
-          );
-          console.log(
-            `📄 コンテンツ ${rating.content_id} レスポンス:`,
-            contentResponse
-          );
-
-          const content =
-            contentResponse.data?.content ||
-            contentResponse.content ||
-            contentResponse;
-          console.log(`📄 コンテンツ ${rating.content_id} データ:`, content);
-          return content;
-        } catch (error) {
-          console.error(
-            `❌ コンテンツ ${rating.content_id} の取得に失敗:`,
-            error
-          );
-          return null;
-        }
-      });
-
-      const goodContentsResults = await Promise.all(goodContentsPromises);
-      const validGoodContents = goodContentsResults.filter(
-        (content) => content !== null
-      );
-
-      setGoodContents(validGoodContents);
-      console.log(`✅ グッドした記事数: ${validGoodContents.length}`);
-    } catch (error) {
-      console.error("❌ グッドした記事の取得エラー:", error);
-      setGoodContents([]);
-      throw error;
-    }
-  }, []); // 依存関係なし
-
-  // useCallbackを使用してfetchDataをメモ化
-  const fetchData = useCallback(async () => {
+  // useCallbackでfetchUserProfileをメモ化
+  const fetchUserProfile = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
 
-      if (activeTab === "my-posts") {
-        await fetchMyPosts();
-      } else if (activeTab === "good") {
-        await fetchGoodContents();
+      // 認証チェック
+      if (!checkAuthentication()) {
+        return;
+      }
+
+      console.log("👤 ユーザープロフィールを取得中...");
+
+      const response: ApiResponse<User> = await api.getCurrentUser();
+      console.log("📥 プロフィールレスポンス:", response);
+
+      if (response.success && response.data) {
+        setUser(response.data);
+        setFormData({
+          username: response.data.username || "",
+          email: response.data.email || "",
+          bio: response.data.bio || "",
+        });
+        console.log("✅ プロフィール取得成功:", {
+          id: response.data.id,
+          username: response.data.username,
+          role: response.data.role,
+        });
+      } else {
+        throw new Error(response.message || "プロフィールの取得に失敗しました");
       }
     } catch (err: any) {
-      console.error("❌ データ取得エラー:", err);
-      setError("データの取得に失敗しました");
+      console.error("❌ プロフィール取得エラー:", err);
+
+      if (err.response?.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        navigate("/login");
+        return;
+      }
+
+      setError(err.message || "プロフィールの取得に失敗しました");
     } finally {
       setLoading(false);
     }
-  }, [activeTab, fetchMyPosts, fetchGoodContents]); // activeTabと関数に依存
+  }, [checkAuthentication, navigate]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]); // fetchDataを依存配列に含める
+  // useCallbackでフォーム変更をメモ化
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      const { name, value } = e.target;
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+      }));
 
-  // useCallbackを使用してhandleDeleteをメモ化
-  const handleDelete = useCallback(
-    async (id: number) => {
-      if (!window.confirm("この投稿を削除しますか？")) {
+      // エラーをクリア
+      if (error) {
+        setError("");
+      }
+    },
+    [error]
+  );
+
+  // useCallbackでバリデーションをメモ化
+  const validateForm = useCallback(() => {
+    if (!formData.username?.trim()) {
+      setError("ユーザー名を入力してください");
+      return false;
+    }
+
+    if (!formData.email?.trim()) {
+      setError("メールアドレスを入力してください");
+      return false;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setError("有効なメールアドレスを入力してください");
+      return false;
+    }
+
+    if (formData.username.length < 2) {
+      setError("ユーザー名は2文字以上で入力してください");
+      return false;
+    }
+
+    if (formData.username.length > 50) {
+      setError("ユーザー名は50文字以下で入力してください");
+      return false;
+    }
+
+    if (formData.bio && formData.bio.length > 500) {
+      setError("自己紹介は500文字以下で入力してください");
+      return false;
+    }
+
+    return true;
+  }, [formData]);
+
+  // useCallbackでhandleSubmitをメモ化
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+
+      if (!validateForm()) {
         return;
       }
 
       try {
-        console.log(`🗑️ コンテンツ ${id} を削除中...`);
-        await api.deleteContent(id.toString());
-        console.log("✅ 削除完了");
+        setSaving(true);
+        setError("");
+        setSuccess("");
 
-        // 成功後、投稿一覧を更新
-        await fetchMyPosts();
-        alert("投稿を削除しました");
+        console.log("💾 プロフィールを更新中...", formData);
+
+        const updateData: UpdateUserRequest = {
+          username: formData.username?.trim(),
+          email: formData.email?.trim(),
+          bio: formData.bio?.trim() || undefined,
+        };
+
+        const response: ApiResponse<User> = await api.updateUser(updateData);
+
+        if (response.success && response.data) {
+          console.log("✅ プロフィール更新完了");
+          setUser(response.data);
+          setEditing(false);
+          setSuccess("プロフィールを更新しました");
+
+          // ローカルストレージのユーザー情報も更新
+          localStorage.setItem("user", JSON.stringify(response.data));
+        } else {
+          throw new Error(
+            response.message || "プロフィールの更新に失敗しました"
+          );
+        }
       } catch (err: any) {
-        console.error("❌ 削除エラー:", err);
-        alert("削除に失敗しました");
+        console.error("❌ プロフィール更新エラー:", err);
+
+        if (err.response?.status === 401) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          navigate("/login");
+          return;
+        }
+
+        if (err.response?.status === 422) {
+          setError(err.response.data?.message || "入力内容に不備があります");
+        } else {
+          setError(err.message || "プロフィールの更新に失敗しました");
+        }
+      } finally {
+        setSaving(false);
       }
     },
-    [fetchMyPosts]
-  ); // fetchMyPostsに依存
+    [formData, validateForm, navigate]
+  );
 
-  // useCallbackを使用してhandleStatusChangeをメモ化
-  const handleStatusChange = useCallback(
-    async (id: number, newStatus: string) => {
-      try {
-        console.log(
-          `🔄 コンテンツ ${id} のステータスを ${newStatus} に変更中...`
-        );
-        await api.updateContentStatus(id.toString(), newStatus);
-        console.log("✅ ステータス変更完了");
+  // useCallbackでhandleEditStartをメモ化
+  const handleEditStart = useCallback(() => {
+    setEditing(true);
+    setError("");
+    setSuccess("");
+  }, []);
 
-        // 成功後、投稿一覧を更新
-        await fetchMyPosts();
-        alert(
-          `投稿を${newStatus === "published" ? "公開" : "下書き"}にしました`
-        );
-      } catch (err: any) {
-        console.error("❌ ステータス変更エラー:", err);
-        alert("ステータスの変更に失敗しました");
-      }
-    },
-    [fetchMyPosts]
-  ); // fetchMyPostsに依存
+  // useCallbackでhandleCancelEditをメモ化
+  const handleCancelEdit = useCallback(() => {
+    if (user) {
+      setEditing(false);
+      setFormData({
+        username: user.username || "",
+        email: user.email || "",
+        bio: user.bio || "",
+      });
+      setError("");
+      setSuccess("");
+    }
+  }, [user]);
 
-  // useCallbackを使用してhandleEditをメモ化
-  const handleEdit = useCallback(
-    (id: number) => {
-      navigate(`/edit/${id}`);
-    },
-    [navigate]
-  ); // navigateに依存
+  // useCallbackでhandleBackToDashboardをメモ化
+  const handleBackToDashboard = useCallback(() => {
+    navigate("/dashboard");
+  }, [navigate]);
 
-  // useCallbackを使用してformatDateをメモ化
+  // useCallbackでformatDateをメモ化
   const formatDate = useCallback((dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("ja-JP", {
       year: "numeric",
-      month: "short",
+      month: "long",
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
     });
-  }, []); // 純粋関数なので依存関係なし
+  }, []);
 
-  // useCallbackを使用してgetStatusColorをメモ化
-  const getStatusColor = useCallback((status: string) => {
-    switch (status) {
-      case "published":
-        return { bg: "#dcfce7", color: "#15803d", text: "公開中" };
-      case "draft":
-        return { bg: "#fef3c7", color: "#92400e", text: "下書き" };
+  // useCallbackでgetRoleDisplayをメモ化
+  const getRoleDisplay = useCallback((role: string) => {
+    switch (role) {
+      case "admin":
+        return { text: "👑 管理者", color: "#dc2626", bg: "#fee2e2" };
+      case "editor":
+        return { text: "✏️ 編集者", color: "#059669", bg: "#d1fae5" };
+      case "user":
+        return { text: "👤 ユーザー", color: "#3b82f6", bg: "#dbeafe" };
       default:
-        return { bg: "#f3f4f6", color: "#6b7280", text: status };
+        return { text: role, color: "#6b7280", bg: "#f3f4f6" };
     }
-  }, []); // 純粋関数なので依存関係なし
+  }, []);
 
-  // useCallbackを使用してgetTabInfoをメモ化
-  const getTabInfo = useCallback(
-    (tab: TabType) => {
-      switch (tab) {
-        case "my-posts":
-          return {
-            title: "マイ投稿",
-            icon: "📄",
-            description: "自分が作成した記事一覧",
-            count: myPosts.length,
-          };
-        case "good":
-          return {
-            title: "グッドした記事",
-            icon: "👍",
-            description: "グッドした記事一覧",
-            count: goodContents.length,
-          };
-      }
-    },
-    [myPosts.length, goodContents.length]
-  ); // データの長さに依存
-
-  // useCallbackを使用してhandleTabChangeをメモ化
-  const handleTabChange = useCallback((tab: TabType) => {
-    setActiveTab(tab);
-  }, []); // 依存関係なし
-
-  // useCallbackを使用してhandleFilterChangeをメモ化
-  const handleFilterChange = useCallback(
-    (newFilter: "all" | "published" | "draft") => {
-      setFilter(newFilter);
+  // useCallbackでカードマウスイベントをメモ化
+  const handleCardMouseEnter = useCallback(
+    (e: React.MouseEvent<HTMLAnchorElement>) => {
+      e.currentTarget.style.transform = "translateY(-2px)";
+      e.currentTarget.style.boxShadow = "0 8px 25px rgba(0, 0, 0, 0.15)";
     },
     []
-  ); // 依存関係なし
-
-  // メモ化されたフィルタリングロジック
-  const filteredPosts = React.useMemo(() => {
-    return activeTab === "my-posts"
-      ? myPosts.filter((post) => {
-          if (filter === "all") return true;
-          return post.status === filter;
-        })
-      : [];
-  }, [activeTab, myPosts, filter]);
-
-  // メモ化された現在のコンテンツ取得
-  const getCurrentContents = useCallback(() => {
-    switch (activeTab) {
-      case "my-posts":
-        return filteredPosts;
-      case "good":
-        return goodContents;
-      default:
-        return [];
-    }
-  }, [activeTab, filteredPosts, goodContents]);
-
-  // useCallbackを使用してrenderContentCardをメモ化
-  const renderContentCard = useCallback(
-    (content: Content, showAuthor: boolean = false) => {
-      const statusInfo = getStatusColor(content.status);
-
-      return (
-        <div
-          key={content.id}
-          style={{
-            backgroundColor: "white",
-            padding: "1.5rem",
-            borderRadius: "8px",
-            boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
-            border: "1px solid #e5e7eb",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-            }}
-          >
-            <div style={{ flex: 1 }}>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "1rem",
-                  marginBottom: "0.75rem",
-                }}
-              >
-                <Link
-                  to={`/contents/${content.id}`}
-                  style={{
-                    fontSize: "1.25rem",
-                    fontWeight: "600",
-                    margin: 0,
-                    color: "#374151",
-                    textDecoration: "none",
-                  }}
-                >
-                  {content.title}
-                </Link>
-                {activeTab === "my-posts" && (
-                  <span
-                    style={{
-                      backgroundColor: statusInfo.bg,
-                      color: statusInfo.color,
-                      padding: "0.25rem 0.75rem",
-                      borderRadius: "9999px",
-                      fontSize: "0.75rem",
-                      fontWeight: "500",
-                    }}
-                  >
-                    {statusInfo.text}
-                  </span>
-                )}
-              </div>
-
-              <div
-                style={{
-                  color: "#6b7280",
-                  fontSize: "0.875rem",
-                  marginBottom: "0.75rem",
-                  display: "flex",
-                  gap: "1rem",
-                }}
-              >
-                <span>📅 {formatDate(content.updated_at)}</span>
-                {showAuthor && content.author && (
-                  <span>✍️ {content.author.username}</span>
-                )}
-                <span>👁️ {content.view_count} 回閲覧</span>
-              </div>
-
-              {/* コンテンツのプレビュー */}
-              <div
-                style={{
-                  color: "#374151",
-                  fontSize: "0.875rem",
-                  lineHeight: "1.5",
-                  marginBottom: "1rem",
-                }}
-              >
-                {(content.content || content.body || "").substring(0, 150)}
-                {(content.content || content.body || "").length > 150 && "..."}
-              </div>
-            </div>
-
-            {/* アクションボタン（マイ投稿のみ） */}
-            {activeTab === "my-posts" && (
-              <div
-                style={{
-                  display: "flex",
-                  gap: "0.5rem",
-                  marginLeft: "1rem",
-                  flexWrap: "wrap",
-                }}
-              >
-                <button
-                  onClick={() => handleEdit(content.id)}
-                  style={{
-                    padding: "0.5rem 1rem",
-                    backgroundColor: "#f3f4f6",
-                    color: "#374151",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "6px",
-                    fontSize: "0.875rem",
-                    cursor: "pointer",
-                  }}
-                >
-                  ✏️ 編集
-                </button>
-
-                {content.status === "draft" ? (
-                  <button
-                    onClick={() => handleStatusChange(content.id, "published")}
-                    style={{
-                      padding: "0.5rem 1rem",
-                      backgroundColor: "#10b981",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "6px",
-                      fontSize: "0.875rem",
-                      cursor: "pointer",
-                    }}
-                  >
-                    🚀 公開
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleStatusChange(content.id, "draft")}
-                    style={{
-                      padding: "0.5rem 1rem",
-                      backgroundColor: "#f59e0b",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "6px",
-                      fontSize: "0.875rem",
-                      cursor: "pointer",
-                    }}
-                  >
-                    📝 下書きに戻す
-                  </button>
-                )}
-
-                <button
-                  onClick={() => handleDelete(content.id)}
-                  style={{
-                    padding: "0.5rem 1rem",
-                    backgroundColor: "#ef4444",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    fontSize: "0.875rem",
-                    cursor: "pointer",
-                  }}
-                >
-                  🗑️ 削除
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      );
-    },
-    [
-      activeTab,
-      getStatusColor,
-      formatDate,
-      handleEdit,
-      handleStatusChange,
-      handleDelete,
-    ]
   );
+
+  const handleCardMouseLeave = useCallback(
+    (e: React.MouseEvent<HTMLAnchorElement>) => {
+      e.currentTarget.style.transform = "translateY(0)";
+      e.currentTarget.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
+    },
+    []
+  );
+
+  // useMemoでフォーム状態をメモ化
+  const formState = useMemo(
+    () => ({
+      isValid:
+        formData.username?.trim() !== "" &&
+        formData.email?.trim() !== "" &&
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email || ""),
+      hasChanges: user
+        ? formData.username !== user.username ||
+          formData.email !== user.email ||
+          formData.bio !== (user.bio || "")
+        : false,
+      usernameLength: formData.username?.length || 0,
+      bioLength: formData.bio?.length || 0,
+    }),
+    [formData, user]
+  );
+
+  // useMemoでユーザー統計をメモ化
+  const userStats = useMemo(() => {
+    if (!user) return null;
+
+    const createdDate = new Date(user.created_at);
+    const updatedDate = new Date(user.updated_at);
+    const daysSinceJoined = Math.floor(
+      (Date.now() - createdDate.getTime()) / (1000 * 60 * 60 * 24)
+    );
+    const isRecentlyUpdated =
+      Date.now() - updatedDate.getTime() < 1000 * 60 * 60 * 24; // 24時間以内
+
+    return {
+      daysSinceJoined,
+      isRecentlyUpdated,
+      hasAvatar: !!user.avatar,
+      hasBio: !!user.bio?.trim(),
+    };
+  }, [user]);
+
+  // useMemoでアクションカードをメモ化
+  const actionCards = useMemo(
+    () => [
+      {
+        to: "/dashboard",
+        icon: "📊",
+        title: "ダッシュボード",
+        description: "アクティビティを確認",
+        color: "#3b82f6",
+      },
+      {
+        to: "/my-posts",
+        icon: "📄",
+        title: "マイ投稿",
+        description: "投稿した記事を管理",
+        color: "#10b981",
+      },
+      {
+        to: "/create",
+        icon: "✏️",
+        title: "新規投稿",
+        description: "新しい記事を作成",
+        color: "#f59e0b",
+      },
+    ],
+    []
+  );
+
+  useEffect(() => {
+    fetchUserProfile();
+  }, [fetchUserProfile]);
 
   if (loading) {
     return (
@@ -549,20 +337,68 @@ const MyPage: React.FC = () => {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+          backgroundColor: "#f9fafb",
         }}
       >
-        <div>読み込み中...</div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "2rem", marginBottom: "1rem" }}>👤</div>
+          <div>プロフィールを読み込み中...</div>
+        </div>
       </div>
     );
   }
 
-  const currentTabInfo = getTabInfo(activeTab);
-  const currentContents = getCurrentContents();
+  if (!user) {
+    return (
+      <div
+        style={{
+          maxWidth: "800px",
+          margin: "0 auto",
+          padding: "2rem",
+          textAlign: "center",
+          backgroundColor: "#f9fafb",
+          minHeight: "100vh",
+        }}
+      >
+        <div
+          style={{
+            backgroundColor: "white",
+            padding: "3rem",
+            borderRadius: "8px",
+            boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
+          }}
+        >
+          <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>❌</div>
+          <h2 style={{ marginBottom: "1rem", color: "#374151" }}>
+            ユーザー情報を取得できませんでした
+          </h2>
+          <button
+            onClick={handleBackToDashboard}
+            style={{
+              display: "inline-block",
+              padding: "0.75rem 1.5rem",
+              backgroundColor: "#3b82f6",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              fontSize: "0.875rem",
+              fontWeight: "500",
+              cursor: "pointer",
+            }}
+          >
+            ダッシュボードに戻る
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const roleInfo = getRoleDisplay(user.role);
 
   return (
     <div
       style={{
-        maxWidth: "1200px",
+        maxWidth: "800px",
         margin: "0 auto",
         padding: "2rem",
         backgroundColor: "#f9fafb",
@@ -582,157 +418,122 @@ const MyPage: React.FC = () => {
           boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
         }}
       >
-        <h1
-          style={{
-            fontSize: "2rem",
-            fontWeight: "bold",
-            margin: 0,
-            color: "#374151",
-          }}
-        >
-          👤 マイページ
-        </h1>
+        <div>
+          <h1
+            style={{
+              fontSize: "2rem",
+              fontWeight: "bold",
+              margin: "0 0 0.5rem 0",
+              color: "#374151",
+            }}
+          >
+            👤 プロフィール
+          </h1>
+          {userStats && (
+            <p
+              style={{
+                margin: 0,
+                color: "#6b7280",
+                fontSize: "0.875rem",
+              }}
+            >
+              登録から{userStats.daysSinceJoined}日経過
+              {userStats.isRecentlyUpdated && " • 最近更新されました"}
+            </p>
+          )}
+        </div>
         <div style={{ display: "flex", gap: "1rem" }}>
-          <Link
-            to="/dashboard"
+          <button
+            onClick={handleBackToDashboard}
             style={{
               padding: "0.75rem 1.5rem",
               backgroundColor: "#6b7280",
               color: "white",
-              textDecoration: "none",
+              border: "none",
               borderRadius: "6px",
               fontSize: "0.875rem",
               fontWeight: "500",
+              cursor: "pointer",
             }}
           >
-            ダッシュボードに戻る
-          </Link>
-          <Link
-            to="/create"
-            style={{
-              padding: "0.75rem 1.5rem",
-              backgroundColor: "#3b82f6",
-              color: "white",
-              textDecoration: "none",
-              borderRadius: "6px",
-              fontSize: "0.875rem",
-              fontWeight: "500",
-            }}
-          >
-            新規投稿
-          </Link>
+            ← ダッシュボード
+          </button>
         </div>
       </div>
 
-      {/* タブナビゲーション */}
-      <div
-        style={{
-          backgroundColor: "white",
-          borderRadius: "8px",
-          marginBottom: "1.5rem",
-          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
-          overflow: "hidden",
-        }}
-      >
-        <div style={{ display: "flex" }}>
-          {(["my-posts", "good"] as TabType[]).map((tab) => {
-            const tabInfo = getTabInfo(tab);
-            const isActive = activeTab === tab;
-
-            return (
-              <button
-                key={tab}
-                onClick={() => handleTabChange(tab)}
-                style={{
-                  flex: 1,
-                  padding: "1rem 1.5rem",
-                  border: "none",
-                  backgroundColor: isActive ? "#3b82f6" : "transparent",
-                  color: isActive ? "white" : "#374151",
-                  cursor: "pointer",
-                  fontSize: "1rem",
-                  fontWeight: "500",
-                  transition: "all 0.2s ease",
-                  borderBottom: isActive ? "none" : "1px solid #e5e7eb",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "0.5rem",
-                  }}
-                >
-                  <span>{tabInfo.icon}</span>
-                  <span>{tabInfo.title}</span>
-                  <span
-                    style={{
-                      fontSize: "0.875rem",
-                      padding: "0.125rem 0.5rem",
-                      backgroundColor: isActive
-                        ? "rgba(255,255,255,0.2)"
-                        : "#f3f4f6",
-                      borderRadius: "9999px",
-                    }}
-                  >
-                    {tabInfo.count}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* フィルター（マイ投稿タブのみ） */}
-      {activeTab === "my-posts" && (
+      {/* ユーザー統計 */}
+      {userStats && (
         <div
           style={{
             backgroundColor: "white",
             padding: "1rem",
             borderRadius: "8px",
             marginBottom: "1.5rem",
-            boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
+            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
           }}
         >
-          <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
-            <span style={{ fontWeight: "500", color: "#374151" }}>
-              フィルター:
-            </span>
-            {(["all", "published", "draft"] as const).map((filterType) => (
-              <button
-                key={filterType}
-                onClick={() => handleFilterChange(filterType)}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+              gap: "1rem",
+              fontSize: "0.875rem",
+              color: "#6b7280",
+            }}
+          >
+            <div style={{ textAlign: "center" }}>
+              <div
                 style={{
-                  padding: "0.5rem 1rem",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "6px",
-                  backgroundColor: filter === filterType ? "#3b82f6" : "white",
-                  color: filter === filterType ? "white" : "#374151",
-                  cursor: "pointer",
-                  fontSize: "0.875rem",
+                  fontSize: "1.5rem",
+                  fontWeight: "bold",
+                  color: "#3b82f6",
                 }}
               >
-                {filterType === "all"
-                  ? "すべて"
-                  : filterType === "published"
-                  ? "公開中"
-                  : "下書き"}
-                {filterType === "all" && ` (${myPosts.length})`}
-                {filterType === "published" &&
-                  ` (${
-                    myPosts.filter((p) => p.status === "published").length
-                  })`}
-                {filterType === "draft" &&
-                  ` (${myPosts.filter((p) => p.status === "draft").length})`}
-              </button>
-            ))}
+                {userStats.daysSinceJoined}
+              </div>
+              <div>📅 登録日数</div>
+            </div>
+            <div style={{ textAlign: "center" }}>
+              <div
+                style={{
+                  fontSize: "1.5rem",
+                  fontWeight: "bold",
+                  color: userStats.hasBio ? "#10b981" : "#6b7280",
+                }}
+              >
+                {userStats.hasBio ? "✅" : "❌"}
+              </div>
+              <div>📝 自己紹介</div>
+            </div>
+            <div style={{ textAlign: "center" }}>
+              <div
+                style={{
+                  fontSize: "1.5rem",
+                  fontWeight: "bold",
+                  color: roleInfo.color,
+                }}
+              >
+                {roleInfo.text.split(" ")[0]}
+              </div>
+              <div>👤 ロール</div>
+            </div>
+            <div style={{ textAlign: "center" }}>
+              <div
+                style={{
+                  fontSize: "1.5rem",
+                  fontWeight: "bold",
+                  color: userStats.isRecentlyUpdated ? "#f59e0b" : "#6b7280",
+                }}
+              >
+                {userStats.isRecentlyUpdated ? "🔄" : "💤"}
+              </div>
+              <div>🕒 最近の活動</div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* エラー表示 */}
+      {/* メッセージ表示 */}
       {error && (
         <div
           style={{
@@ -744,63 +545,559 @@ const MyPage: React.FC = () => {
             marginBottom: "1rem",
           }}
         >
-          {error}
+          ⚠️ {error}
         </div>
       )}
 
-      {/* コンテンツ一覧 */}
-      {currentContents.length === 0 ? (
+      {success && (
         <div
           style={{
-            backgroundColor: "white",
-            padding: "3rem",
-            borderRadius: "8px",
-            textAlign: "center",
-            boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
+            backgroundColor: "#d1fae5",
+            border: "1px solid #6ee7b7",
+            color: "#059669",
+            padding: "1rem",
+            borderRadius: "6px",
+            marginBottom: "1rem",
           }}
         >
-          <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>
-            {currentTabInfo.icon}
-          </div>
-          <h3
+          ✅ {success}
+        </div>
+      )}
+
+      {/* プロフィール表示・編集 */}
+      <div
+        style={{
+          backgroundColor: "white",
+          borderRadius: "8px",
+          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
+          overflow: "hidden",
+          marginBottom: "2rem",
+        }}
+      >
+        {/* プロフィールヘッダー */}
+        <div
+          style={{
+            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            padding: "2rem",
+            color: "white",
+            textAlign: "center",
+          }}
+        >
+          <div
             style={{
-              fontSize: "1.25rem",
-              marginBottom: "0.5rem",
-              color: "#374151",
+              width: "100px",
+              height: "100px",
+              borderRadius: "50%",
+              backgroundColor: "rgba(255, 255, 255, 0.2)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 1rem",
+              fontSize: "2.5rem",
+              border: "3px solid rgba(255, 255, 255, 0.3)",
             }}
           >
-            {currentTabInfo.title}がありません
-          </h3>
-          <p style={{ color: "#6b7280", marginBottom: "1.5rem" }}>
-            {currentTabInfo.description}
-          </p>
-          {activeTab === "my-posts" && (
-            <Link
-              to="/create"
-              style={{
-                display: "inline-block",
-                padding: "0.75rem 1.5rem",
-                backgroundColor: "#3b82f6",
-                color: "white",
-                textDecoration: "none",
-                borderRadius: "6px",
-                fontSize: "0.875rem",
-                fontWeight: "500",
-              }}
-            >
-              新規投稿を作成
-            </Link>
+            {user.avatar ? (
+              <img
+                src={user.avatar}
+                alt={user.username}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  borderRadius: "50%",
+                  objectFit: "cover",
+                }}
+              />
+            ) : (
+              "👤"
+            )}
+          </div>
+          <h2 style={{ margin: "0 0 0.5rem 0", fontSize: "1.8rem" }}>
+            {user.username}
+          </h2>
+          <div
+            style={{ fontSize: "0.9rem", marginBottom: "1rem", opacity: 0.9 }}
+          >
+            {user.email}
+          </div>
+          <div
+            style={{
+              display: "inline-block",
+              backgroundColor: roleInfo.bg,
+              color: roleInfo.color,
+              padding: "0.5rem 1rem",
+              borderRadius: "9999px",
+              fontSize: "0.875rem",
+              fontWeight: "500",
+            }}
+          >
+            {roleInfo.text}
+          </div>
+        </div>
+
+        {/* プロフィール内容 */}
+        <div style={{ padding: "2rem" }}>
+          {!editing ? (
+            // 表示モード
+            <div>
+              <div style={{ marginBottom: "1.5rem" }}>
+                <h3
+                  style={{
+                    fontSize: "1.125rem",
+                    fontWeight: "600",
+                    marginBottom: "1rem",
+                    color: "#374151",
+                  }}
+                >
+                  📋 基本情報
+                </h3>
+
+                <div style={{ display: "grid", gap: "1rem" }}>
+                  <div>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.875rem",
+                        fontWeight: "500",
+                        color: "#6b7280",
+                        marginBottom: "0.25rem",
+                      }}
+                    >
+                      👤 ユーザー名
+                    </label>
+                    <div
+                      style={{
+                        padding: "0.75rem",
+                        backgroundColor: "#f9fafb",
+                        borderRadius: "6px",
+                        color: "#374151",
+                        border: "1px solid #e5e7eb",
+                      }}
+                    >
+                      {user.username}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.875rem",
+                        fontWeight: "500",
+                        color: "#6b7280",
+                        marginBottom: "0.25rem",
+                      }}
+                    >
+                      📧 メールアドレス
+                    </label>
+                    <div
+                      style={{
+                        padding: "0.75rem",
+                        backgroundColor: "#f9fafb",
+                        borderRadius: "6px",
+                        color: "#374151",
+                        border: "1px solid #e5e7eb",
+                      }}
+                    >
+                      {user.email}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.875rem",
+                        fontWeight: "500",
+                        color: "#6b7280",
+                        marginBottom: "0.25rem",
+                      }}
+                    >
+                      📝 自己紹介
+                    </label>
+                    <div
+                      style={{
+                        padding: "0.75rem",
+                        backgroundColor: "#f9fafb",
+                        borderRadius: "6px",
+                        color: "#374151",
+                        minHeight: "4rem",
+                        whiteSpace: "pre-wrap",
+                        border: "1px solid #e5e7eb",
+                      }}
+                    >
+                      {user.bio || "自己紹介が設定されていません"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "1.5rem" }}>
+                <h3
+                  style={{
+                    fontSize: "1.125rem",
+                    fontWeight: "600",
+                    marginBottom: "1rem",
+                    color: "#374151",
+                  }}
+                >
+                  🔍 アカウント情報
+                </h3>
+
+                <div style={{ display: "grid", gap: "1rem" }}>
+                  <div>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.875rem",
+                        fontWeight: "500",
+                        color: "#6b7280",
+                        marginBottom: "0.25rem",
+                      }}
+                    >
+                      📅 登録日
+                    </label>
+                    <div
+                      style={{
+                        padding: "0.75rem",
+                        backgroundColor: "#f9fafb",
+                        borderRadius: "6px",
+                        color: "#374151",
+                        border: "1px solid #e5e7eb",
+                      }}
+                    >
+                      {formatDate(user.created_at)}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.875rem",
+                        fontWeight: "500",
+                        color: "#6b7280",
+                        marginBottom: "0.25rem",
+                      }}
+                    >
+                      🔄 最終更新
+                    </label>
+                    <div
+                      style={{
+                        padding: "0.75rem",
+                        backgroundColor: "#f9fafb",
+                        borderRadius: "6px",
+                        color: "#374151",
+                        border: "1px solid #e5e7eb",
+                      }}
+                    >
+                      {formatDate(user.updated_at)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ textAlign: "center" }}>
+                <button
+                  onClick={handleEditStart}
+                  style={{
+                    padding: "0.75rem 2rem",
+                    backgroundColor: "#3b82f6",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    fontSize: "1rem",
+                    fontWeight: "500",
+                    cursor: "pointer",
+                    transition: "background-color 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "#2563eb";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "#3b82f6";
+                  }}
+                >
+                  ✏️ プロフィールを編集
+                </button>
+              </div>
+            </div>
+          ) : (
+            // 編集モード
+            <form onSubmit={handleSubmit}>
+              <h3
+                style={{
+                  fontSize: "1.125rem",
+                  fontWeight: "600",
+                  marginBottom: "1.5rem",
+                  color: "#374151",
+                }}
+              >
+                ✏️ プロフィール編集
+              </h3>
+
+              <div
+                style={{ display: "grid", gap: "1rem", marginBottom: "2rem" }}
+              >
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.875rem",
+                      fontWeight: "500",
+                      color: "#374151",
+                      marginBottom: "0.5rem",
+                    }}
+                  >
+                    👤 ユーザー名 *
+                  </label>
+                  <input
+                    type="text"
+                    name="username"
+                    required
+                    value={formData.username || ""}
+                    onChange={handleChange}
+                    disabled={saving}
+                    style={{
+                      width: "100%",
+                      padding: "0.75rem",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "6px",
+                      fontSize: "1rem",
+                      boxSizing: "border-box",
+                      opacity: saving ? 0.6 : 1,
+                    }}
+                    placeholder="ユーザー名を入力"
+                  />
+                  <div
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "#6b7280",
+                      marginTop: "0.25rem",
+                    }}
+                  >
+                    {formState.usernameLength}/50文字
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.875rem",
+                      fontWeight: "500",
+                      color: "#374151",
+                      marginBottom: "0.5rem",
+                    }}
+                  >
+                    📧 メールアドレス *
+                  </label>
+                  <input
+                    type="email"
+                    name="email"
+                    required
+                    value={formData.email || ""}
+                    onChange={handleChange}
+                    disabled={saving}
+                    style={{
+                      width: "100%",
+                      padding: "0.75rem",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "6px",
+                      fontSize: "1rem",
+                      boxSizing: "border-box",
+                      opacity: saving ? 0.6 : 1,
+                    }}
+                    placeholder="メールアドレスを入力"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.875rem",
+                      fontWeight: "500",
+                      color: "#374151",
+                      marginBottom: "0.5rem",
+                    }}
+                  >
+                    📝 自己紹介
+                  </label>
+                  <textarea
+                    name="bio"
+                    rows={4}
+                    value={formData.bio || ""}
+                    onChange={handleChange}
+                    disabled={saving}
+                    style={{
+                      width: "100%",
+                      padding: "0.75rem",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "6px",
+                      fontSize: "1rem",
+                      resize: "vertical",
+                      boxSizing: "border-box",
+                      opacity: saving ? 0.6 : 1,
+                    }}
+                    placeholder="自己紹介を入力（任意）"
+                  />
+                  <div
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "#6b7280",
+                      marginTop: "0.25rem",
+                    }}
+                  ></div>
+                </div>
+              </div>
+
+              {/* フォーム状態表示 */}
+              <div
+                style={{
+                  fontSize: "0.75rem",
+                  color: "#6b7280",
+                  marginBottom: "1.5rem",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <span>
+                  {formState.isValid ? "✅ 入力完了" : "📝 入力中..."}
+                  {formState.hasChanges && " • 変更あり"}
+                </span>
+                <span>必須項目: {formState.isValid ? "完了" : "未完了"}</span>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: "1rem",
+                  justifyContent: "center",
+                  flexWrap: "wrap",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  disabled={saving}
+                  style={{
+                    padding: "0.75rem 1.5rem",
+                    backgroundColor: "#6b7280",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    fontSize: "1rem",
+                    cursor: saving ? "not-allowed" : "pointer",
+                    opacity: saving ? 0.6 : 1,
+                  }}
+                >
+                  ❌ キャンセル
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={saving || !formState.isValid}
+                  style={{
+                    padding: "0.75rem 1.5rem",
+                    backgroundColor: saving ? "#6b7280" : "#10b981",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    fontSize: "1rem",
+                    cursor:
+                      saving || !formState.isValid ? "not-allowed" : "pointer",
+                    opacity: saving || !formState.isValid ? 0.6 : 1,
+                  }}
+                >
+                  {saving ? "💾 保存中..." : "💾 保存"}
+                </button>
+              </div>
+            </form>
           )}
         </div>
-      ) : (
-        <div style={{ display: "grid", gap: "1rem" }}>
-          {currentContents.map((content) =>
-            renderContentCard(content, activeTab !== "my-posts")
-          )}
+      </div>
+
+      {/* アクションカード */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+          gap: "1rem",
+        }}
+      >
+        {actionCards.map((card) => (
+          <Link
+            key={card.to}
+            to={card.to}
+            style={{
+              display: "block",
+              backgroundColor: "white",
+              padding: "1.5rem",
+              borderRadius: "8px",
+              boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
+              textDecoration: "none",
+              color: "inherit",
+              transition: "transform 0.2s, box-shadow 0.2s",
+              border: `2px solid transparent`,
+            }}
+            onMouseEnter={handleCardMouseEnter}
+            onMouseLeave={handleCardMouseLeave}
+          >
+            <div
+              style={{
+                fontSize: "2rem",
+                marginBottom: "0.5rem",
+                color: card.color,
+              }}
+            >
+              {card.icon}
+            </div>
+            <h3
+              style={{
+                margin: "0 0 0.5rem 0",
+                fontSize: "1.125rem",
+                fontWeight: "600",
+                color: "#374151",
+              }}
+            >
+              {card.title}
+            </h3>
+            <p
+              style={{
+                margin: 0,
+                color: "#6b7280",
+                fontSize: "0.875rem",
+                lineHeight: "1.5",
+              }}
+            >
+              {card.description}
+            </p>
+          </Link>
+        ))}
+      </div>
+
+      {/* 保存中の表示 */}
+      {saving && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "2rem",
+            right: "2rem",
+            backgroundColor: "#1f2937",
+            color: "white",
+            padding: "1rem",
+            borderRadius: "8px",
+            fontSize: "0.875rem",
+            zIndex: 1000,
+          }}
+        >
+          💾 プロフィールを保存中...
         </div>
       )}
     </div>
   );
 };
 
-export default MyPage;
+export default ProfilePage;
