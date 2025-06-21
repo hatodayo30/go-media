@@ -109,7 +109,7 @@ export interface ContentFilters {
   search?: string;
 }
 
-// コメント関連の型
+// コメント関連の型（重複削除）
 export interface Comment {
   id: number;
   body: string;
@@ -152,8 +152,36 @@ export interface CreateRatingRequest {
 }
 
 export interface AverageRating {
+  like_count: number;
   average: number;
   count: number;
+}
+
+export interface CreateOrUpdateRatingRequest {
+  value: number;
+  content_id: number;
+}
+
+// フォロー関連の型
+export interface Follow {
+  id: number;
+  follower_id: number;
+  following_id: number;
+  follower?: User;
+  following?: User;
+  created_at: string;
+}
+
+export interface FollowStats {
+  followers_count: number;
+  following_count: number;
+  is_following: boolean;
+  is_followed_by: boolean;
+}
+
+export interface FollowingFeedParams {
+  page?: number;
+  limit?: number;
 }
 
 // ページネーション関連

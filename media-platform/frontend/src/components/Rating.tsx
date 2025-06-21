@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { ThumbsUp, ThumbsDown } from "lucide-react";
 import { api } from "../services/api";
+import { ApiResponse, Rating as RatingType, User } from "../types";
 
 interface RatingProps {
   contentId: number;
@@ -30,33 +31,128 @@ const Rating: React.FC<RatingProps> = ({
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const sizeClasses = {
-    small: "text-sm px-2 py-1",
-    medium: "text-base px-3 py-2",
-    large: "text-lg px-4 py-3",
-  };
+  // useMemoでサイズクラスをメモ化
+  const sizeClasses = useMemo(
+    () => ({
+      small: "text-sm px-2 py-1",
+      medium: "text-base px-3 py-2",
+      large: "text-lg px-4 py-3",
+    }),
+    []
+  );
 
   const currentSizeClass = sizeClasses[size];
 
-  // 統計情報を取得（シンプル版）
+  // useMemoでアイコンサイズをメモ化
+  const iconSize = useMemo(() => {
+    switch (size) {
+      case "small":
+        return 14;
+      case "large":
+        return 20;
+      default:
+        return 16;
+    }
+  }, [size]);
+
+  // useCallbackで認証チェックをメモ化
+  const checkAuthentication = useCallback(() => {
+    const token = localStorage.getItem("token");
+    const userStr = localStorage.getItem("user");
+
+    if (token && userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        setIsAuthenticated(true);
+        setCurrentUser(user);
+        console.log("✅ 認証確認: ユーザーID", user.id);
+      } catch (error) {
+        console.error("❌ ユーザー情報解析エラー:", error);
+        setIsAuthenticated(false);
+        setCurrentUser(null);
+      }
+    } else {
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+    }
+  }, []);
+
+  // useCallbackでfetchUserRatingをメモ化
+  const fetchUserRating = useCallback(async (): Promise<number | undefined> => {
+    if (!isAuthenticated || !currentUser) {
+      return undefined;
+    }
+
+    try {
+      console.log(`👤 ユーザー評価取得: ユーザーID ${currentUser.id}`);
+      const response: ApiResponse<RatingType[]> = await api.getRatingsByUser(
+        currentUser.id.toString()
+      );
+
+      if (response.success && response.data) {
+        // 現在のコンテンツに対するユーザーの評価を検索
+        const userRating = response.data.find(
+          (rating: RatingType) => rating.content_id === contentId
+        );
+
+        if (userRating) {
+          console.log(`✅ ユーザー評価取得: ${userRating.value}`);
+          return userRating.value;
+        } else {
+          console.log("📭 このコンテンツの評価なし");
+          return undefined;
+        }
+      } else {
+        console.warn("⚠️ ユーザー評価データなし:", response.message);
+        return undefined;
+      }
+    } catch (error: any) {
+      console.error("❌ ユーザー評価取得エラー:", error);
+      if (error.response?.status !== 404) {
+        throw error;
+      }
+      return undefined;
+    }
+  }, [isAuthenticated, currentUser, contentId]);
+
+  // useCallbackでfetchStatsをメモ化
   const fetchStats = useCallback(async () => {
     try {
       setError(null);
       console.log("📊 統計情報取得開始:", contentId);
 
-      // 平均評価統計を取得
-      const averageResponse = await api.getAverageRating(contentId.toString());
-      console.log("📊 平均評価レスポンス:", averageResponse);
+      // 統計情報とユーザー評価を並列取得
+      const [avgResponse, userRating] = await Promise.all([
+        api.getAverageRating(contentId.toString()),
+        fetchUserRating(),
+      ]);
 
-      const avgData = averageResponse.data || averageResponse;
+      console.log("📊 平均評価レスポンス:", avgResponse);
 
-      setStats({
-        likes: avgData.like_count || 0,
-        dislikes: avgData.dislike_count || 0,
-        userRating: undefined, // 個別ユーザー評価は省略（シンプル化）
-      });
+      if (avgResponse.success && avgResponse.data) {
+        const avgData = avgResponse.data;
+
+        setStats({
+          likes: avgData.count || 0, // AverageRating型のcountフィールドを使用
+          dislikes: 0, // 現在のAPIでは区別されていない
+          userRating: userRating,
+        });
+
+        console.log("✅ 統計情報設定完了:", {
+          likes: avgData.count || 0,
+          userRating: userRating,
+        });
+      } else {
+        console.warn("⚠️ 統計データなし:", avgResponse.message);
+        setStats({
+          likes: 0,
+          dislikes: 0,
+          userRating: userRating,
+        });
+      }
     } catch (error: any) {
       console.error("❌ 統計情報取得エラー:", error);
 
@@ -71,90 +167,118 @@ const Rating: React.FC<RatingProps> = ({
         setError("統計情報の取得に失敗しました");
       }
     }
-  }, [contentId]); // contentIdを依存関係に追加
+  }, [contentId, fetchUserRating]);
 
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    setIsAuthenticated(!!token);
-    fetchStats();
-  }, [fetchStats]);
-
-  // 評価を送信 - 修正箇所
-  const handleRating = async (rating: number) => {
-    if (!isAuthenticated) {
-      alert("評価するにはログインが必要です");
-      return;
-    }
-
-    if (isLoading) return;
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      console.log("🔄 評価送信中...", { contentId, rating });
-      console.log("📤 送信予定データ:", { contentId, value: rating });
-
-      // 修正: api.createOrUpdateRating の呼び出し方法を変更
-      const response = await api.createOrUpdateRating(contentId, rating);
-
-      console.log("✅ 評価投稿成功:", response);
-
-      // 統計情報を再取得
-      await fetchStats();
-
-      // コールバック実行
-      onRatingChange?.(rating);
-    } catch (error: any) {
-      console.error("❌ 評価投稿エラー:", error);
-      if (error.response?.data) {
-        console.error("❌ エラー詳細:", error.response.data);
+  // useCallbackでhandleRatingをメモ化
+  const handleRating = useCallback(
+    async (rating: number) => {
+      if (!isAuthenticated || !currentUser) {
+        alert("評価するにはログインが必要です");
+        return;
       }
 
-      let errorMessage = "評価の投稿に失敗しました";
-      if (error.response?.status === 401) {
-        errorMessage = "認証が必要です。再度ログインしてください。";
-        localStorage.removeItem("token");
-        setIsAuthenticated(false);
-      } else if (error.response?.data?.error) {
-        errorMessage = error.response.data.error;
+      if (isLoading) return;
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        console.log("🔄 評価送信中...", { contentId, rating });
+
+        const response: ApiResponse<RatingType> =
+          await api.createOrUpdateRating(contentId, rating);
+
+        if (response.success) {
+          console.log("✅ 評価投稿成功:", response);
+
+          // 統計情報を再取得
+          await fetchStats();
+
+          // コールバック実行
+          onRatingChange?.(rating);
+        } else {
+          throw new Error(response.message || "評価の投稿に失敗しました");
+        }
+      } catch (error: any) {
+        console.error("❌ 評価投稿エラー:", error);
+
+        let errorMessage = "評価の投稿に失敗しました";
+
+        if (error.response?.status === 401) {
+          errorMessage = "認証が必要です。再度ログインしてください。";
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          setIsAuthenticated(false);
+          setCurrentUser(null);
+        } else if (error.response?.data?.message) {
+          errorMessage = error.response.data.message;
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+
+        setError(errorMessage);
+        alert(errorMessage);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [
+      isAuthenticated,
+      currentUser,
+      isLoading,
+      contentId,
+      fetchStats,
+      onRatingChange,
+    ]
+  );
+
+  // useCallbackでhandleLikeをメモ化
+  const handleLike = useCallback(() => {
+    handleRating(1);
+  }, [handleRating]);
+
+  // useCallbackでhandleDislikeをメモ化
+  const handleDislike = useCallback(() => {
+    handleRating(0);
+  }, [handleRating]);
+
+  // useMemoでボタンの共通スタイルをメモ化
+  const getButtonStyle = useCallback(
+    (isActive: boolean, colorScheme: "green" | "red") => {
+      const baseStyle = `flex items-center gap-2 rounded-lg border transition-all duration-200 ${currentSizeClass}`;
+
+      if (isActive) {
+        return `${baseStyle} ${
+          colorScheme === "green"
+            ? "bg-green-50 border-green-200 text-green-700 shadow-sm"
+            : "bg-red-50 border-red-200 text-red-700 shadow-sm"
+        }`;
       }
 
-      setError(errorMessage);
-      alert(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      const disabledStyle = isLoading
+        ? "opacity-50 cursor-not-allowed"
+        : isAuthenticated
+        ? "cursor-pointer hover:bg-gray-50 hover:border-gray-300"
+        : "cursor-not-allowed opacity-60";
 
-  // いいね/ディスライクボタンをレンダリング
-  const renderLikeButtons = () => {
+      return `${baseStyle} bg-white border-gray-200 text-gray-600 ${disabledStyle}`;
+    },
+    [currentSizeClass, isLoading, isAuthenticated]
+  );
+
+  // useCallbackでrenderLikeButtonsをメモ化
+  const renderLikeButtons = useCallback(() => {
     return (
       <div className="flex items-center gap-3">
         {/* いいねボタン */}
         <button
-          onClick={() => handleRating(1)} // 1 = いいね
+          onClick={handleLike}
           disabled={isLoading || !isAuthenticated}
-          className={`
-            flex items-center gap-2 rounded-lg border transition-all duration-200
-            ${currentSizeClass}
-            ${
-              stats.userRating === 1
-                ? "bg-green-50 border-green-200 text-green-700 shadow-sm"
-                : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300"
-            }
-            ${
-              isLoading
-                ? "opacity-50 cursor-not-allowed"
-                : isAuthenticated
-                ? "cursor-pointer"
-                : "cursor-not-allowed opacity-60"
-            }
-          `}
+          className={getButtonStyle(stats.userRating === 1, "green")}
           title={isAuthenticated ? "いいね" : "ログインが必要です"}
         >
           <ThumbsUp
-            size={size === "small" ? 14 : size === "large" ? 20 : 16}
+            size={iconSize}
             className={stats.userRating === 1 ? "fill-current" : ""}
           />
           <span className="font-medium">{stats.likes}</span>
@@ -162,28 +286,13 @@ const Rating: React.FC<RatingProps> = ({
 
         {/* ディスライクボタン */}
         <button
-          onClick={() => handleRating(0)} // 0 = バッド
+          onClick={handleDislike}
           disabled={isLoading || !isAuthenticated}
-          className={`
-            flex items-center gap-2 rounded-lg border transition-all duration-200
-            ${currentSizeClass}
-            ${
-              stats.userRating === 0
-                ? "bg-red-50 border-red-200 text-red-700 shadow-sm"
-                : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300"
-            }
-            ${
-              isLoading
-                ? "opacity-50 cursor-not-allowed"
-                : isAuthenticated
-                ? "cursor-pointer"
-                : "cursor-not-allowed opacity-60"
-            }
-          `}
+          className={getButtonStyle(stats.userRating === 0, "red")}
           title={isAuthenticated ? "ディスライク" : "ログインが必要です"}
         >
           <ThumbsDown
-            size={size === "small" ? 14 : size === "large" ? 20 : 16}
+            size={iconSize}
             className={stats.userRating === 0 ? "fill-current" : ""}
           />
           <span className="font-medium">{stats.dislikes}</span>
@@ -198,7 +307,30 @@ const Rating: React.FC<RatingProps> = ({
         )}
       </div>
     );
-  };
+  }, [
+    handleLike,
+    handleDislike,
+    isLoading,
+    isAuthenticated,
+    getButtonStyle,
+    stats.userRating,
+    stats.likes,
+    stats.dislikes,
+    iconSize,
+  ]);
+
+  // useMemoで総評価数をメモ化
+  const totalRatings = useMemo(() => {
+    return stats.likes + stats.dislikes;
+  }, [stats.likes, stats.dislikes]);
+
+  useEffect(() => {
+    checkAuthentication();
+  }, [checkAuthentication]);
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
 
   return (
     <div className="rating-component">
@@ -223,8 +355,15 @@ const Rating: React.FC<RatingProps> = ({
       {showStats && (
         <div className="mt-3 pt-2 border-t border-gray-100">
           <div className="text-xs text-gray-500">
-            総評価数: {stats.likes + stats.dislikes}件
+            総評価数: {totalRatings}件
           </div>
+          {process.env.NODE_ENV === "development" && (
+            <div className="text-xs text-gray-400 mt-1">
+              <div>コンテンツID: {contentId}</div>
+              <div>ユーザー評価: {stats.userRating ?? "未評価"}</div>
+              <div>認証状態: {isAuthenticated ? "✅" : "❌"}</div>
+            </div>
+          )}
         </div>
       )}
     </div>

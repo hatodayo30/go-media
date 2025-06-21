@@ -1,0 +1,234 @@
+import React, { useState, useEffect, useCallback } from "react";
+import { ThumbsUp, ThumbsDown } from "lucide-react";
+import { api } from "../services/api";
+
+interface RatingProps {
+  contentId: number;
+  mode?: "like" | "star";
+  showStats?: boolean;
+  size?: "small" | "medium" | "large";
+  onRatingChange?: (rating: number) => void;
+}
+
+interface RatingStats {
+  likes: number;
+  dislikes: number;
+  userRating?: number; // 0 = バッド, 1 = いいね, undefined = 未評価
+}
+
+const Rating: React.FC<RatingProps> = ({
+  contentId,
+  mode = "like",
+  showStats = true,
+  size = "medium",
+  onRatingChange,
+}) => {
+  const [stats, setStats] = useState<RatingStats>({
+    likes: 0,
+    dislikes: 0,
+    userRating: undefined,
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const sizeClasses = {
+    small: "text-sm px-2 py-1",
+    medium: "text-base px-3 py-2",
+    large: "text-lg px-4 py-3",
+  };
+
+  const currentSizeClass = sizeClasses[size];
+
+  // 統計情報を取得（シンプル版）
+  const fetchStats = useCallback(async () => {
+    try {
+      setError(null);
+      console.log("📊 統計情報取得開始:", contentId);
+
+      // 平均評価統計を取得
+      const averageResponse = await api.getAverageRating(contentId.toString());
+      console.log("📊 平均評価レスポンス:", averageResponse);
+
+      const avgData = averageResponse.data || averageResponse;
+
+      setStats({
+        likes: avgData.like_count || 0,
+        dislikes: avgData.dislike_count || 0,
+        userRating: undefined, // 個別ユーザー評価は省略（シンプル化）
+      });
+    } catch (error: any) {
+      console.error("❌ 統計情報取得エラー:", error);
+
+      // 404エラーの場合はデフォルト値を設定
+      if (error.response?.status === 404) {
+        setStats({
+          likes: 0,
+          dislikes: 0,
+          userRating: undefined,
+        });
+      } else {
+        setError("統計情報の取得に失敗しました");
+      }
+    }
+  }, [contentId]); // contentIdを依存関係に追加
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    setIsAuthenticated(!!token);
+    fetchStats();
+  }, [fetchStats]);
+
+  // 評価を送信 - 修正箇所
+  const handleRating = async (rating: number) => {
+    if (!isAuthenticated) {
+      alert("評価するにはログインが必要です");
+      return;
+    }
+
+    if (isLoading) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      console.log("🔄 評価送信中...", { contentId, rating });
+      console.log("📤 送信予定データ:", { contentId, value: rating });
+
+      // 修正: api.createOrUpdateRating の呼び出し方法を変更
+      const response = await api.createOrUpdateRating(contentId, rating);
+
+      console.log("✅ 評価投稿成功:", response);
+
+      // 統計情報を再取得
+      await fetchStats();
+
+      // コールバック実行
+      onRatingChange?.(rating);
+    } catch (error: any) {
+      console.error("❌ 評価投稿エラー:", error);
+      if (error.response?.data) {
+        console.error("❌ エラー詳細:", error.response.data);
+      }
+
+      let errorMessage = "評価の投稿に失敗しました";
+      if (error.response?.status === 401) {
+        errorMessage = "認証が必要です。再度ログインしてください。";
+        localStorage.removeItem("token");
+        setIsAuthenticated(false);
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      }
+
+      setError(errorMessage);
+      alert(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // いいね/ディスライクボタンをレンダリング
+  const renderLikeButtons = () => {
+    return (
+      <div className="flex items-center gap-3">
+        {/* いいねボタン */}
+        <button
+          onClick={() => handleRating(1)} // 1 = いいね
+          disabled={isLoading || !isAuthenticated}
+          className={`
+            flex items-center gap-2 rounded-lg border transition-all duration-200
+            ${currentSizeClass}
+            ${
+              stats.userRating === 1
+                ? "bg-green-50 border-green-200 text-green-700 shadow-sm"
+                : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300"
+            }
+            ${
+              isLoading
+                ? "opacity-50 cursor-not-allowed"
+                : isAuthenticated
+                ? "cursor-pointer"
+                : "cursor-not-allowed opacity-60"
+            }
+          `}
+          title={isAuthenticated ? "いいね" : "ログインが必要です"}
+        >
+          <ThumbsUp
+            size={size === "small" ? 14 : size === "large" ? 20 : 16}
+            className={stats.userRating === 1 ? "fill-current" : ""}
+          />
+          <span className="font-medium">{stats.likes}</span>
+        </button>
+
+        {/* ディスライクボタン */}
+        <button
+          onClick={() => handleRating(0)} // 0 = バッド
+          disabled={isLoading || !isAuthenticated}
+          className={`
+            flex items-center gap-2 rounded-lg border transition-all duration-200
+            ${currentSizeClass}
+            ${
+              stats.userRating === 0
+                ? "bg-red-50 border-red-200 text-red-700 shadow-sm"
+                : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300"
+            }
+            ${
+              isLoading
+                ? "opacity-50 cursor-not-allowed"
+                : isAuthenticated
+                ? "cursor-pointer"
+                : "cursor-not-allowed opacity-60"
+            }
+          `}
+          title={isAuthenticated ? "ディスライク" : "ログインが必要です"}
+        >
+          <ThumbsDown
+            size={size === "small" ? 14 : size === "large" ? 20 : 16}
+            className={stats.userRating === 0 ? "fill-current" : ""}
+          />
+          <span className="font-medium">{stats.dislikes}</span>
+        </button>
+
+        {/* ローディング表示 */}
+        {isLoading && (
+          <div className="text-sm text-gray-500 flex items-center gap-1">
+            <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
+            更新中...
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="rating-component">
+      {/* エラー表示 */}
+      {error && (
+        <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
+          ⚠️ {error}
+        </div>
+      )}
+
+      {/* 認証状態の通知 */}
+      {!isAuthenticated && (
+        <div className="mb-2 text-xs text-gray-500 flex items-center gap-1">
+          🔒 評価するにはログインしてください
+        </div>
+      )}
+
+      {/* 評価ボタン */}
+      {mode === "like" && renderLikeButtons()}
+
+      {/* 統計情報 */}
+      {showStats && (
+        <div className="mt-3 pt-2 border-t border-gray-100">
+          <div className="text-xs text-gray-500">
+            総評価数: {stats.likes + stats.dislikes}件
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Rating;

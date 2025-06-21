@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 
@@ -56,8 +56,19 @@ const SearchPage: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // useCallbackを使用してfetchInitialDataをメモ化
-  const fetchInitialData = useCallback(async () => {
+  useEffect(() => {
+    fetchInitialData();
+
+    // URLクエリパラメータから検索条件を取得
+    const urlParams = new URLSearchParams(location.search);
+    const query = urlParams.get("q");
+    if (query) {
+      setFilters((prev) => ({ ...prev, query }));
+      performSearch({ ...filters, query });
+    }
+  }, []);
+
+  const fetchInitialData = async () => {
     try {
       const token = localStorage.getItem("token");
       if (!token) {
@@ -88,191 +99,89 @@ const SearchPage: React.FC = () => {
         window.location.href = "/login";
       }
     }
-  }, []); // 依存関係なし
+  };
 
-  // useCallbackを使用してperformSearchをメモ化
-  const performSearch = useCallback(
-    async (searchFilters: SearchFilters) => {
-      if (!searchFilters.query.trim()) {
-        setSearchResults([]);
-        return;
+  const performSearch = async (searchFilters: SearchFilters) => {
+    if (!searchFilters.query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // APIパラメータを構築
+      const params: any = {
+        q: searchFilters.query,
+        sort_by: searchFilters.sort_by || "date",
+      };
+
+      if (searchFilters.category_id) {
+        params.category_id = searchFilters.category_id;
+      }
+      if (searchFilters.author_id) {
+        params.author_id = searchFilters.author_id;
+      }
+      if (searchFilters.date_range) {
+        params.date_start = searchFilters.date_range.start;
+        params.date_end = searchFilters.date_range.end;
       }
 
-      try {
-        setLoading(true);
+      // 拡張された検索APIを使用（実装が必要）
+      const response = await api.searchContents(params);
+      setSearchResults(
+        response.data?.contents || response.contents || response || []
+      );
 
-        // APIパラメータを構築
-        const params: any = {
-          q: searchFilters.query,
-          sort_by: searchFilters.sort_by || "date",
-        };
+      // URLを更新
+      const urlParams = new URLSearchParams();
+      urlParams.set("q", searchFilters.query);
+      if (searchFilters.category_id)
+        urlParams.set("category", searchFilters.category_id.toString());
+      if (searchFilters.author_id)
+        urlParams.set("author", searchFilters.author_id.toString());
+      if (searchFilters.sort_by) urlParams.set("sort", searchFilters.sort_by);
 
-        if (searchFilters.category_id) {
-          params.category_id = searchFilters.category_id;
-        }
-        if (searchFilters.author_id) {
-          params.author_id = searchFilters.author_id;
-        }
-        if (searchFilters.date_range) {
-          params.date_start = searchFilters.date_range.start;
-          params.date_end = searchFilters.date_range.end;
-        }
+      navigate(`/search?${urlParams.toString()}`, { replace: true });
+    } catch (error) {
+      console.error("検索エラー:", error);
+      setSearchResults([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        // 拡張された検索APIを使用（実装が必要）
-        const response = await api.searchContents(params);
-        setSearchResults(
-          response.data?.contents || response.contents || response || []
-        );
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    performSearch(filters);
+  };
 
-        // URLを更新
-        const urlParams = new URLSearchParams();
-        urlParams.set("q", searchFilters.query);
-        if (searchFilters.category_id)
-          urlParams.set("category", searchFilters.category_id.toString());
-        if (searchFilters.author_id)
-          urlParams.set("author", searchFilters.author_id.toString());
-        if (searchFilters.sort_by) urlParams.set("sort", searchFilters.sort_by);
+  const handleFilterChange = (key: keyof SearchFilters, value: any) => {
+    const newFilters = { ...filters, [key]: value };
+    setFilters(newFilters);
 
-        navigate(`/search?${urlParams.toString()}`, { replace: true });
-      } catch (error) {
-        console.error("検索エラー:", error);
-        setSearchResults([]);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [navigate]
-  ); // navigateに依存
-
-  useEffect(() => {
-    fetchInitialData();
-
-    // URLクエリパラメータから検索条件を取得
-    const urlParams = new URLSearchParams(location.search);
-    const query = urlParams.get("q");
-    if (query) {
-      const newFilters = { ...filters, query };
-      setFilters(newFilters);
+    // リアルタイム検索（クエリがある場合）
+    if (newFilters.query.trim()) {
       performSearch(newFilters);
     }
-  }, [fetchInitialData, performSearch, location.search]); // eslint-disable-line react-hooks/exhaustive-deps
+  };
 
-  // useCallbackを使用してhandleSearchをメモ化
-  const handleSearch = useCallback(
-    (e: React.FormEvent) => {
-      e.preventDefault();
-      performSearch(filters);
-    },
-    [filters, performSearch]
-  );
-
-  // useCallbackを使用してhandleFilterChangeをメモ化
-  const handleFilterChange = useCallback(
-    (key: keyof SearchFilters, value: any) => {
-      const newFilters = { ...filters, [key]: value };
-      setFilters(newFilters);
-
-      // リアルタイム検索（クエリがある場合）
-      if (newFilters.query.trim()) {
-        performSearch(newFilters);
-      }
-    },
-    [filters, performSearch]
-  );
-
-  // useCallbackを使用してhandleLogoutをメモ化
-  const handleLogout = useCallback(() => {
+  const handleLogout = () => {
     localStorage.removeItem("token");
     window.location.href = "/login";
-  }, []);
+  };
 
-  // useCallbackを使用してclearFiltersをメモ化
-  const clearFilters = useCallback(() => {
-    const clearedFilters = {
+  const clearFilters = () => {
+    setFilters({
       query: "",
       category_id: undefined,
       author_id: undefined,
       date_range: undefined,
-      sort_by: "date" as const,
-    };
-    setFilters(clearedFilters);
+      sort_by: "date",
+    });
     setSearchResults([]);
     navigate("/search", { replace: true });
-  }, [navigate]);
-
-  // useCallbackを使用してtoggleFiltersをメモ化
-  const toggleFilters = useCallback(() => {
-    setShowFilters((prev) => !prev);
-  }, []);
-
-  // useCallbackを使用してマウスイベントハンドラーをメモ化
-  const handleCardMouseEnter = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.15)";
-      e.currentTarget.style.transform = "translateY(-2px)";
-    },
-    []
-  );
-
-  const handleCardMouseLeave = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      e.currentTarget.style.boxShadow = "0 1px 3px rgba(0, 0, 0, 0.1)";
-      e.currentTarget.style.transform = "translateY(0)";
-    },
-    []
-  );
-
-  const handleLinkMouseEnter = useCallback(
-    (e: React.MouseEvent<HTMLAnchorElement>) => {
-      e.currentTarget.style.color = "#3b82f6";
-    },
-    []
-  );
-
-  const handleLinkMouseLeave = useCallback(
-    (e: React.MouseEvent<HTMLAnchorElement>) => {
-      e.currentTarget.style.color = "inherit";
-    },
-    []
-  );
-
-  // useCallbackを使用して個別のフィルター変更ハンドラーをメモ化
-  const handleQueryChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      handleFilterChange("query", e.target.value);
-    },
-    [handleFilterChange]
-  );
-
-  const handleCategoryChange = useCallback(
-    (e: React.ChangeEvent<HTMLSelectElement>) => {
-      handleFilterChange(
-        "category_id",
-        e.target.value ? parseInt(e.target.value) : undefined
-      );
-    },
-    [handleFilterChange]
-  );
-
-  const handleAuthorChange = useCallback(
-    (e: React.ChangeEvent<HTMLSelectElement>) => {
-      handleFilterChange(
-        "author_id",
-        e.target.value ? parseInt(e.target.value) : undefined
-      );
-    },
-    [handleFilterChange]
-  );
-
-  const handleSortChange = useCallback(
-    (e: React.ChangeEvent<HTMLSelectElement>) => {
-      handleFilterChange(
-        "sort_by",
-        e.target.value as "date" | "popularity" | "rating"
-      );
-    },
-    [handleFilterChange]
-  );
+  };
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#f9fafb" }}>
@@ -422,7 +331,7 @@ const SearchPage: React.FC = () => {
                 type="text"
                 placeholder="記事のタイトルや内容を検索..."
                 value={filters.query}
-                onChange={handleQueryChange}
+                onChange={(e) => handleFilterChange("query", e.target.value)}
                 style={{
                   flex: 1,
                   padding: "0.75rem 1rem",
@@ -450,7 +359,7 @@ const SearchPage: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={toggleFilters}
+                onClick={() => setShowFilters(!showFilters)}
                 style={{
                   backgroundColor: "#6b7280",
                   color: "white",
@@ -490,7 +399,12 @@ const SearchPage: React.FC = () => {
                   </label>
                   <select
                     value={filters.category_id || ""}
-                    onChange={handleCategoryChange}
+                    onChange={(e) =>
+                      handleFilterChange(
+                        "category_id",
+                        e.target.value ? parseInt(e.target.value) : undefined
+                      )
+                    }
                     style={{
                       width: "100%",
                       padding: "0.5rem",
@@ -521,7 +435,12 @@ const SearchPage: React.FC = () => {
                   </label>
                   <select
                     value={filters.author_id || ""}
-                    onChange={handleAuthorChange}
+                    onChange={(e) =>
+                      handleFilterChange(
+                        "author_id",
+                        e.target.value ? parseInt(e.target.value) : undefined
+                      )
+                    }
                     style={{
                       width: "100%",
                       padding: "0.5rem",
@@ -552,7 +471,12 @@ const SearchPage: React.FC = () => {
                   </label>
                   <select
                     value={filters.sort_by || "date"}
-                    onChange={handleSortChange}
+                    onChange={(e) =>
+                      handleFilterChange(
+                        "sort_by",
+                        e.target.value as "date" | "popularity" | "rating"
+                      )
+                    }
                     style={{
                       width: "100%",
                       padding: "0.5rem",
@@ -633,8 +557,16 @@ const SearchPage: React.FC = () => {
                     cursor: "pointer",
                     border: "1px solid #e5e7eb",
                   }}
-                  onMouseEnter={handleCardMouseEnter}
-                  onMouseLeave={handleCardMouseLeave}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow =
+                      "0 4px 12px rgba(0, 0, 0, 0.15)";
+                    e.currentTarget.style.transform = "translateY(-2px)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow =
+                      "0 1px 3px rgba(0, 0, 0, 0.1)";
+                    e.currentTarget.style.transform = "translateY(0)";
+                  }}
                 >
                   <div
                     style={{
@@ -685,8 +617,12 @@ const SearchPage: React.FC = () => {
                         color: "inherit",
                         transition: "color 0.2s",
                       }}
-                      onMouseEnter={handleLinkMouseEnter}
-                      onMouseLeave={handleLinkMouseLeave}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = "#3b82f6";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = "inherit";
+                      }}
                     >
                       {content.title}
                     </Link>

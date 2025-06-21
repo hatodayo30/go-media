@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "../services/api";
+import { ApiResponse, Rating, AverageRating, User } from "../types";
 
 interface ContentActionsProps {
   contentId: number;
@@ -8,12 +9,12 @@ interface ContentActionsProps {
 }
 
 interface ActionStats {
-  goods: number; // likes → goods に変更
+  goods: number;
 }
 
 interface UserActions {
-  hasGood: boolean; // hasLiked → hasGood に変更
-  goodId?: number; // likeId → goodId に変更
+  hasGood: boolean;
+  goodId?: number;
 }
 
 const ContentActions: React.FC<ContentActionsProps> = ({
@@ -22,82 +23,115 @@ const ContentActions: React.FC<ContentActionsProps> = ({
   showCounts = true,
 }) => {
   const [stats, setStats] = useState<ActionStats>({
-    goods: 0, // likes → goods に変更
+    goods: 0,
   });
   const [userActions, setUserActions] = useState<UserActions>({
-    hasGood: false, // hasLiked → hasGood に変更
+    hasGood: false,
   });
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // サイズに応じたスタイル
-  const sizes = {
-    small: {
-      fontSize: "0.875rem",
-      padding: "0.375rem 0.75rem",
-      gap: "0.5rem",
-      iconSize: "1rem",
-    },
-    medium: {
-      fontSize: "1rem",
-      padding: "0.5rem 1rem",
-      gap: "0.75rem",
-      iconSize: "1.25rem",
-    },
-    large: {
-      fontSize: "1.125rem",
-      padding: "0.75rem 1.25rem",
-      gap: "1rem",
-      iconSize: "1.5rem",
-    },
-  };
+  // useCallbackでcheckAuthenticationをメモ化
+  const checkAuthentication = useCallback(() => {
+    const token = localStorage.getItem("token");
+    const userStr = localStorage.getItem("user");
 
-  const currentSize = sizes[size];
+    if (token && userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        setIsAuthenticated(true);
+        setCurrentUser(user);
+        console.log("✅ 認証確認: ユーザーID", user.id);
+      } catch (error) {
+        console.error("❌ ユーザー情報解析エラー:", error);
+        setIsAuthenticated(false);
+        setCurrentUser(null);
+      }
+    } else {
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+    }
+  }, []);
 
+  // useCallbackでfetchStatsをメモ化
+  const fetchStats = useCallback(async () => {
+    try {
+      console.log(`📊 統計取得: コンテンツID ${contentId}`);
+      const response: ApiResponse<AverageRating> = await api.getAverageRating(
+        contentId.toString()
+      );
+
+      if (response.success && response.data) {
+        const count = response.data.count || 0;
+        setStats({ goods: count });
+        console.log(`✅ 統計取得成功: グッド数 ${count}`);
+      } else {
+        console.warn("⚠️ 統計データなし:", response.message);
+        setStats({ goods: 0 });
+      }
+    } catch (error: any) {
+      console.error("❌ 統計取得エラー:", error);
+      if (error.response?.status !== 404) {
+        throw error; // 404以外のエラーは上位に投げる
+      }
+      setStats({ goods: 0 });
+    }
+  }, [contentId]);
+
+  // useCallbackでfetchUserActionsをメモ化
+  const fetchUserActions = useCallback(async () => {
+    if (!isAuthenticated || !currentUser) {
+      setUserActions({ hasGood: false });
+      return;
+    }
+
+    try {
+      console.log(`👤 ユーザー評価取得: ユーザーID ${currentUser.id}`);
+      const response: ApiResponse<Rating[]> = await api.getRatingsByUser(
+        currentUser.id.toString()
+      );
+
+      if (response.success && response.data) {
+        // 現在のコンテンツに対するユーザーの評価を検索
+        const userRating = response.data.find(
+          (rating: Rating) =>
+            rating.content_id === contentId && rating.value === 1
+        );
+
+        setUserActions({
+          hasGood: !!userRating,
+          goodId: userRating?.id,
+        });
+
+        console.log(`✅ ユーザー評価: ${userRating ? "グッド済み" : "未評価"}`);
+      } else {
+        console.warn("⚠️ ユーザー評価データなし:", response.message);
+        setUserActions({ hasGood: false });
+      }
+    } catch (error: any) {
+      console.error("❌ ユーザー評価取得エラー:", error);
+      if (error.response?.status !== 404) {
+        throw error;
+      }
+      setUserActions({ hasGood: false });
+    }
+  }, [isAuthenticated, currentUser, contentId]);
+
+  // useCallbackでfetchActionsをメモ化（全データ取得）
   const fetchActions = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      console.log(`🎯 評価データ取得: コンテンツID ${contentId}`);
+      console.log(`🎯 評価データ取得開始: コンテンツID ${contentId}`);
 
-      // 評価統計を取得（既存のエンドポイントを使用）
-      const statsResponse = await api.getAverageRating(contentId.toString()); // 既存エンドポイント
-      const statsData = statsResponse.data || statsResponse;
+      await Promise.all([fetchStats(), fetchUserActions()]);
 
-      console.log("📊 統計データ:", statsData); // デバッグ用
-
-      setStats({
-        goods: statsData.good_count || statsData.like_count || 0, // good_count または like_count
-      });
-
-      // ユーザーの評価状態確認（ログイン時のみ）
-      if (isAuthenticated) {
-        const ratingsResponse = await api.getRatingsByContent(
-          contentId.toString()
-        );
-        const ratings =
-          ratingsResponse.data?.ratings || ratingsResponse.ratings || [];
-
-        const user = JSON.parse(localStorage.getItem("user") || "{}");
-        const userId = user.id;
-
-        if (userId) {
-          const userGood = ratings.find(
-            (
-              r: any // userLike → userGood
-            ) => r.user_id === userId && r.value === 1
-          );
-
-          setUserActions({
-            hasGood: !!userGood, // hasLiked → hasGood
-            goodId: userGood?.id, // likeId → goodId
-          });
-        }
-      }
+      console.log("✅ 全評価データ取得完了");
     } catch (error: any) {
-      console.error("❌ アクション取得エラー:", error);
+      console.error("❌ 評価データ取得エラー:", error);
 
       if (error.response?.status === 404) {
         // データがない場合は正常
@@ -109,20 +143,16 @@ const ContentActions: React.FC<ContentActionsProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [contentId, isAuthenticated]); // contentIdとisAuthenticatedを依存関係に追加
+  }, [contentId, fetchStats, fetchUserActions]);
 
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    setIsAuthenticated(!!token);
-    fetchActions();
-  }, [fetchActions]); // fetchActionsを依存関係に追加
-
-  const handleGood = async () => {
-    // handleLike → handleGood
-    if (!isAuthenticated) {
+  // useCallbackでhandleGoodをメモ化
+  const handleGood = useCallback(async () => {
+    if (!isAuthenticated || !currentUser) {
       alert("評価するにはログインが必要です");
       return;
     }
+
+    if (submitting) return;
 
     try {
       setSubmitting(true);
@@ -130,41 +160,145 @@ const ContentActions: React.FC<ContentActionsProps> = ({
       console.log("👍 グッド処理開始");
 
       if (userActions.hasGood) {
-        // hasLiked → hasGood
-        // グッドを取り消し（削除）
+        // グッドを取り消し
         if (userActions.goodId) {
-          // likeId → goodId
           console.log("❌ グッド取り消し:", userActions.goodId);
-          await api.deleteRating(userActions.goodId.toString());
-          console.log("✅ グッド取り消し成功");
+          const response: ApiResponse<void> = await api.deleteRating(
+            userActions.goodId.toString()
+          );
+
+          if (response.success) {
+            console.log("✅ グッド取り消し成功");
+          } else {
+            throw new Error(
+              response.message || "グッドの取り消しに失敗しました"
+            );
+          }
         }
       } else {
         // グッドを追加
         console.log("➕ グッド追加");
-        await api.createOrUpdateRating(contentId, 1); // 1 = グッド
-        console.log("✅ グッド追加成功");
+        const response: ApiResponse<Rating> = await api.createOrUpdateRating(
+          contentId,
+          1
+        );
+
+        if (response.success) {
+          console.log("✅ グッド追加成功");
+        } else {
+          throw new Error(response.message || "グッドの追加に失敗しました");
+        }
       }
 
+      // データを再取得
       await fetchActions();
     } catch (error: any) {
       console.error("❌ グッドエラー:", error);
-      setError("グッドの処理に失敗しました"); // いいね → グッド
+      setError(error.message || "グッドの処理に失敗しました");
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [
+    isAuthenticated,
+    currentUser,
+    submitting,
+    userActions.hasGood,
+    userActions.goodId,
+    contentId,
+    fetchActions,
+  ]);
+
+  // useCallbackでhandleAuthRequiredActionをメモ化
+  const handleAuthRequiredAction = useCallback(() => {
+    if (!isAuthenticated) {
+      alert("この機能を使用するにはログインが必要です");
+      return;
+    }
+    handleGood();
+  }, [isAuthenticated, handleGood]);
+
+  // useMemoでサイズスタイルをメモ化
+  const sizeStyles = useMemo(() => {
+    const sizes = {
+      small: {
+        fontSize: "0.875rem",
+        padding: "0.375rem 0.75rem",
+        gap: "0.5rem",
+        iconSize: "1rem",
+      },
+      medium: {
+        fontSize: "1rem",
+        padding: "0.5rem 1rem",
+        gap: "0.75rem",
+        iconSize: "1.25rem",
+      },
+      large: {
+        fontSize: "1.125rem",
+        padding: "0.75rem 1.25rem",
+        gap: "1rem",
+        iconSize: "1.5rem",
+      },
+    };
+    return sizes[size];
+  }, [size]);
+
+  // useMemoでボタンスタイルをメモ化
+  const buttonStyle = useMemo(
+    () => ({
+      display: "flex",
+      alignItems: "center",
+      gap: "0.375rem",
+      padding: sizeStyles.padding,
+      backgroundColor: userActions.hasGood ? "#dcfce7" : "transparent",
+      color: userActions.hasGood ? "#059669" : "#6b7280",
+      border: `1px solid ${userActions.hasGood ? "#059669" : "#d1d5db"}`,
+      borderRadius: "8px",
+      fontSize: sizeStyles.fontSize,
+      cursor: isAuthenticated ? "pointer" : "not-allowed",
+      opacity: submitting ? 0.6 : 1,
+      transition: "all 0.2s ease",
+      fontWeight: userActions.hasGood ? "600" : "400",
+    }),
+    [sizeStyles, userActions.hasGood, isAuthenticated, submitting]
+  );
+
+  // useMemoでボタンタイトルをメモ化
+  const buttonTitle = useMemo(() => {
+    if (!isAuthenticated) return "ログインが必要です";
+    if (submitting) return "処理中...";
+    return userActions.hasGood ? "グッドを取り消す" : "グッドする";
+  }, [isAuthenticated, submitting, userActions.hasGood]);
+
+  // useMemoでアイコンをメモ化
+  const goodIcon = useMemo(() => {
+    return userActions.hasGood ? "👍" : "🤍";
+  }, [userActions.hasGood]);
+
+  useEffect(() => {
+    checkAuthentication();
+  }, [checkAuthentication]);
+
+  useEffect(() => {
+    fetchActions();
+  }, [fetchActions]);
 
   if (loading) {
     return (
       <div
         style={{
           display: "flex",
-          gap: currentSize.gap,
+          gap: sizeStyles.gap,
           alignItems: "center",
-          fontSize: currentSize.fontSize,
+          fontSize: sizeStyles.fontSize,
+          padding: "1rem",
+          border: "1px solid #e5e7eb",
+          borderRadius: "8px",
+          backgroundColor: "white",
+          justifyContent: "center",
         }}
       >
-        📊 読み込み中...
+        <span>📊</span>
+        <span>読み込み中...</span>
       </div>
     );
   }
@@ -194,42 +328,25 @@ const ContentActions: React.FC<ContentActionsProps> = ({
         </div>
       )}
 
-      {/* グッドボタンのみ */}
+      {/* グッドボタン */}
       <div
         style={{
           display: "flex",
-          gap: currentSize.gap,
+          gap: sizeStyles.gap,
           alignItems: "center",
           justifyContent: "center",
           flexWrap: "wrap",
         }}
       >
         <button
-          onClick={handleGood} // handleLike → handleGood
-          disabled={submitting || !isAuthenticated}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.375rem",
-            padding: currentSize.padding,
-            backgroundColor: userActions.hasGood ? "#dcfce7" : "transparent", // hasLiked → hasGood
-            color: userActions.hasGood ? "#059669" : "#6b7280",
-            border: `1px solid ${userActions.hasGood ? "#059669" : "#d1d5db"}`,
-            borderRadius: "8px",
-            fontSize: currentSize.fontSize,
-            cursor: isAuthenticated ? "pointer" : "not-allowed",
-            opacity: submitting ? 0.6 : 1,
-            transition: "all 0.2s ease",
-            fontWeight: userActions.hasGood ? "600" : "400",
-          }}
-          title={isAuthenticated ? "グッド" : "ログインが必要です"} // いいね → グッド
+          onClick={handleAuthRequiredAction}
+          disabled={submitting}
+          style={buttonStyle}
+          title={buttonTitle}
         >
-          <span style={{ fontSize: currentSize.iconSize }}>
-            {userActions.hasGood ? "👍" : "🤍"} {/* ❤️ → 👍 に変更 */}
-          </span>
-          {showCounts && <span>{stats?.goods || 0}</span>}
-          <span style={{ fontSize: "0.875em" }}>グッド</span>{" "}
-          {/* いいね → グッド */}
+          <span style={{ fontSize: sizeStyles.iconSize }}>{goodIcon}</span>
+          {showCounts && <span>{stats.goods}</span>}
+          <span style={{ fontSize: "0.875em" }}>グッド</span>
         </button>
       </div>
 
@@ -248,23 +365,40 @@ const ContentActions: React.FC<ContentActionsProps> = ({
       )}
 
       {/* ユーザー状態表示 */}
-      {showCounts &&
-        isAuthenticated &&
-        userActions.hasGood && ( // hasLiked → hasGood
-          <div
-            style={{
-              marginTop: "0.75rem",
-              paddingTop: "0.75rem",
-              borderTop: "1px solid #e5e7eb",
-              fontSize: "0.75rem",
-              color: "#6b7280",
-              textAlign: "center",
-            }}
-          >
-            <span>👍 あなたがグッドしました</span>{" "}
-            {/* ❤️ → 👍, いいね → グッド */}
-          </div>
-        )}
+      {showCounts && isAuthenticated && userActions.hasGood && (
+        <div
+          style={{
+            marginTop: "0.75rem",
+            paddingTop: "0.75rem",
+            borderTop: "1px solid #e5e7eb",
+            fontSize: "0.75rem",
+            color: "#6b7280",
+            textAlign: "center",
+          }}
+        >
+          <span>👍 あなたがグッドしました</span>
+        </div>
+      )}
+
+      {/* デバッグ情報（開発時のみ） */}
+      {process.env.NODE_ENV === "development" && (
+        <div
+          style={{
+            marginTop: "0.5rem",
+            padding: "0.5rem",
+            backgroundColor: "#f3f4f6",
+            borderRadius: "4px",
+            fontSize: "0.75rem",
+            color: "#6b7280",
+          }}
+        >
+          <div>コンテンツID: {contentId}</div>
+          <div>認証状態: {isAuthenticated ? "✅" : "❌"}</div>
+          <div>ユーザーID: {currentUser?.id || "なし"}</div>
+          <div>グッド状態: {userActions.hasGood ? "✅" : "❌"}</div>
+          <div>グッド数: {stats.goods}</div>
+        </div>
+      )}
     </div>
   );
 };

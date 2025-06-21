@@ -1,16 +1,21 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { api } from "../services/api";
-import { Category, CreateContentRequest, Content, ApiResponse } from "../types";
+
+interface Category {
+  id: number;
+  name: string;
+  description?: string;
+}
 
 const CreateContentPage: React.FC = () => {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState<CreateContentRequest>({
+  const [formData, setFormData] = useState({
     title: "",
     body: "",
     type: "article",
     category_id: 0,
-    status: "draft",
+    status: "draft" as "draft" | "published",
   });
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
@@ -18,88 +23,41 @@ const CreateContentPage: React.FC = () => {
   const [success, setSuccess] = useState("");
   const [pageLoading, setPageLoading] = useState(true);
 
-  // useCallbackで認証チェックをメモ化
-  const checkAuthentication = useCallback(() => {
-    const token = localStorage.getItem("token");
-    console.log("🔑 Token存在チェック:", !!token);
-
-    if (!token) {
-      console.log("❌ 認証なし、ログインページへリダイレクト");
-      navigate("/login");
-      return false;
-    }
-    return true;
-  }, [navigate]);
-
-  // useCallbackでfetchCategoriesをメモ化
-  const fetchCategories = useCallback(async () => {
-    try {
-      console.log("📂 カテゴリ取得開始...");
-      const response: ApiResponse<Category[]> = await api.getCategories();
-
-      if (response.success && response.data) {
-        setCategories(response.data);
-        console.log(`✅ カテゴリ取得成功: ${response.data.length}件`);
-      } else {
-        console.error("❌ カテゴリ取得失敗:", response.message);
-        setError(response.message || "カテゴリの取得に失敗しました");
-        setCategories([]);
-      }
-    } catch (error: any) {
-      console.error("❌ カテゴリ取得エラー:", error);
-      setError("カテゴリの取得に失敗しました");
-      setCategories([]);
-    }
-  }, []);
-
-  // useCallbackで初期化処理をメモ化
+  // useCallbackを使用して関数をメモ化
   const fetchInitialData = useCallback(async () => {
     try {
-      setPageLoading(true);
-      setError("");
-
       // 認証チェック
-      if (!checkAuthentication()) {
+      const token = localStorage.getItem("token");
+      console.log("🔑 Token存在チェック:", !!token);
+      if (!token) {
+        navigate("/login");
         return;
       }
 
-      // カテゴリ取得
-      await fetchCategories();
+      console.log("📂 カテゴリ取得開始...");
+      const categoriesRes = await api.getCategories();
+
+      console.log("📂 カテゴリ取得結果:", categoriesRes);
+      setCategories(
+        categoriesRes.data?.categories ||
+          categoriesRes.categories ||
+          categoriesRes ||
+          []
+      );
 
       console.log("✅ 初期化完了");
-    } catch (error: any) {
-      console.error("❌ 初期化エラー:", error);
+      setPageLoading(false);
+    } catch (error) {
+      console.error("❌ カテゴリの取得に失敗しました:", error);
       setError("初期化に失敗しました");
-    } finally {
       setPageLoading(false);
     }
-  }, [checkAuthentication, fetchCategories]);
+  }, [navigate]); // navigateが依存配列に含まれる
 
-  // useCallbackでバリデーションをメモ化
-  const validateForm = useCallback(() => {
-    if (!formData.title.trim()) {
-      console.log("❌ バリデーションエラー: タイトル未入力");
-      setError("タイトルを入力してください");
-      return false;
-    }
+  useEffect(() => {
+    fetchInitialData();
+  }, [fetchInitialData]); // fetchInitialDataを依存配列に含める
 
-    if (!formData.body.trim()) {
-      console.log("❌ バリデーションエラー: 本文未入力");
-      setError("本文を入力してください");
-      return false;
-    }
-
-    if (!formData.category_id || formData.category_id === 0) {
-      console.log("❌ バリデーションエラー: カテゴリ未選択");
-      setError("カテゴリを選択してください");
-      return false;
-    }
-
-    console.log("✅ バリデーション通過");
-    return true;
-  }, [formData.title, formData.body, formData.category_id]);
-
-  // useCallbackでhandleSubmitをメモ化
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
@@ -110,89 +68,95 @@ const CreateContentPage: React.FC = () => {
       setSuccess("");
       setLoading(true);
 
-      try {
-        // バリデーション
-        if (!validateForm()) {
-          setLoading(false);
-          return;
-        }
+      // バリデーション
+      if (!formData.title.trim()) {
+        console.log("❌ バリデーションエラー: タイトル未入力");
+        setError("タイトルを入力してください");
+        setLoading(false);
+        return;
+      }
 
+      if (!formData.body.trim()) {
+        console.log("❌ バリデーションエラー: 本文未入力");
+        setError("本文を入力してください");
+        setLoading(false);
+        return;
+      }
+
+      if (!formData.category_id) {
+        console.log("❌ バリデーションエラー: カテゴリ未選択");
+        setError("カテゴリを選択してください");
+        setLoading(false);
+        return;
+      }
+
+      console.log("✅ バリデーション通過");
+
+      try {
         console.log("🌐 API リクエスト送信開始");
         console.log("📤 送信データ:", JSON.stringify(formData, null, 2));
 
-        const response: ApiResponse<Content> = await api.createContent(
-          formData
+        const response = await api.createContent(formData);
+        console.log("✅ API レスポンス受信:", response);
+
+        setSuccess(
+          formData.status === "published"
+            ? "コンテンツが正常に公開されました！"
+            : "コンテンツが下書きとして保存されました！"
         );
 
-        if (response.success && response.data) {
-          console.log("✅ API レスポンス受信:", response);
-
-          const successMessage =
-            formData.status === "published"
-              ? "コンテンツが正常に公開されました！"
-              : "コンテンツが下書きとして保存されました！";
-
-          setSuccess(successMessage);
-
-          console.log("🎉 作成成功、リダイレクト実行中...");
-          // 2秒後にダッシュボードにリダイレクト
-          setTimeout(() => {
-            navigate("/dashboard");
-          }, 2000);
-        } else {
-          throw new Error(response.message || "コンテンツの作成に失敗しました");
-        }
+        console.log("🎉 作成成功、リダイレクト実行中...");
+        // 3秒後にダッシュボードにリダイレクト
+        setTimeout(() => {
+          navigate("/dashboard");
+        }, 2000);
       } catch (err: any) {
         console.error("❌ コンテンツ作成エラー:", err);
+        console.error("❌ エラー詳細:", {
+          message: err.message,
+          response: err.response,
+          request: err.request,
+          config: err.config,
+        });
 
-        let errorMessage = "コンテンツの作成に失敗しました";
-
+        // より詳細なエラーハンドリング
         if (err.response) {
           const statusCode = err.response.status;
           const errorData = err.response.data;
 
           console.log(`❌ HTTPエラー ${statusCode}:`, errorData);
 
-          switch (statusCode) {
-            case 401:
-              errorMessage = "認証が切れています。再度ログインしてください。";
-              setTimeout(() => navigate("/login"), 2000);
-              break;
-            case 400:
-              errorMessage =
-                errorData?.message ||
-                errorData?.error ||
-                "リクエストデータが無効です";
-              break;
-            case 500:
-              errorMessage =
-                "サーバーエラーが発生しました。しばらく待ってから再度お試しください。";
-              break;
-            default:
-              errorMessage =
-                errorData?.message ||
-                errorData?.error ||
-                `エラーが発生しました (${statusCode})`;
+          if (statusCode === 401) {
+            setError("認証が切れています。再度ログインしてください。");
+            setTimeout(() => navigate("/login"), 2000);
+          } else if (statusCode === 400) {
+            setError(errorData?.error || "リクエストデータが無効です");
+          } else if (statusCode === 500) {
+            setError(
+              "サーバーエラーが発生しました。しばらく待ってから再度お試しください。"
+            );
+          } else {
+            setError(
+              errorData?.error || `エラーが発生しました (${statusCode})`
+            );
           }
         } else if (err.request) {
           console.log("❌ ネットワークエラー:", err.request);
-          errorMessage =
-            "サーバーに接続できません。ネットワーク接続を確認してください。";
+          setError(
+            "サーバーに接続できません。ネットワーク接続を確認してください。"
+          );
         } else {
           console.log("❌ その他のエラー:", err.message);
-          errorMessage = err.message || errorMessage;
+          setError("コンテンツの作成に失敗しました");
         }
-
-        setError(errorMessage);
       } finally {
         setLoading(false);
         console.log("🏁 処理完了");
       }
     },
-    [formData, validateForm, navigate]
-  );
+    [formData, navigate]
+  ); // formDataとnavigateが依存配列に含まれる
 
-  // useCallbackでhandleChangeをメモ化
   const handleChange = useCallback(
     (
       e: React.ChangeEvent<
@@ -201,83 +165,21 @@ const CreateContentPage: React.FC = () => {
     ) => {
       const { name, value } = e.target;
       console.log(`📝 フィールド変更: ${name} = ${value}`);
-
       setFormData((prev) => ({
         ...prev,
-        [name]: name === "category_id" ? parseInt(value) || 0 : value,
+        [name]: name === "category_id" ? parseInt(value) : value,
       }));
     },
     []
-  );
+  ); // 依存関係なし（setFormDataは関数型更新を使用）
 
-  // useCallbackでhandleStatusChangeをメモ化
   const handleStatusChange = useCallback((status: "draft" | "published") => {
     console.log("🔄 ステータス変更:", status);
     setFormData((prev) => ({
       ...prev,
       status,
     }));
-  }, []);
-
-  // useCallbackでhandleCancelをメモ化
-  const handleCancel = useCallback(() => {
-    if (formData.title || formData.body) {
-      const confirmLeave = window.confirm(
-        "入力内容が失われますが、よろしいですか？"
-      );
-      if (!confirmLeave) return;
-    }
-    navigate("/dashboard");
-  }, [formData.title, formData.body, navigate]);
-
-  // useMemoで計算値をメモ化
-  const currentStatusText = useMemo(() => {
-    return formData.status === "published" ? "今すぐ公開" : "下書き保存";
-  }, [formData.status]);
-
-  const submitButtonText = useMemo(() => {
-    if (loading) return "作成中...";
-    return formData.status === "published" ? "✨ 公開する" : "📝 下書き保存";
-  }, [loading, formData.status]);
-
-  const characterCount = useMemo(() => {
-    return formData.body.length;
-  }, [formData.body.length]);
-
-  // useMemoでスタイルをメモ化
-  const statusButtonStyle = useCallback(
-    (isSelected: boolean, colorScheme: "blue" | "green") => {
-      const colors = {
-        blue: {
-          border: isSelected ? "2px solid #3b82f6" : "1px solid #d1d5db",
-          background: isSelected ? "#dbeafe" : "white",
-          color: isSelected ? "#1d4ed8" : "#374151",
-        },
-        green: {
-          border: isSelected ? "2px solid #059669" : "1px solid #d1d5db",
-          background: isSelected ? "#dcfce7" : "white",
-          color: isSelected ? "#166534" : "#374151",
-        },
-      };
-
-      return {
-        padding: "0.75rem 1.5rem",
-        border: colors[colorScheme].border,
-        borderRadius: "6px",
-        backgroundColor: colors[colorScheme].background,
-        color: colors[colorScheme].color,
-        cursor: "pointer",
-        fontSize: "0.875rem",
-        fontWeight: isSelected ? "600" : "400",
-        transition: "all 0.2s ease-in-out",
-      };
-    },
-    []
-  );
-
-  useEffect(() => {
-    fetchInitialData();
-  }, [fetchInitialData]);
+  }, []); // 依存関係なし（setFormDataは関数型更新を使用）
 
   if (pageLoading) {
     return (
@@ -287,13 +189,9 @@ const CreateContentPage: React.FC = () => {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: "#f9fafb",
         }}
       >
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "2rem", marginBottom: "1rem" }}>⏳</div>
-          <div>初期化中...</div>
-        </div>
+        <div>初期化中...</div>
       </div>
     );
   }
@@ -328,27 +226,26 @@ const CreateContentPage: React.FC = () => {
                 color: "#1f2937",
               }}
             >
-              📝 メディアプラットフォーム
+              メディアプラットフォーム
             </Link>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
             <span style={{ fontSize: "0.875rem", color: "#6b7280" }}>
-              新規作成
+              ログイン済みユーザー
             </span>
-            <button
-              onClick={handleCancel}
+            <Link
+              to="/dashboard"
               style={{
                 backgroundColor: "#6b7280",
                 color: "white",
                 padding: "0.5rem 1rem",
                 borderRadius: "6px",
-                border: "none",
+                textDecoration: "none",
                 fontSize: "0.875rem",
-                cursor: "pointer",
               }}
             >
-              ← ダッシュボードに戻る
-            </button>
+              ダッシュボードに戻る
+            </Link>
           </div>
         </div>
       </header>
@@ -377,40 +274,35 @@ const CreateContentPage: React.FC = () => {
                 color: "#1f2937",
               }}
             >
-              ✍️ 新規コンテンツ作成
+              新規コンテンツ作成
             </h1>
             <p style={{ margin: 0, color: "#6b7280" }}>
               新しい記事を作成してください
             </p>
           </div>
 
-          {/* デバッグ情報表示（開発環境のみ） */}
-          {process.env.NODE_ENV === "development" && (
-            <div
-              style={{
-                backgroundColor: "#f3f4f6",
-                padding: "1rem",
-                borderRadius: "6px",
-                marginBottom: "1.5rem",
-                fontSize: "0.875rem",
-              }}
-            >
-              <strong>🔍 デバッグ情報:</strong>
-              <br />
-              カテゴリ数: {categories.length}
-              <br />
-              現在のステータス: {formData.status}
-              <br />
-              タイトル: {formData.title || "(空)"}
-              <br />
-              カテゴリID: {formData.category_id || "(未選択)"}
-              <br />
-              本文文字数: {characterCount}
-            </div>
-          )}
+          {/* デバッグ情報表示 */}
+          <div
+            style={{
+              backgroundColor: "#f3f4f6",
+              padding: "1rem",
+              borderRadius: "6px",
+              marginBottom: "1.5rem",
+              fontSize: "0.875rem",
+            }}
+          >
+            <strong>🔍 デバッグ情報:</strong>
+            <br />
+            カテゴリ数: {categories.length}
+            <br />
+            現在のステータス: {formData.status}
+            <br />
+            タイトル: {formData.title || "(空)"}
+            <br />
+            カテゴリID: {formData.category_id || "(未選択)"}
+          </div>
 
           <form onSubmit={handleSubmit}>
-            {/* エラー・成功メッセージ */}
             {error && (
               <div
                 style={{
@@ -422,7 +314,7 @@ const CreateContentPage: React.FC = () => {
                   marginBottom: "1.5rem",
                 }}
               >
-                ⚠️ {error}
+                {error}
               </div>
             )}
 
@@ -437,7 +329,7 @@ const CreateContentPage: React.FC = () => {
                   marginBottom: "1.5rem",
                 }}
               >
-                ✅ {success}
+                {success}
               </div>
             )}
 
@@ -451,7 +343,7 @@ const CreateContentPage: React.FC = () => {
                   color: "#374151",
                 }}
               >
-                タイトル <span style={{ color: "#ef4444" }}>*</span>
+                タイトル *
               </label>
               <input
                 type="text"
@@ -488,7 +380,7 @@ const CreateContentPage: React.FC = () => {
                     color: "#374151",
                   }}
                 >
-                  カテゴリ <span style={{ color: "#ef4444" }}>*</span>
+                  カテゴリ *
                 </label>
                 <select
                   name="category_id"
@@ -535,10 +427,10 @@ const CreateContentPage: React.FC = () => {
                     fontSize: "1rem",
                   }}
                 >
-                  <option value="article">📄 記事</option>
-                  <option value="tutorial">📚 チュートリアル</option>
-                  <option value="news">📰 ニュース</option>
-                  <option value="review">⭐ レビュー</option>
+                  <option value="article">記事</option>
+                  <option value="tutorial">チュートリアル</option>
+                  <option value="news">ニュース</option>
+                  <option value="review">レビュー</option>
                 </select>
               </div>
             </div>
@@ -553,7 +445,7 @@ const CreateContentPage: React.FC = () => {
                   color: "#374151",
                 }}
               >
-                本文 <span style={{ color: "#ef4444" }}>*</span>
+                本文 *
               </label>
               <textarea
                 name="body"
@@ -579,7 +471,7 @@ const CreateContentPage: React.FC = () => {
                   marginTop: "0.5rem",
                 }}
               >
-                📊 文字数: {characterCount}
+                文字数: {formData.body.length}
               </div>
             </div>
 
@@ -599,17 +491,43 @@ const CreateContentPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleStatusChange("draft")}
-                  style={statusButtonStyle(formData.status === "draft", "blue")}
+                  style={{
+                    padding: "0.75rem 1.5rem",
+                    border:
+                      formData.status === "draft"
+                        ? "2px solid #3b82f6"
+                        : "1px solid #d1d5db",
+                    borderRadius: "6px",
+                    backgroundColor:
+                      formData.status === "draft" ? "#dbeafe" : "white",
+                    color: formData.status === "draft" ? "#1d4ed8" : "#374151",
+                    cursor: "pointer",
+                    fontSize: "0.875rem",
+                    fontWeight: formData.status === "draft" ? "600" : "400",
+                    transition: "all 0.2s ease-in-out",
+                  }}
                 >
                   📝 下書き保存
                 </button>
                 <button
                   type="button"
                   onClick={() => handleStatusChange("published")}
-                  style={statusButtonStyle(
-                    formData.status === "published",
-                    "green"
-                  )}
+                  style={{
+                    padding: "0.75rem 1.5rem",
+                    border:
+                      formData.status === "published"
+                        ? "2px solid #059669"
+                        : "1px solid #d1d5db",
+                    borderRadius: "6px",
+                    backgroundColor:
+                      formData.status === "published" ? "#dcfce7" : "white",
+                    color:
+                      formData.status === "published" ? "#166534" : "#374151",
+                    cursor: "pointer",
+                    fontSize: "0.875rem",
+                    fontWeight: formData.status === "published" ? "600" : "400",
+                    transition: "all 0.2s ease-in-out",
+                  }}
                 >
                   🌟 今すぐ公開
                 </button>
@@ -621,7 +539,8 @@ const CreateContentPage: React.FC = () => {
                   marginTop: "0.5rem",
                 }}
               >
-                現在選択中: {currentStatusText}
+                現在選択中:{" "}
+                {formData.status === "published" ? "今すぐ公開" : "下書き保存"}
               </div>
             </div>
 
@@ -633,21 +552,19 @@ const CreateContentPage: React.FC = () => {
                 alignItems: "center",
               }}
             >
-              <button
-                type="button"
-                onClick={handleCancel}
+              <Link
+                to="/dashboard"
                 style={{
                   padding: "0.75rem 1.5rem",
                   border: "1px solid #d1d5db",
                   borderRadius: "6px",
-                  backgroundColor: "white",
+                  textDecoration: "none",
                   color: "#374151",
-                  cursor: "pointer",
-                  fontSize: "1rem",
+                  backgroundColor: "white",
                 }}
               >
-                ❌ キャンセル
-              </button>
+                キャンセル
+              </Link>
 
               <button
                 type="submit"
@@ -665,7 +582,11 @@ const CreateContentPage: React.FC = () => {
                   transition: "all 0.2s ease-in-out",
                 }}
               >
-                {submitButtonText}
+                {loading
+                  ? "作成中..."
+                  : formData.status === "published"
+                  ? "✨ 公開する"
+                  : "📝 下書き保存"}
               </button>
             </div>
           </form>

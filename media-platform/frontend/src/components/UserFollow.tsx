@@ -1,31 +1,7 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../services/api";
-
-// 型定義
-interface User {
-  id: number;
-  username: string;
-  email: string;
-  bio: string;
-  role: string;
-  created_at: string;
-}
-
-interface Follow {
-  id: number;
-  follower_id: number;
-  following_id: number;
-  created_at: string;
-  follower?: User;
-  following?: User;
-}
-
-interface FollowStats {
-  followers_count: number;
-  following_count: number;
-  is_following: boolean;
-}
+import { Follow, FollowStats, User, ApiResponse } from "../types";
 
 interface UserFollowProps {
   userId: number;
@@ -42,121 +18,273 @@ const UserFollow: React.FC<UserFollowProps> = ({
     followers_count: 0,
     following_count: 0,
     is_following: false,
+    is_followed_by: false,
   });
-  const [followers, setFollowers] = useState<Follow[]>([]);
-  const [following, setFollowing] = useState<Follow[]>([]);
+  const [followers, setFollowers] = useState<User[]>([]);
+  const [following, setFollowing] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"followers" | "following">(
     "followers"
   );
   const [showFollowList, setShowFollowList] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // fetchFollowStatsをuseCallbackでメモ化
+  // useCallbackでfetchFollowStatsをメモ化
   const fetchFollowStats = useCallback(async () => {
     try {
       setLoading(true);
-      const stats = await api.getFollowStats(userId, currentUserId);
-      setFollowStats(stats);
-    } catch (error) {
-      console.error("フォロー統計の取得に失敗しました:", error);
+      setError(null);
+      console.log(`📊 フォロー統計取得: ユーザーID ${userId}`);
+
+      const response: ApiResponse<FollowStats> = await api.getFollowStats(
+        userId,
+        currentUserId
+      );
+
+      if (response.success && response.data) {
+        setFollowStats(response.data);
+        console.log("✅ フォロー統計取得成功:", response.data);
+      } else {
+        console.error("❌ フォロー統計取得失敗:", response.message);
+        setError(response.message || "フォロー統計の取得に失敗しました");
+      }
+    } catch (error: any) {
+      console.error("❌ フォロー統計取得エラー:", error);
+      setError("フォロー統計の取得に失敗しました");
     } finally {
       setLoading(false);
     }
   }, [userId, currentUserId]);
 
-  // fetchFollowersをuseCallbackでメモ化
+  // useCallbackでfetchFollowersをメモ化
   const fetchFollowers = useCallback(async () => {
     try {
       setLoading(true);
-      const followersList = await api.getFollowers(userId);
-      setFollowers(followersList);
-    } catch (error) {
-      console.error("フォロワー一覧の取得に失敗しました:", error);
+      setError(null);
+      console.log(`👥 フォロワー一覧取得: ユーザーID ${userId}`);
+
+      const response: ApiResponse<User[]> = await api.getFollowers(userId);
+
+      if (response.success && response.data) {
+        setFollowers(response.data);
+        console.log(`✅ フォロワー一覧取得成功: ${response.data.length}人`);
+      } else {
+        console.error("❌ フォロワー一覧取得失敗:", response.message);
+        setError(response.message || "フォロワー一覧の取得に失敗しました");
+        setFollowers([]);
+      }
+    } catch (error: any) {
+      console.error("❌ フォロワー一覧取得エラー:", error);
+      setError("フォロワー一覧の取得に失敗しました");
+      setFollowers([]);
     } finally {
       setLoading(false);
     }
   }, [userId]);
 
-  // fetchFollowingをuseCallbackでメモ化
+  // useCallbackでfetchFollowingをメモ化
   const fetchFollowing = useCallback(async () => {
     try {
       setLoading(true);
-      const followingList = await api.getFollowing(userId);
-      setFollowing(followingList);
-    } catch (error) {
-      console.error("フォロー中一覧の取得に失敗しました:", error);
+      setError(null);
+      console.log(`➡️ フォロー中一覧取得: ユーザーID ${userId}`);
+
+      const response: ApiResponse<User[]> = await api.getFollowing(userId);
+
+      if (response.success && response.data) {
+        setFollowing(response.data);
+        console.log(`✅ フォロー中一覧取得成功: ${response.data.length}人`);
+      } else {
+        console.error("❌ フォロー中一覧取得失敗:", response.message);
+        setError(response.message || "フォロー中一覧の取得に失敗しました");
+        setFollowing([]);
+      }
+    } catch (error: any) {
+      console.error("❌ フォロー中一覧取得エラー:", error);
+      setError("フォロー中一覧の取得に失敗しました");
+      setFollowing([]);
     } finally {
       setLoading(false);
     }
   }, [userId]);
 
-  useEffect(() => {
-    fetchFollowStats();
-  }, [fetchFollowStats]);
-
-  const handleFollow = async () => {
-    if (!currentUserId || currentUserId === userId) return;
+  // useCallbackでhandleFollowをメモ化
+  const handleFollow = useCallback(async () => {
+    if (!currentUserId || currentUserId === userId || followLoading) return;
 
     try {
       setFollowLoading(true);
+      setError(null);
 
       if (followStats.is_following) {
-        await api.unfollowUser(userId);
-        setFollowStats((prev) => ({
-          ...prev,
-          is_following: false,
-          followers_count: prev.followers_count - 1,
-        }));
+        console.log(`🚫 アンフォロー実行: ユーザーID ${userId}`);
+        const response: ApiResponse<void> = await api.unfollowUser(userId);
+
+        if (response.success) {
+          setFollowStats((prev) => ({
+            ...prev,
+            is_following: false,
+            followers_count: Math.max(0, prev.followers_count - 1),
+          }));
+          console.log("✅ アンフォロー成功");
+        } else {
+          throw new Error(response.message || "アンフォローに失敗しました");
+        }
       } else {
-        await api.followUser(userId);
-        setFollowStats((prev) => ({
-          ...prev,
-          is_following: true,
-          followers_count: prev.followers_count + 1,
-        }));
+        console.log(`➕ フォロー実行: ユーザーID ${userId}`);
+        const response: ApiResponse<Follow> = await api.followUser(userId);
+
+        if (response.success) {
+          setFollowStats((prev) => ({
+            ...prev,
+            is_following: true,
+            followers_count: prev.followers_count + 1,
+          }));
+          console.log("✅ フォロー成功");
+        } else {
+          throw new Error(response.message || "フォローに失敗しました");
+        }
       }
-    } catch (error) {
-      console.error("フォロー操作に失敗しました:", error);
+    } catch (error: any) {
+      console.error("❌ フォロー操作エラー:", error);
+      setError(error.message || "フォロー操作に失敗しました");
     } finally {
       setFollowLoading(false);
     }
-  };
+  }, [currentUserId, userId, followLoading, followStats.is_following]);
 
-  const handleShowFollowList = (tab: "followers" | "following") => {
-    setActiveTab(tab);
-    setShowFollowList(true);
+  // useCallbackでhandleShowFollowListをメモ化
+  const handleShowFollowList = useCallback(
+    (tab: "followers" | "following") => {
+      setActiveTab(tab);
+      setShowFollowList(true);
+      setError(null);
 
-    if (tab === "followers") {
-      fetchFollowers();
-    } else {
-      fetchFollowing();
-    }
-  };
-
-  const handleUserFollow = async (
-    targetUserId: number,
-    isCurrentlyFollowing: boolean
-  ) => {
-    if (!currentUserId) return;
-
-    try {
-      if (isCurrentlyFollowing) {
-        await api.unfollowUser(targetUserId);
-      } else {
-        await api.followUser(targetUserId);
-      }
-
-      // リストを再取得
-      if (activeTab === "followers") {
+      if (tab === "followers") {
         fetchFollowers();
       } else {
         fetchFollowing();
       }
-    } catch (error) {
-      console.error("フォロー操作に失敗しました:", error);
+    },
+    [fetchFollowers, fetchFollowing]
+  );
+
+  // useCallbackでhandleCloseModalをメモ化
+  const handleCloseModal = useCallback(() => {
+    setShowFollowList(false);
+    setError(null);
+  }, []);
+
+  // useCallbackでhandleTabChangeをメモ化
+  const handleTabChange = useCallback(
+    (tab: "followers" | "following") => {
+      setActiveTab(tab);
+      setError(null);
+
+      if (tab === "followers") {
+        fetchFollowers();
+      } else {
+        fetchFollowing();
+      }
+    },
+    [fetchFollowers, fetchFollowing]
+  );
+
+  // useCallbackでhandleUserFollowをメモ化
+  const handleUserFollow = useCallback(
+    async (targetUserId: number, isCurrentlyFollowing: boolean) => {
+      if (!currentUserId) return;
+
+      try {
+        setError(null);
+
+        if (isCurrentlyFollowing) {
+          const response: ApiResponse<void> = await api.unfollowUser(
+            targetUserId
+          );
+          if (!response.success) {
+            throw new Error(response.message || "アンフォローに失敗しました");
+          }
+        } else {
+          const response: ApiResponse<Follow> = await api.followUser(
+            targetUserId
+          );
+          if (!response.success) {
+            throw new Error(response.message || "フォローに失敗しました");
+          }
+        }
+
+        // リストを再取得
+        if (activeTab === "followers") {
+          fetchFollowers();
+        } else {
+          fetchFollowing();
+        }
+      } catch (error: any) {
+        console.error("❌ ユーザーフォロー操作エラー:", error);
+        setError(error.message || "フォロー操作に失敗しました");
+      }
+    },
+    [currentUserId, activeTab, fetchFollowers, fetchFollowing]
+  );
+
+  // useCallbackでrenderUserListをメモ化
+  const renderUserList = useCallback(() => {
+    const users = activeTab === "followers" ? followers : following;
+
+    if (loading) {
+      return (
+        <div style={{ textAlign: "center", padding: "2rem" }}>
+          📡 読み込み中...
+        </div>
+      );
     }
-  };
+
+    if (users.length === 0) {
+      return (
+        <div style={{ textAlign: "center", padding: "2rem", color: "#6b7280" }}>
+          {activeTab === "followers"
+            ? "📭 まだフォロワーがいません"
+            : "📭 まだ誰もフォローしていません"}
+        </div>
+      );
+    }
+
+    return (
+      <div>
+        {users.map((user) => (
+          <UserListItem
+            key={user.id}
+            user={user}
+            currentUserId={currentUserId}
+            onFollowChange={handleUserFollow}
+          />
+        ))}
+      </div>
+    );
+  }, [
+    activeTab,
+    followers,
+    following,
+    loading,
+    currentUserId,
+    handleUserFollow,
+  ]);
+
+  // useMemoでisOwnProfileをメモ化
+  const isOwnProfile = useMemo(() => {
+    return currentUserId === userId;
+  }, [currentUserId, userId]);
+
+  // useMemoでshowFollowButtonをメモ化
+  const showFollowButton = useMemo(() => {
+    return showActions && currentUserId && !isOwnProfile;
+  }, [showActions, currentUserId, isOwnProfile]);
+
+  useEffect(() => {
+    fetchFollowStats();
+  }, [fetchFollowStats]);
 
   if (loading && !showFollowList) {
     return (
@@ -168,13 +296,29 @@ const UserFollow: React.FC<UserFollowProps> = ({
           padding: "1rem",
         }}
       >
-        <div>読み込み中...</div>
+        <div>📡 読み込み中...</div>
       </div>
     );
   }
 
   return (
     <div style={{ fontFamily: "Arial, sans-serif" }}>
+      {/* エラー表示 */}
+      {error && (
+        <div
+          style={{
+            backgroundColor: "#fee2e2",
+            color: "#dc2626",
+            padding: "0.75rem",
+            borderRadius: "6px",
+            marginBottom: "1rem",
+            fontSize: "0.875rem",
+          }}
+        >
+          ⚠️ {error}
+        </div>
+      )}
+
       {/* フォロー統計表示 */}
       <div
         style={{
@@ -189,73 +333,21 @@ const UserFollow: React.FC<UserFollowProps> = ({
         }}
       >
         {/* フォロワー数 */}
-        <button
+        <FollowStatButton
+          count={followStats.followers_count}
+          label="👥 フォロワー"
           onClick={() => handleShowFollowList("followers")}
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            textAlign: "center",
-            padding: "0.5rem",
-            borderRadius: "6px",
-            transition: "background-color 0.2s",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = "#f3f4f6";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "transparent";
-          }}
-        >
-          <div
-            style={{
-              fontSize: "1.25rem",
-              fontWeight: "bold",
-              color: "#1f2937",
-            }}
-          >
-            {followStats.followers_count}
-          </div>
-          <div style={{ fontSize: "0.875rem", color: "#6b7280" }}>
-            👥 フォロワー
-          </div>
-        </button>
+        />
 
         {/* フォロー中数 */}
-        <button
+        <FollowStatButton
+          count={followStats.following_count}
+          label="➡️ フォロー中"
           onClick={() => handleShowFollowList("following")}
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            textAlign: "center",
-            padding: "0.5rem",
-            borderRadius: "6px",
-            transition: "background-color 0.2s",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = "#f3f4f6";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "transparent";
-          }}
-        >
-          <div
-            style={{
-              fontSize: "1.25rem",
-              fontWeight: "bold",
-              color: "#1f2937",
-            }}
-          >
-            {followStats.following_count}
-          </div>
-          <div style={{ fontSize: "0.875rem", color: "#6b7280" }}>
-            ➡️ フォロー中
-          </div>
-        </button>
+        />
 
         {/* フォローボタン */}
-        {showActions && currentUserId && currentUserId !== userId && (
+        {showFollowButton && (
           <button
             onClick={handleFollow}
             disabled={followLoading}
@@ -274,7 +366,7 @@ const UserFollow: React.FC<UserFollowProps> = ({
             }}
           >
             {followLoading
-              ? "処理中..."
+              ? "⏳ 処理中..."
               : followStats.is_following
               ? "🚫 アンフォロー"
               : "➕ フォロー"}
@@ -284,221 +376,263 @@ const UserFollow: React.FC<UserFollowProps> = ({
 
       {/* フォロー一覧モーダル */}
       {showFollowList && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: "white",
-              borderRadius: "8px",
-              padding: "1.5rem",
-              maxWidth: "500px",
-              width: "90%",
-              maxHeight: "80vh",
-              overflow: "hidden",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            {/* ヘッダー */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "1rem",
-                borderBottom: "1px solid #e5e7eb",
-                paddingBottom: "1rem",
-              }}
-            >
-              <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: "600" }}>
-                {activeTab === "followers" ? "👥 フォロワー" : "➡️ フォロー中"}
-              </h3>
-              <button
-                onClick={() => setShowFollowList(false)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontSize: "1.5rem",
-                  cursor: "pointer",
-                  color: "#6b7280",
-                }}
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* タブ */}
-            <div
-              style={{
-                display: "flex",
-                marginBottom: "1rem",
-                borderBottom: "1px solid #e5e7eb",
-              }}
-            >
-              <button
-                onClick={() => {
-                  setActiveTab("followers");
-                  fetchFollowers();
-                }}
-                style={{
-                  flex: 1,
-                  padding: "0.75rem",
-                  border: "none",
-                  backgroundColor:
-                    activeTab === "followers" ? "#3b82f6" : "transparent",
-                  color: activeTab === "followers" ? "white" : "#6b7280",
-                  cursor: "pointer",
-                  fontSize: "0.875rem",
-                  fontWeight: "500",
-                }}
-              >
-                フォロワー ({followStats.followers_count})
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab("following");
-                  fetchFollowing();
-                }}
-                style={{
-                  flex: 1,
-                  padding: "0.75rem",
-                  border: "none",
-                  backgroundColor:
-                    activeTab === "following" ? "#3b82f6" : "transparent",
-                  color: activeTab === "following" ? "white" : "#6b7280",
-                  cursor: "pointer",
-                  fontSize: "0.875rem",
-                  fontWeight: "500",
-                }}
-              >
-                フォロー中 ({followStats.following_count})
-              </button>
-            </div>
-
-            {/* ユーザーリスト */}
-            <div
-              style={{
-                flex: 1,
-                overflowY: "auto",
-                maxHeight: "400px",
-              }}
-            >
-              {loading ? (
-                <div style={{ textAlign: "center", padding: "2rem" }}>
-                  読み込み中...
-                </div>
-              ) : (
-                <div>
-                  {(activeTab === "followers" ? followers : following).map(
-                    (follow) => {
-                      const user =
-                        activeTab === "followers"
-                          ? follow.follower
-                          : follow.following;
-                      if (!user) return null;
-
-                      return (
-                        <div
-                          key={follow.id}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            padding: "0.75rem",
-                            borderBottom: "1px solid #f3f4f6",
-                            transition: "background-color 0.2s",
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = "#f9fafb";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor =
-                              "transparent";
-                          }}
-                        >
-                          <div style={{ flex: 1 }}>
-                            <Link
-                              to={`/users/${user.id}`}
-                              style={{
-                                textDecoration: "none",
-                                color: "inherit",
-                              }}
-                            >
-                              <div
-                                style={{ fontWeight: "500", color: "#1f2937" }}
-                              >
-                                {user.username}
-                              </div>
-                              {user.bio && (
-                                <div
-                                  style={{
-                                    fontSize: "0.875rem",
-                                    color: "#6b7280",
-                                    marginTop: "0.25rem",
-                                  }}
-                                >
-                                  {user.bio.substring(0, 50)}
-                                  {user.bio.length > 50 ? "..." : ""}
-                                </div>
-                              )}
-                            </Link>
-                          </div>
-
-                          {/* フォローボタン（自分以外） */}
-                          {currentUserId && currentUserId !== user.id && (
-                            <FollowButton
-                              userId={user.id}
-                              currentUserId={currentUserId}
-                              onFollowChange={() =>
-                                handleUserFollow(user.id, false)
-                              }
-                            />
-                          )}
-                        </div>
-                      );
-                    }
-                  )}
-
-                  {(activeTab === "followers" ? followers : following)
-                    .length === 0 && (
-                    <div
-                      style={{
-                        textAlign: "center",
-                        padding: "2rem",
-                        color: "#6b7280",
-                      }}
-                    >
-                      {activeTab === "followers"
-                        ? "まだフォロワーがいません"
-                        : "まだ誰もフォローしていません"}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <FollowListModal
+          activeTab={activeTab}
+          followStats={followStats}
+          onClose={handleCloseModal}
+          onTabChange={handleTabChange}
+          renderUserList={renderUserList}
+        />
       )}
     </div>
   );
 };
 
+// フォロー統計ボタンコンポーネント
+interface FollowStatButtonProps {
+  count: number;
+  label: string;
+  onClick: () => void;
+}
+
+const FollowStatButton: React.FC<FollowStatButtonProps> = React.memo(
+  ({ count, label, onClick }) => {
+    const [isHover, setIsHover] = useState(false);
+
+    return (
+      <button
+        onClick={onClick}
+        style={{
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          textAlign: "center",
+          padding: "0.5rem",
+          borderRadius: "6px",
+          transition: "background-color 0.2s",
+          backgroundColor: isHover ? "#f3f4f6" : "transparent",
+        }}
+        onMouseEnter={() => setIsHover(true)}
+        onMouseLeave={() => setIsHover(false)}
+      >
+        <div
+          style={{
+            fontSize: "1.25rem",
+            fontWeight: "bold",
+            color: "#1f2937",
+          }}
+        >
+          {count}
+        </div>
+        <div style={{ fontSize: "0.875rem", color: "#6b7280" }}>{label}</div>
+      </button>
+    );
+  }
+);
+
+// ユーザーリストアイテムコンポーネント
+interface UserListItemProps {
+  user: User;
+  currentUserId?: number;
+  onFollowChange: (userId: number, isFollowing: boolean) => void;
+}
+
+const UserListItem: React.FC<UserListItemProps> = React.memo(
+  ({ user, currentUserId, onFollowChange }) => {
+    const [isHover, setIsHover] = useState(false);
+
+    const truncatedBio = useMemo(() => {
+      if (!user.bio) return "";
+      return user.bio.length > 50
+        ? `${user.bio.substring(0, 50)}...`
+        : user.bio;
+    }, [user.bio]);
+
+    const showFollowButton = useMemo(() => {
+      return currentUserId && currentUserId !== user.id;
+    }, [currentUserId, user.id]);
+
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          padding: "0.75rem",
+          borderBottom: "1px solid #f3f4f6",
+          transition: "background-color 0.2s",
+          backgroundColor: isHover ? "#f9fafb" : "transparent",
+        }}
+        onMouseEnter={() => setIsHover(true)}
+        onMouseLeave={() => setIsHover(false)}
+      >
+        <div style={{ flex: 1 }}>
+          <Link
+            to={`/users/${user.id}`}
+            style={{
+              textDecoration: "none",
+              color: "inherit",
+            }}
+          >
+            <div style={{ fontWeight: "500", color: "#1f2937" }}>
+              {user.username}
+            </div>
+            {truncatedBio && (
+              <div
+                style={{
+                  fontSize: "0.875rem",
+                  color: "#6b7280",
+                  marginTop: "0.25rem",
+                }}
+              >
+                {truncatedBio}
+              </div>
+            )}
+          </Link>
+        </div>
+
+        {/* フォローボタン（自分以外） */}
+        {showFollowButton && (
+          <FollowButton
+            userId={user.id}
+            currentUserId={currentUserId!}
+            onFollowChange={onFollowChange}
+          />
+        )}
+      </div>
+    );
+  }
+);
+
+// フォロー一覧モーダルコンポーネント
+interface FollowListModalProps {
+  activeTab: "followers" | "following";
+  followStats: FollowStats;
+  onClose: () => void;
+  onTabChange: (tab: "followers" | "following") => void;
+  renderUserList: () => React.ReactNode;
+}
+
+const FollowListModal: React.FC<FollowListModalProps> = React.memo(
+  ({ activeTab, followStats, onClose, onTabChange, renderUserList }) => {
+    return (
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(0, 0, 0, 0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000,
+        }}
+      >
+        <div
+          style={{
+            backgroundColor: "white",
+            borderRadius: "8px",
+            padding: "1.5rem",
+            maxWidth: "500px",
+            width: "90%",
+            maxHeight: "80vh",
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          {/* ヘッダー */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "1rem",
+              borderBottom: "1px solid #e5e7eb",
+              paddingBottom: "1rem",
+            }}
+          >
+            <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: "600" }}>
+              {activeTab === "followers" ? "👥 フォロワー" : "➡️ フォロー中"}
+            </h3>
+            <button
+              onClick={onClose}
+              style={{
+                background: "none",
+                border: "none",
+                fontSize: "1.5rem",
+                cursor: "pointer",
+                color: "#6b7280",
+              }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* タブ */}
+          <div
+            style={{
+              display: "flex",
+              marginBottom: "1rem",
+              borderBottom: "1px solid #e5e7eb",
+            }}
+          >
+            <button
+              onClick={() => onTabChange("followers")}
+              style={{
+                flex: 1,
+                padding: "0.75rem",
+                border: "none",
+                backgroundColor:
+                  activeTab === "followers" ? "#3b82f6" : "transparent",
+                color: activeTab === "followers" ? "white" : "#6b7280",
+                cursor: "pointer",
+                fontSize: "0.875rem",
+                fontWeight: "500",
+              }}
+            >
+              フォロワー ({followStats.followers_count})
+            </button>
+            <button
+              onClick={() => onTabChange("following")}
+              style={{
+                flex: 1,
+                padding: "0.75rem",
+                border: "none",
+                backgroundColor:
+                  activeTab === "following" ? "#3b82f6" : "transparent",
+                color: activeTab === "following" ? "white" : "#6b7280",
+                cursor: "pointer",
+                fontSize: "0.875rem",
+                fontWeight: "500",
+              }}
+            >
+              フォロー中 ({followStats.following_count})
+            </button>
+          </div>
+
+          {/* ユーザーリスト */}
+          <div
+            style={{
+              flex: 1,
+              overflowY: "auto",
+              maxHeight: "400px",
+            }}
+          >
+            {renderUserList()}
+          </div>
+        </div>
+      </div>
+    );
+  }
+);
+
 // フォローボタンコンポーネント
 interface FollowButtonProps {
   userId: number;
   currentUserId: number;
-  onFollowChange?: () => void;
+  onFollowChange: (userId: number, isFollowing: boolean) => void;
 }
 
 const FollowButton: React.FC<FollowButtonProps> = ({
@@ -509,39 +643,51 @@ const FollowButton: React.FC<FollowButtonProps> = ({
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // checkFollowStatusをuseCallbackでメモ化
+  // useCallbackでcheckFollowStatusをメモ化
   const checkFollowStatus = useCallback(async () => {
     try {
-      const stats = await api.getFollowStats(userId, currentUserId);
-      setIsFollowing(stats.is_following);
+      const response: ApiResponse<FollowStats> = await api.getFollowStats(
+        userId,
+        currentUserId
+      );
+      if (response.success && response.data) {
+        setIsFollowing(response.data.is_following);
+      }
     } catch (error) {
       console.error("フォロー状態の確認に失敗しました:", error);
     }
   }, [userId, currentUserId]);
 
-  useEffect(() => {
-    checkFollowStatus();
-  }, [checkFollowStatus]);
+  // useCallbackでhandleFollowをメモ化
+  const handleFollow = useCallback(async () => {
+    if (loading) return;
 
-  const handleFollow = async () => {
     try {
       setLoading(true);
 
       if (isFollowing) {
-        await api.unfollowUser(userId);
-        setIsFollowing(false);
+        const response: ApiResponse<void> = await api.unfollowUser(userId);
+        if (response.success) {
+          setIsFollowing(false);
+          onFollowChange(userId, false);
+        }
       } else {
-        await api.followUser(userId);
-        setIsFollowing(true);
+        const response: ApiResponse<Follow> = await api.followUser(userId);
+        if (response.success) {
+          setIsFollowing(true);
+          onFollowChange(userId, true);
+        }
       }
-
-      onFollowChange?.();
     } catch (error) {
       console.error("フォロー操作に失敗しました:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [loading, isFollowing, userId, onFollowChange]);
+
+  useEffect(() => {
+    checkFollowStatus();
+  }, [checkFollowStatus]);
 
   return (
     <button
@@ -560,7 +706,7 @@ const FollowButton: React.FC<FollowButtonProps> = ({
         transition: "all 0.2s",
       }}
     >
-      {loading ? "..." : isFollowing ? "アンフォロー" : "フォロー"}
+      {loading ? "⏳" : isFollowing ? "アンフォロー" : "フォロー"}
     </button>
   );
 };
