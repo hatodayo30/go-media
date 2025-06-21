@@ -1,135 +1,220 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../services/api";
+import type { AuthResponse } from "../types";
 
 const LoginPage: React.FC = () => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  // useCallbackを使用してhandleSubmitをメモ化
-  const handleSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      setError("");
-      setLoading(true);
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+  });
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-      try {
-        console.log("🔐 ログイン開始:", {
-          email,
-          password: password ? "[HIDDEN]" : "[EMPTY]",
-        });
+  // useCallbackで認証状態チェックをメモ化
+  const checkIfAlreadyLoggedIn = useCallback(() => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      console.log("✅ 既にログイン済み、ダッシュボードへリダイレクト");
+      navigate("/dashboard");
+    }
+  }, [navigate]);
 
-        // API通信
-        const response = await api.login(email, password);
-        console.log("📥 ログインレスポンス（完全）:", response);
+  // useCallbackでフォーム変更をメモ化
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const { name, value } = e.target;
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+      }));
 
-        // レスポンス構造の詳細確認
-        console.log("🔍 レスポンス解析:", {
-          hasData: !!response.data,
-          hasToken: response.data && !!response.data.token,
-          hasUser: response.data && !!response.data.user,
-          status: response.status,
-          responseKeys: Object.keys(response),
-          dataKeys: response.data ? Object.keys(response.data) : null,
-        });
-
-        // トークンを保存
-        if (response.data && response.data.token) {
-          const token = response.data.token;
-          console.log("💾 トークン保存開始:", {
-            tokenExists: !!token,
-            tokenLength: token?.length,
-            tokenPreview: token?.substring(0, 20) + "...",
-          });
-
-          localStorage.setItem("token", token);
-
-          // 保存確認
-          const savedToken = localStorage.getItem("token");
-          console.log("✅ トークン保存確認:", {
-            savedSuccessfully: !!savedToken,
-            savedLength: savedToken?.length,
-            tokensMatch: savedToken === token,
-          });
-
-          // ユーザー情報も保存
-          if (response.data.user) {
-            localStorage.setItem("user", JSON.stringify(response.data.user));
-            console.log("👤 ユーザー情報保存:", response.data.user);
-          }
-
-          console.log("🎉 ログイン成功 - ダッシュボードへリダイレクト");
-
-          // 最終確認
-          setTimeout(() => {
-            const finalCheck = localStorage.getItem("token");
-            console.log("🔍 最終トークン確認:", {
-              exists: !!finalCheck,
-              length: finalCheck?.length,
-            });
-          }, 100);
-
-          navigate("/dashboard");
-        } else {
-          console.error("❌ トークンが見つかりません:", {
-            hasData: !!response.data,
-            dataContent: response.data,
-            fullResponse: response,
-          });
-          setError("ログインレスポンスが不正です");
-        }
-      } catch (err: any) {
-        console.error("❌ ログインエラー:", err);
-
-        if (err.response) {
-          console.error("📥 エラーレスポンス詳細:", {
-            status: err.response.status,
-            statusText: err.response.statusText,
-            data: err.response.data,
-            headers: err.response.headers,
-          });
-
-          // サーバーからのエラーレスポンス
-          const errorMessage =
-            err.response.data?.error ||
-            err.response.data?.message ||
-            `エラー: ${err.response.status}`;
-          setError(errorMessage);
-        } else if (err.request) {
-          console.error("🌐 ネットワークエラー:", err.request);
-          // ネットワークエラー
-          setError(
-            "サーバーに接続できません。APIサーバーが起動しているか確認してください。"
-          );
-        } else {
-          console.error("❓ その他のエラー:", err.message);
-          // その他のエラー
-          setError("ログインに失敗しました");
-        }
-      } finally {
-        setLoading(false);
+      // エラーをクリア
+      if (error) {
+        setError("");
       }
     },
-    [email, password, navigate]
-  ); // email、password、navigateが依存配列に含まれる
+    [error]
+  );
 
-  // useCallbackを使用してinput changeハンドラーをメモ化
-  const handleEmailChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      setEmail(e.target.value);
-    },
-    []
-  ); // 依存関係なし
+  // useCallbackでバリデーションをメモ化
+  const validateForm = useCallback(() => {
+    if (!formData.email.trim()) {
+      setError("メールアドレスを入力してください");
+      return false;
+    }
 
-  const handlePasswordChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      setPassword(e.target.value);
+    if (!formData.password.trim()) {
+      setError("パスワードを入力してください");
+      return false;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setError("有効なメールアドレスを入力してください");
+      return false;
+    }
+
+    if (formData.password.length < 6) {
+      setError("パスワードは6文字以上で入力してください");
+      return false;
+    }
+
+    return true;
+  }, [formData]);
+
+  // useCallbackでログイン処理をメモ化
+  const handleLogin = useCallback(async () => {
+    if (!validateForm()) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError("");
+
+      console.log("🔐 ログイン開始:", {
+        email: formData.email,
+        password: "[HIDDEN]",
+      });
+
+      const response: AuthResponse = await api.login(
+        formData.email,
+        formData.password
+      );
+      console.log("📥 ログインレスポンス:", {
+        hasToken: !!response.token,
+        hasUser: !!response.user,
+        tokenLength: response.token?.length,
+      });
+
+      if (response.token && response.user) {
+        // トークンとユーザー情報を保存
+        localStorage.setItem("token", response.token);
+        localStorage.setItem("user", JSON.stringify(response.user));
+
+        console.log("💾 認証情報保存完了:", {
+          userId: response.user.id,
+          username: response.user.username,
+          role: response.user.role,
+        });
+
+        // 保存確認
+        const savedToken = localStorage.getItem("token");
+        const savedUser = localStorage.getItem("user");
+
+        if (savedToken && savedUser) {
+          console.log("✅ ログイン成功 - ダッシュボードへリダイレクト");
+          navigate("/dashboard");
+        } else {
+          throw new Error("認証情報の保存に失敗しました");
+        }
+      } else {
+        throw new Error("認証レスポンスが不正です");
+      }
+    } catch (err: any) {
+      console.error("❌ ログインエラー:", err);
+
+      if (err.response) {
+        const status = err.response.status;
+        const data = err.response.data;
+
+        console.error("📥 エラーレスポンス詳細:", {
+          status,
+          statusText: err.response.statusText,
+          data,
+        });
+
+        if (status === 401) {
+          setError("メールアドレスまたはパスワードが間違っています");
+        } else if (status === 422) {
+          setError(data?.message || "入力内容に不備があります");
+        } else if (status >= 500) {
+          setError("サーバーエラーが発生しました。しばらく後でお試しください");
+        } else {
+          setError(data?.message || data?.error || `エラー: ${status}`);
+        }
+      } else if (err.request) {
+        console.error("🌐 ネットワークエラー:", err.request);
+        setError(
+          "サーバーに接続できません。ネットワーク接続を確認してください"
+        );
+      } else {
+        console.error("❓ その他のエラー:", err.message);
+        setError(err.message || "ログインに失敗しました");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [formData, navigate, validateForm]);
+
+  // useCallbackでフォーム送信をメモ化
+  const handleSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      handleLogin();
     },
-    []
-  ); // 依存関係なし
+    [handleLogin]
+  );
+
+  // useCallbackでテストログインをメモ化
+  const handleTestLogin = useCallback(() => {
+    setFormData({
+      email: "test@example.com",
+      password: "test123",
+    });
+    setError("");
+  }, []);
+
+  // useCallbackでクリアをメモ化
+  const handleClear = useCallback(() => {
+    setFormData({
+      email: "",
+      password: "",
+    });
+    setError("");
+  }, []);
+
+  // useMemoでフォーム状態をメモ化
+  const formState = useMemo(
+    () => ({
+      isValid: formData.email.trim() !== "" && formData.password.trim() !== "",
+      hasData: formData.email !== "" || formData.password !== "",
+      emailError:
+        formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email),
+      passwordError: formData.password && formData.password.length < 6,
+    }),
+    [formData]
+  );
+
+  // useMemoでUI状態をメモ化
+  const uiState = useMemo(
+    () => ({
+      canSubmit: formState.isValid && !loading,
+      showClearButton: formState.hasData && !loading,
+      buttonText: loading ? "ログイン中..." : "ログイン",
+      buttonStyle: {
+        width: "100%",
+        backgroundColor: loading ? "#6b7280" : "#3b82f6",
+        color: "white",
+        padding: "0.75rem",
+        border: "none",
+        borderRadius: "6px",
+        fontSize: "1rem",
+        cursor: loading || !formState.isValid ? "not-allowed" : "pointer",
+        opacity: loading || !formState.isValid ? 0.6 : 1,
+        transition: "all 0.2s",
+      },
+    }),
+    [formState, loading]
+  );
+
+  // 初期化時の認証チェック
+  useEffect(() => {
+    checkIfAlreadyLoggedIn();
+  }, [checkIfAlreadyLoggedIn]);
 
   return (
     <div
@@ -152,15 +237,28 @@ const LoginPage: React.FC = () => {
           boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
         }}
       >
-        <h2
-          style={{
-            textAlign: "center",
-            marginBottom: "2rem",
-            fontSize: "2rem",
-          }}
-        >
-          ログイン
-        </h2>
+        {/* ヘッダー */}
+        <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+          <h2
+            style={{
+              fontSize: "2rem",
+              fontWeight: "bold",
+              margin: "0 0 0.5rem 0",
+              color: "#374151",
+            }}
+          >
+            🔐 ログイン
+          </h2>
+          <p
+            style={{
+              margin: 0,
+              color: "#6b7280",
+              fontSize: "0.875rem",
+            }}
+          >
+            アカウントにログインしてください
+          </p>
+        </div>
 
         {/* テスト用アカウント情報 */}
         <div
@@ -170,30 +268,44 @@ const LoginPage: React.FC = () => {
             backgroundColor: "#f0f9ff",
             borderRadius: "6px",
             fontSize: "0.875rem",
+            border: "1px solid #e0f2fe",
           }}
         >
-          <strong>テスト用アカウント:</strong>
-          <br />
-          Email: test@example.com
-          <br />
-          Password: test123
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "0.5rem",
+            }}
+          >
+            <strong style={{ color: "#0369a1" }}>🧪 テスト用アカウント</strong>
+            <button
+              type="button"
+              onClick={handleTestLogin}
+              disabled={loading}
+              style={{
+                padding: "0.25rem 0.5rem",
+                backgroundColor: "#3b82f6",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                fontSize: "0.75rem",
+                cursor: loading ? "not-allowed" : "pointer",
+                opacity: loading ? 0.6 : 1,
+              }}
+            >
+              自動入力
+            </button>
+          </div>
+          <div style={{ fontSize: "0.75rem", color: "#0369a1" }}>
+            📧 Email: test@example.com
+            <br />
+            🔑 Password: test123
+          </div>
         </div>
 
-        {/* デバッグ情報 */}
-        <div
-          style={{
-            marginBottom: "1rem",
-            padding: "0.75rem",
-            backgroundColor: "#f0fdf4",
-            borderRadius: "6px",
-            fontSize: "0.875rem",
-          }}
-        >
-          <strong>🔍 デバッグモード有効</strong>
-          <br />
-          コンソールで詳細ログを確認してください
-        </div>
-
+        {/* フォーム */}
         <form onSubmit={handleSubmit}>
           {error && (
             <div
@@ -204,9 +316,10 @@ const LoginPage: React.FC = () => {
                 padding: "0.75rem",
                 borderRadius: "6px",
                 marginBottom: "1rem",
+                fontSize: "0.875rem",
               }}
             >
-              {error}
+              ⚠️ {error}
             </div>
           )}
 
@@ -216,24 +329,42 @@ const LoginPage: React.FC = () => {
                 display: "block",
                 marginBottom: "0.5rem",
                 fontWeight: "500",
+                color: "#374151",
               }}
             >
-              メールアドレス
+              📧 メールアドレス
             </label>
             <input
               type="email"
+              name="email"
               required
-              value={email}
-              onChange={handleEmailChange}
+              value={formData.email}
+              onChange={handleInputChange}
               style={{
                 width: "100%",
                 padding: "0.75rem",
-                border: "1px solid #d1d5db",
+                border: `1px solid ${
+                  formState.emailError ? "#ef4444" : "#d1d5db"
+                }`,
                 borderRadius: "6px",
                 fontSize: "1rem",
+                boxSizing: "border-box",
+                transition: "border-color 0.2s",
               }}
-              placeholder="メールアドレス"
+              placeholder="your@example.com"
+              disabled={loading}
             />
+            {formState.emailError && (
+              <div
+                style={{
+                  fontSize: "0.75rem",
+                  color: "#ef4444",
+                  marginTop: "0.25rem",
+                }}
+              >
+                有効なメールアドレスを入力してください
+              </div>
+            )}
           </div>
 
           <div style={{ marginBottom: "1.5rem" }}>
@@ -242,54 +373,138 @@ const LoginPage: React.FC = () => {
                 display: "block",
                 marginBottom: "0.5rem",
                 fontWeight: "500",
+                color: "#374151",
               }}
             >
-              パスワード
+              🔑 パスワード
             </label>
             <input
               type="password"
+              name="password"
               required
-              value={password}
-              onChange={handlePasswordChange}
+              value={formData.password}
+              onChange={handleInputChange}
               style={{
                 width: "100%",
                 padding: "0.75rem",
-                border: "1px solid #d1d5db",
+                border: `1px solid ${
+                  formState.passwordError ? "#ef4444" : "#d1d5db"
+                }`,
                 borderRadius: "6px",
                 fontSize: "1rem",
+                boxSizing: "border-box",
+                transition: "border-color 0.2s",
               }}
-              placeholder="パスワード"
+              placeholder="パスワード（6文字以上）"
+              disabled={loading}
             />
+            {formState.passwordError && (
+              <div
+                style={{
+                  fontSize: "0.75rem",
+                  color: "#ef4444",
+                  marginTop: "0.25rem",
+                }}
+              >
+                パスワードは6文字以上で入力してください
+              </div>
+            )}
+          </div>
+
+          {/* フォーム統計 */}
+          <div
+            style={{
+              fontSize: "0.75rem",
+              color: "#6b7280",
+              marginBottom: "1rem",
+              display: "flex",
+              justifyContent: "space-between",
+            }}
+          >
+            <span>{formState.isValid ? "✅ 入力完了" : "📝 入力中..."}</span>
+            {uiState.showClearButton && (
+              <button
+                type="button"
+                onClick={handleClear}
+                disabled={loading}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#6b7280",
+                  cursor: loading ? "not-allowed" : "pointer",
+                  fontSize: "0.75rem",
+                  textDecoration: "underline",
+                }}
+              >
+                クリア
+              </button>
+            )}
           </div>
 
           <button
             type="submit"
-            disabled={loading}
-            style={{
-              width: "100%",
-              backgroundColor: "#3b82f6",
-              color: "white",
-              padding: "0.75rem",
-              border: "none",
-              borderRadius: "6px",
-              fontSize: "1rem",
-              cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.6 : 1,
-            }}
+            disabled={!uiState.canSubmit}
+            style={uiState.buttonStyle}
           >
-            {loading ? "ログイン中..." : "ログイン"}
+            {uiState.buttonText}
           </button>
 
           <div style={{ textAlign: "center", marginTop: "1rem" }}>
             <Link
               to="/register"
-              style={{ color: "#3b82f6", textDecoration: "none" }}
+              style={{
+                color: "#3b82f6",
+                textDecoration: "none",
+                fontSize: "0.875rem",
+                fontWeight: "500",
+              }}
             >
-              アカウントをお持ちでない方はこちら
+              ✨ アカウントをお持ちでない方はこちら
             </Link>
           </div>
         </form>
+
+        {/* デバッグ情報 */}
+        {process.env.NODE_ENV === "development" && (
+          <div
+            style={{
+              marginTop: "1rem",
+              padding: "0.75rem",
+              backgroundColor: "#f0fdf4",
+              borderRadius: "6px",
+              fontSize: "0.75rem",
+              border: "1px solid #dcfce7",
+            }}
+          >
+            <strong style={{ color: "#15803d" }}>🔍 開発モード</strong>
+            <br />
+            <span style={{ color: "#16a34a" }}>
+              フォーム状態: {formState.isValid ? "有効" : "無効"} | エラー:{" "}
+              {error ? "あり" : "なし"} | ローディング:{" "}
+              {loading ? "中" : "なし"}
+            </span>
+          </div>
+        )}
       </div>
+
+      {/* ローディング表示 */}
+      {loading && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "2rem",
+            right: "2rem",
+            backgroundColor: "#1f2937",
+            color: "white",
+            padding: "1rem",
+            borderRadius: "8px",
+            fontSize: "0.875rem",
+            zIndex: 1000,
+          }}
+        >
+          🔐 ログイン中...
+        </div>
+      )}
     </div>
   );
 };
