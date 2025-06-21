@@ -1,147 +1,173 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../services/api";
-
-// 一時的に型定義（後で types/index.ts から import）
-interface User {
-  id: number;
-  username: string;
-  email: string;
-  bio: string;
-  role: string;
-}
-
-interface Content {
-  id: number;
-  title: string;
-  body: string;
-  type: string;
-  author?: User;
-  category?: any;
-  status: string;
-  view_count: number;
-  created_at: string;
-}
-
-interface Category {
-  id: number;
-  name: string;
-  description?: string;
-}
+import { User, Content, Category, ApiResponse } from "../types";
 
 const DashboardPage: React.FC = () => {
+  const navigate = useNavigate();
+
   const [user, setUser] = useState<User | null>(null);
   const [contents, setContents] = useState<Content[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
-  const navigate = useNavigate();
+  // useCallbackで認証チェックをメモ化
+  const checkAuthentication = useCallback(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      console.log("❌ 認証なし、ログインページへリダイレクト");
+      navigate("/login");
+      return false;
+    }
+    return true;
+  }, [navigate]);
 
-  // useCallbackを使用してfetchUserAndDataをメモ化
+  // useCallbackでユーザー情報取得をメモ化
+  const fetchUser = useCallback(async () => {
+    try {
+      console.log("👤 ユーザー情報取得開始");
+      const response: ApiResponse<User> = await api.getCurrentUser();
+
+      if (response.success && response.data) {
+        setUser(response.data);
+        console.log("✅ ユーザー情報取得成功:", response.data.username);
+      } else {
+        throw new Error(response.message || "ユーザー情報の取得に失敗しました");
+      }
+    } catch (error: any) {
+      console.error("❌ ユーザー情報取得エラー:", error);
+      if (error.response?.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        navigate("/login");
+      } else {
+        setError("ユーザー情報の取得に失敗しました");
+      }
+    }
+  }, [navigate]);
+
+  // useCallbackでコンテンツ取得をメモ化
+  const fetchContents = useCallback(async (categoryId?: number | null) => {
+    try {
+      console.log(
+        "📄 コンテンツ取得開始:",
+        categoryId ? `カテゴリ${categoryId}` : "全て"
+      );
+
+      let response: ApiResponse<Content[]>;
+      if (categoryId) {
+        response = await api.getContentsByCategory(categoryId.toString());
+      } else {
+        response = await api.getPublishedContents();
+      }
+
+      if (response.success && response.data) {
+        setContents(response.data);
+        console.log(`✅ コンテンツ取得成功: ${response.data.length}件`);
+      } else {
+        console.error("❌ コンテンツ取得失敗:", response.message);
+        setContents([]);
+        setError(response.message || "コンテンツの取得に失敗しました");
+      }
+    } catch (error: any) {
+      console.error("❌ コンテンツ取得エラー:", error);
+      setContents([]);
+      setError("コンテンツの取得に失敗しました");
+    }
+  }, []);
+
+  // useCallbackでカテゴリ取得をメモ化
+  const fetchCategories = useCallback(async () => {
+    try {
+      console.log("📂 カテゴリ取得開始");
+      const response: ApiResponse<Category[]> = await api.getCategories();
+
+      if (response.success && response.data) {
+        setCategories(response.data);
+        console.log(`✅ カテゴリ取得成功: ${response.data.length}件`);
+      } else {
+        console.error("❌ カテゴリ取得失敗:", response.message);
+        setCategories([]);
+        setError(response.message || "カテゴリの取得に失敗しました");
+      }
+    } catch (error: any) {
+      console.error("❌ カテゴリ取得エラー:", error);
+      setCategories([]);
+      setError("カテゴリの取得に失敗しました");
+    }
+  }, []);
+
+  // useCallbackで初期データ取得をメモ化
   const fetchUserAndData = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
 
-      // ユーザー情報を取得
-      const token = localStorage.getItem("token");
-      if (!token) {
-        window.location.href = "/login";
+      // 認証チェック
+      if (!checkAuthentication()) {
         return;
       }
 
-      const userResponse = await api.getCurrentUser();
-      setUser(userResponse.data || userResponse);
+      // 並列でデータ取得
+      await Promise.all([fetchUser(), fetchContents(), fetchCategories()]);
 
-      // コンテンツとカテゴリを取得
-      const [contentsRes, categoriesRes] = await Promise.all([
-        api.getPublishedContents(),
-        api.getCategories(),
-      ]);
-
-      // APIレスポンスの構造に合わせて修正
-      setContents(
-        contentsRes.data?.contents || contentsRes.contents || contentsRes || []
-      );
-      setCategories(
-        categoriesRes.data?.categories ||
-          categoriesRes.categories ||
-          categoriesRes ||
-          []
-      );
-    } catch (error) {
-      console.error("データの取得に失敗しました:", error);
-      // 認証エラーの場合はログインページへ
-      if ((error as any)?.response?.status === 401) {
-        localStorage.removeItem("token");
-        window.location.href = "/login";
-      }
+      console.log("✅ 全データ取得完了");
+    } catch (error: any) {
+      console.error("❌ データ取得エラー:", error);
+      setError("データの取得に失敗しました");
     } finally {
       setLoading(false);
     }
-  }, []); // 依存関係なし
+  }, [checkAuthentication, fetchUser, fetchContents, fetchCategories]);
 
-  useEffect(() => {
-    fetchUserAndData();
-  }, [fetchUserAndData]); // fetchUserAndDataを依存配列に含める
-
-  // useCallbackを使用してhandleCategoryFilterをメモ化
+  // useCallbackでカテゴリフィルターをメモ化
   const handleCategoryFilter = useCallback(
     async (categoryId: number | null) => {
       try {
+        console.log("🔍 カテゴリフィルター:", categoryId);
         setSelectedCategory(categoryId);
-
-        let filteredContents;
-        if (categoryId) {
-          filteredContents = await api.getContentsByCategory(
-            categoryId.toString()
-          );
-        } else {
-          filteredContents = await api.getPublishedContents();
-        }
-
-        // APIレスポンスの構造に合わせて修正
-        setContents(
-          filteredContents.data?.contents ||
-            filteredContents.contents ||
-            filteredContents ||
-            []
-        );
-      } catch (error) {
-        console.error("カテゴリフィルターエラー:", error);
+        setError(null);
+        await fetchContents(categoryId);
+      } catch (error: any) {
+        console.error("❌ カテゴリフィルターエラー:", error);
+        setError("フィルターの適用に失敗しました");
       }
     },
-    []
-  ); // 依存関係なし
+    [fetchContents]
+  );
 
-  // useCallbackを使用してhandleSearchSubmitをメモ化
+  // useCallbackで検索フォーム送信をメモ化
   const handleSearchSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
       if (searchQuery.trim()) {
-        // 検索ページに遷移
+        console.log("🔍 検索実行:", searchQuery.trim());
         navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
       }
     },
     [searchQuery, navigate]
-  ); // searchQueryとnavigateが依存配列に含まれる
+  );
 
-  // useCallbackを使用してhandleLogoutをメモ化
+  // useCallbackでログアウトをメモ化
   const handleLogout = useCallback(() => {
+    console.log("🚪 ログアウト実行");
     localStorage.removeItem("token");
-    window.location.href = "/login";
-  }, []); // 依存関係なし
+    localStorage.removeItem("user");
+    navigate("/login");
+  }, [navigate]);
 
-  // useCallbackを使用してinput changeハンドラーをメモ化
+  // useCallbackで検索入力変更をメモ化
   const handleSearchInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       setSearchQuery(e.target.value);
     },
     []
-  ); // 依存関係なし（関数型更新を使用）
+  );
 
-  // useCallbackを使用してマウスイベントハンドラーをメモ化
+  // useCallbackでマウスイベントハンドラーをメモ化
   const handleCardMouseEnter = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.15)";
@@ -172,6 +198,174 @@ const DashboardPage: React.FC = () => {
     []
   );
 
+  // useCallbackでカテゴリボタンスタイルをメモ化
+  const getCategoryButtonStyle = useCallback(
+    (isSelected: boolean) => ({
+      width: "100%",
+      textAlign: "left" as const,
+      padding: "0.75rem",
+      border: "none",
+      borderRadius: "6px",
+      cursor: "pointer",
+      backgroundColor: isSelected ? "#dbeafe" : "transparent",
+      color: isSelected ? "#1d4ed8" : "#374151",
+      fontWeight: isSelected ? "600" : "400",
+      transition: "all 0.2s",
+    }),
+    []
+  );
+
+  // useCallbackでrenderContentCardをメモ化
+  const renderContentCard = useCallback(
+    (content: Content) => (
+      <div
+        key={content.id}
+        style={{
+          backgroundColor: "white",
+          borderRadius: "8px",
+          padding: "1.5rem",
+          boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+          transition: "all 0.2s",
+          cursor: "pointer",
+          border: "1px solid #e5e7eb",
+        }}
+        onMouseEnter={handleCardMouseEnter}
+        onMouseLeave={handleCardMouseLeave}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "1rem",
+          }}
+        >
+          <span
+            style={{
+              fontSize: "0.75rem",
+              backgroundColor: "#dbeafe",
+              color: "#1d4ed8",
+              padding: "0.25rem 0.75rem",
+              borderRadius: "9999px",
+              fontWeight: "500",
+            }}
+          >
+            📁 {content.category?.name || "カテゴリなし"}
+          </span>
+          <span
+            style={{
+              fontSize: "0.75rem",
+              color: "#6b7280",
+              backgroundColor: "#f3f4f6",
+              padding: "0.25rem 0.5rem",
+              borderRadius: "4px",
+            }}
+          >
+            👁️ {content.view_count}
+          </span>
+        </div>
+
+        <h3
+          style={{
+            margin: "0 0 0.75rem 0",
+            fontSize: "1.125rem",
+            fontWeight: "600",
+            color: "#1f2937",
+            lineHeight: "1.4",
+          }}
+        >
+          <Link
+            to={`/contents/${content.id}`}
+            style={{
+              textDecoration: "none",
+              color: "inherit",
+              transition: "color 0.2s",
+            }}
+            onMouseEnter={handleLinkMouseEnter}
+            onMouseLeave={handleLinkMouseLeave}
+          >
+            {content.title}
+          </Link>
+        </h3>
+
+        <p
+          style={{
+            margin: "0 0 1rem 0",
+            color: "#6b7280",
+            fontSize: "0.875rem",
+            lineHeight: "1.5",
+            overflow: "hidden",
+            display: "-webkit-box",
+            WebkitLineClamp: 3,
+            WebkitBoxOrient: "vertical",
+          }}
+        >
+          {content.body.substring(0, 120)}...
+        </p>
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            fontSize: "0.75rem",
+            color: "#6b7280",
+            borderTop: "1px solid #f3f4f6",
+            paddingTop: "0.75rem",
+          }}
+        >
+          <span style={{ fontWeight: "500" }}>
+            ✍️ {content.author?.username || "不明"}
+          </span>
+          <span>
+            📅 {new Date(content.created_at).toLocaleDateString("ja-JP")}
+          </span>
+        </div>
+      </div>
+    ),
+    [
+      handleCardMouseEnter,
+      handleCardMouseLeave,
+      handleLinkMouseEnter,
+      handleLinkMouseLeave,
+    ]
+  );
+
+  // useMemoで統計データをメモ化
+  const stats = useMemo(
+    () => ({
+      contentsCount: contents.length,
+      categoriesCount: categories.length,
+      userRole: user?.role || "未設定",
+    }),
+    [contents.length, categories.length, user?.role]
+  );
+
+  // useMemoでヘッダータイトルをメモ化
+  const headerTitle = useMemo(() => {
+    if (selectedCategory) {
+      const category = categories.find((c) => c.id === selectedCategory);
+      return `📁 ${category?.name || "不明なカテゴリ"}`;
+    }
+    return "🏠 すべてのコンテンツ";
+  }, [selectedCategory, categories]);
+
+  // useMemoでナビゲーションリンクをメモ化
+  const navigationLinks = useMemo(
+    () => [
+      { to: "/create", label: "✏️ 新規投稿", color: "#3b82f6" },
+      { to: "/drafts", label: "📝 下書き一覧", color: "#f59e0b" },
+      { to: "/my-posts", label: "📄 マイ投稿", color: "#8b5cf6" },
+      { to: "/profile", label: "👤 プロフィール", color: "#6b7280" },
+      { to: "/search", label: "🔍 検索", color: "#10b981" },
+    ],
+    []
+  );
+
+  useEffect(() => {
+    fetchUserAndData();
+  }, [fetchUserAndData]);
+
   if (loading) {
     return (
       <div
@@ -180,15 +374,34 @@ const DashboardPage: React.FC = () => {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+          backgroundColor: "#f9fafb",
         }}
       >
-        <div>読み込み中...</div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "2rem", marginBottom: "1rem" }}>⏳</div>
+          <div>読み込み中...</div>
+        </div>
       </div>
     );
   }
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#f9fafb" }}>
+      {/* エラー表示 */}
+      {error && (
+        <div
+          style={{
+            backgroundColor: "#fee2e2",
+            color: "#dc2626",
+            padding: "1rem",
+            textAlign: "center",
+            fontSize: "0.875rem",
+          }}
+        >
+          ⚠️ {error}
+        </div>
+      )}
+
       {/* ヘッダー */}
       <header
         style={{
@@ -204,7 +417,7 @@ const DashboardPage: React.FC = () => {
             padding: "0 1rem",
           }}
         >
-          {/* トップヘッダー：タイトル、検索バー、ユーザー情報 */}
+          {/* トップヘッダー */}
           <div
             style={{
               display: "flex",
@@ -216,7 +429,7 @@ const DashboardPage: React.FC = () => {
           >
             <div style={{ flexShrink: 0 }}>
               <h1 style={{ margin: 0, fontSize: "1.5rem", fontWeight: "bold" }}>
-                メディアプラットフォーム
+                📰 メディアプラットフォーム
               </h1>
             </div>
 
@@ -273,6 +486,7 @@ const DashboardPage: React.FC = () => {
               </form>
             </div>
 
+            {/* ユーザー情報 */}
             <div
               style={{
                 display: "flex",
@@ -296,7 +510,7 @@ const DashboardPage: React.FC = () => {
                   fontSize: "0.875rem",
                 }}
               >
-                ログアウト
+                🚪 ログアウト
               </button>
             </div>
           </div>
@@ -309,96 +523,26 @@ const DashboardPage: React.FC = () => {
               flexWrap: "wrap",
             }}
           >
-            <Link
-              to="/create"
-              style={{
-                padding: "0.75rem 1.5rem",
-                backgroundColor: "#3b82f6",
-                color: "white",
-                textDecoration: "none",
-                borderRadius: "6px",
-                fontSize: "0.875rem",
-                fontWeight: "500",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-              }}
-            >
-              ✏️ 新規投稿
-            </Link>
-
-            <Link
-              to="/drafts"
-              style={{
-                padding: "0.75rem 1.5rem",
-                backgroundColor: "#f59e0b",
-                color: "white",
-                textDecoration: "none",
-                borderRadius: "6px",
-                fontSize: "0.875rem",
-                fontWeight: "500",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-              }}
-            >
-              📝 下書き一覧
-            </Link>
-
-            <Link
-              to="/my-posts"
-              style={{
-                padding: "0.75rem 1.5rem",
-                backgroundColor: "#8b5cf6",
-                color: "white",
-                textDecoration: "none",
-                borderRadius: "6px",
-                fontSize: "0.875rem",
-                fontWeight: "500",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-              }}
-            >
-              📄 マイ投稿
-            </Link>
-
-            <Link
-              to="/profile"
-              style={{
-                padding: "0.75rem 1.5rem",
-                backgroundColor: "#6b7280",
-                color: "white",
-                textDecoration: "none",
-                borderRadius: "6px",
-                fontSize: "0.875rem",
-                fontWeight: "500",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-              }}
-            >
-              👤 プロフィール
-            </Link>
-
-            {/* 検索ボタン（モバイル用） */}
-            <Link
-              to="/search"
-              style={{
-                padding: "0.75rem 1.5rem",
-                backgroundColor: "#10b981",
-                color: "white",
-                textDecoration: "none",
-                borderRadius: "6px",
-                fontSize: "0.875rem",
-                fontWeight: "500",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-              }}
-            >
-              🔍 検索
-            </Link>
+            {navigationLinks.map((link) => (
+              <Link
+                key={link.to}
+                to={link.to}
+                style={{
+                  padding: "0.75rem 1.5rem",
+                  backgroundColor: link.color,
+                  color: "white",
+                  textDecoration: "none",
+                  borderRadius: "6px",
+                  fontSize: "0.875rem",
+                  fontWeight: "500",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                }}
+              >
+                {link.label}
+              </Link>
+            ))}
           </div>
         </div>
       </header>
@@ -412,8 +556,9 @@ const DashboardPage: React.FC = () => {
           gap: "2rem",
         }}
       >
-        {/* サイドバー - カテゴリフィルター */}
+        {/* サイドバー */}
         <aside style={{ width: "250px", flexShrink: 0 }}>
+          {/* カテゴリフィルター */}
           <div
             style={{
               backgroundColor: "white",
@@ -435,19 +580,7 @@ const DashboardPage: React.FC = () => {
               <li style={{ marginBottom: "0.5rem" }}>
                 <button
                   onClick={() => handleCategoryFilter(null)}
-                  style={{
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "0.75rem",
-                    border: "none",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    backgroundColor:
-                      selectedCategory === null ? "#dbeafe" : "transparent",
-                    color: selectedCategory === null ? "#1d4ed8" : "#374151",
-                    fontWeight: selectedCategory === null ? "600" : "400",
-                    transition: "all 0.2s",
-                  }}
+                  style={getCategoryButtonStyle(selectedCategory === null)}
                 >
                   🏠 すべて
                 </button>
@@ -456,25 +589,9 @@ const DashboardPage: React.FC = () => {
                 <li key={category.id} style={{ marginBottom: "0.5rem" }}>
                   <button
                     onClick={() => handleCategoryFilter(category.id)}
-                    style={{
-                      width: "100%",
-                      textAlign: "left",
-                      padding: "0.75rem",
-                      border: "none",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      backgroundColor:
-                        selectedCategory === category.id
-                          ? "#dbeafe"
-                          : "transparent",
-                      color:
-                        selectedCategory === category.id
-                          ? "#1d4ed8"
-                          : "#374151",
-                      fontWeight:
-                        selectedCategory === category.id ? "600" : "400",
-                      transition: "all 0.2s",
-                    }}
+                    style={getCategoryButtonStyle(
+                      selectedCategory === category.id
+                    )}
                   >
                     📁 {category.name}
                   </button>
@@ -504,16 +621,16 @@ const DashboardPage: React.FC = () => {
             </h3>
             <div style={{ fontSize: "0.875rem", color: "#6b7280" }}>
               <div style={{ marginBottom: "0.5rem" }}>
-                📝 公開記事: {contents.length}件
+                📝 公開記事: {stats.contentsCount}件
               </div>
               <div style={{ marginBottom: "0.5rem" }}>
-                🏷️ カテゴリ: {categories.length}件
+                🏷️ カテゴリ: {stats.categoriesCount}件
               </div>
-              <div>👤 ログイン: {user?.role}</div>
+              <div>👤 ログイン: {stats.userRole}</div>
             </div>
           </div>
 
-          {/* クイック検索ヒント */}
+          {/* 検索ヒント */}
           <div
             style={{
               backgroundColor: "#fef3c7",
@@ -556,11 +673,7 @@ const DashboardPage: React.FC = () => {
                 fontWeight: "bold",
               }}
             >
-              {selectedCategory
-                ? `📁 ${
-                    categories.find((c) => c.id === selectedCategory)?.name
-                  }`
-                : "🏠 すべてのコンテンツ"}
+              {headerTitle}
             </h2>
             <p style={{ margin: 0, color: "#6b7280" }}>
               {contents.length}件のコンテンツが見つかりました
@@ -576,113 +689,7 @@ const DashboardPage: React.FC = () => {
                 gap: "1.5rem",
               }}
             >
-              {contents.map((content) => (
-                <div
-                  key={content.id}
-                  style={{
-                    backgroundColor: "white",
-                    borderRadius: "8px",
-                    padding: "1.5rem",
-                    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
-                    transition: "all 0.2s",
-                    cursor: "pointer",
-                    border: "1px solid #e5e7eb",
-                  }}
-                  onMouseEnter={handleCardMouseEnter}
-                  onMouseLeave={handleCardMouseLeave}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      marginBottom: "1rem",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "0.75rem",
-                        backgroundColor: "#dbeafe",
-                        color: "#1d4ed8",
-                        padding: "0.25rem 0.75rem",
-                        borderRadius: "9999px",
-                        fontWeight: "500",
-                      }}
-                    >
-                      📁 {content.category?.name || "カテゴリなし"}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#6b7280",
-                        backgroundColor: "#f3f4f6",
-                        padding: "0.25rem 0.5rem",
-                        borderRadius: "4px",
-                      }}
-                    >
-                      👁️ {content.view_count}
-                    </span>
-                  </div>
-
-                  <h3
-                    style={{
-                      margin: "0 0 0.75rem 0",
-                      fontSize: "1.125rem",
-                      fontWeight: "600",
-                      color: "#1f2937",
-                      lineHeight: "1.4",
-                    }}
-                  >
-                    <Link
-                      to={`/contents/${content.id}`}
-                      style={{
-                        textDecoration: "none",
-                        color: "inherit",
-                        transition: "color 0.2s",
-                      }}
-                      onMouseEnter={handleLinkMouseEnter}
-                      onMouseLeave={handleLinkMouseLeave}
-                    >
-                      {content.title}
-                    </Link>
-                  </h3>
-
-                  <p
-                    style={{
-                      margin: "0 0 1rem 0",
-                      color: "#6b7280",
-                      fontSize: "0.875rem",
-                      lineHeight: "1.5",
-                      overflow: "hidden",
-                      display: "-webkit-box",
-                      WebkitLineClamp: 3,
-                      WebkitBoxOrient: "vertical",
-                    }}
-                  >
-                    {content.body.substring(0, 120)}...
-                  </p>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      fontSize: "0.75rem",
-                      color: "#6b7280",
-                      borderTop: "1px solid #f3f4f6",
-                      paddingTop: "0.75rem",
-                    }}
-                  >
-                    <span style={{ fontWeight: "500" }}>
-                      ✍️ {content.author?.username || "不明"}
-                    </span>
-                    <span>
-                      📅{" "}
-                      {new Date(content.created_at).toLocaleDateString("ja-JP")}
-                    </span>
-                  </div>
-                </div>
-              ))}
+              {contents.map(renderContentCard)}
             </div>
           ) : (
             <div
