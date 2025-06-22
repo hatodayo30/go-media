@@ -84,21 +84,64 @@ const LoginPage: React.FC = () => {
         formData.email,
         formData.password
       );
-      console.log("📥 ログインレスポンス:", {
-        hasToken: !!response.token,
-        hasUser: !!response.user,
-        tokenLength: response.token?.length,
+      console.log("📥 ログインレスポンス（完全）:", response);
+
+      // バックエンドのレスポンス構造を確認
+      console.log("🔍 レスポンス解析:", {
+        responseType: typeof response,
+        responseKeys: Object.keys(response),
+        hasData: !!(response as any).data,
+        hasToken: !!(response as any).token,
+        hasUser: !!(response as any).user,
+        dataType: (response as any).data
+          ? typeof (response as any).data
+          : "undefined",
+        dataKeys: (response as any).data
+          ? Object.keys((response as any).data)
+          : null,
       });
 
-      if (response.token && response.user) {
+      // レスポンス構造に応じて柔軟に処理
+      let token: string | undefined;
+      let user: any;
+
+      // パターン1: 直接tokenとuserがある場合
+      if ((response as any).token && (response as any).user) {
+        token = (response as any).token;
+        user = (response as any).user;
+      }
+      // パターン2: dataの中にtokenとuserがある場合
+      else if (
+        (response as any).data &&
+        typeof (response as any).data === "object"
+      ) {
+        const data = (response as any).data;
+        token = data.token;
+        user = data.user;
+      }
+      // パターン3: ネストしたdata構造の場合
+      else if ((response as any).data?.data) {
+        const nestedData = (response as any).data.data;
+        token = nestedData.token;
+        user = nestedData.user;
+      }
+
+      console.log("🔍 抽出結果:", {
+        hasToken: !!token,
+        hasUser: !!user,
+        tokenLength: token?.length,
+        userKeys: user ? Object.keys(user) : null,
+      });
+
+      if (token && user) {
         // トークンとユーザー情報を保存
-        localStorage.setItem("token", response.token);
-        localStorage.setItem("user", JSON.stringify(response.user));
+        localStorage.setItem("token", token);
+        localStorage.setItem("user", JSON.stringify(user));
 
         console.log("💾 認証情報保存完了:", {
-          userId: response.user.id,
-          username: response.user.username,
-          role: response.user.role,
+          userId: user.id,
+          username: user.username,
+          role: user.role,
         });
 
         // 保存確認
@@ -112,6 +155,11 @@ const LoginPage: React.FC = () => {
           throw new Error("認証情報の保存に失敗しました");
         }
       } else {
+        console.error("❌ 認証情報が見つかりません:", {
+          response,
+          extractedToken: token,
+          extractedUser: user,
+        });
         throw new Error("認証レスポンスが不正です");
       }
     } catch (err: any) {

@@ -205,3 +205,45 @@ func (r *userRepository) Delete(ctx context.Context, id int64) error {
 
 	return nil
 }
+
+// GetPublicUsers は公開情報のみを取得します
+func (r *userRepository) GetPublicUsers(ctx context.Context) ([]*model.User, error) {
+	query := `
+		SELECT id, username, bio, role, created_at, updated_at
+		FROM users
+		ORDER BY id
+	`
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []*model.User
+	for rows.Next() {
+		var user model.User
+		// パスワードとメールアドレスは取得しない
+		err := rows.Scan(
+			&user.ID,
+			&user.Username,
+			&user.Bio,
+			&user.Role,
+			&user.CreatedAt,
+			&user.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		// パスワードとメールは空にしておく
+		user.Password = ""
+		user.Email = ""
+		users = append(users, &user)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}

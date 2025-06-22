@@ -21,8 +21,11 @@ import type {
   AverageRating,
 } from "../types";
 
-// APIのベースURL
-const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8003";
+// APIのベースURL - Docker環境に合わせて修正
+const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8082";
+
+// デバッグ用ログ
+console.log("🔗 API Base URL:", API_BASE_URL);
 
 // Axiosインスタンスを作成
 const apiClient = axios.create({
@@ -30,6 +33,7 @@ const apiClient = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
+  timeout: 10000, // 10秒のタイムアウトを追加
 });
 
 // リクエストインターセプター（認証トークンを自動的に付与）
@@ -39,9 +43,17 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // デバッグ用ログ
+    console.log(`🔗 ${config.method?.toUpperCase()} ${config.url}`, {
+      hasToken: !!token,
+      baseURL: config.baseURL,
+    });
+
     return config;
   },
   (error) => {
+    console.error("❌ Request interceptor error:", error);
     return Promise.reject(error);
   }
 );
@@ -49,15 +61,40 @@ apiClient.interceptors.request.use(
 // レスポンスインターセプター（エラーハンドリング）
 apiClient.interceptors.response.use(
   (response) => {
+    // デバッグ用ログ
+    console.log(
+      `✅ ${response.config.method?.toUpperCase()} ${response.config.url} - ${
+        response.status
+      }`,
+      {
+        status: response.status,
+        dataType: typeof response.data,
+        hasData: !!response.data,
+      }
+    );
+
     return response;
   },
   (error) => {
+    // 詳細なエラーログ
+    console.error("❌ API Error:", {
+      method: error.config?.method?.toUpperCase(),
+      url: error.config?.url,
+      baseURL: error.config?.baseURL,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      message: error.message,
+    });
+
     if (error.response?.status === 401) {
       // 認証エラーの場合、トークンを削除してログインページにリダイレクト
+      console.warn("🔓 Authentication failed - redirecting to login");
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       window.location.href = "/login";
     }
+
     return Promise.reject(error);
   }
 );
@@ -66,7 +103,7 @@ apiClient.interceptors.response.use(
 export const api = {
   // 認証関連
   login: async (email: string, password: string): Promise<AuthResponse> => {
-    const response = await apiClient.post<AuthResponse>("/auth/login", {
+    const response = await apiClient.post<AuthResponse>("/api/users/login", {
       email,
       password,
     });
@@ -75,7 +112,7 @@ export const api = {
 
   register: async (userData: RegisterRequest): Promise<AuthResponse> => {
     const response = await apiClient.post<AuthResponse>(
-      "/auth/register",
+      "/api/users/register",
       userData
     );
     return response.data;
@@ -83,7 +120,7 @@ export const api = {
 
   // ユーザー関連
   getCurrentUser: async (): Promise<ApiResponse<User>> => {
-    const response = await apiClient.get<ApiResponse<User>>("/users/me");
+    const response = await apiClient.get<ApiResponse<User>>("/api/users/me");
     return response.data;
   },
 
@@ -91,14 +128,21 @@ export const api = {
     userData: UpdateUserRequest
   ): Promise<ApiResponse<User>> => {
     const response = await apiClient.put<ApiResponse<User>>(
-      "/users/me",
+      "/api/users/me",
       userData
     );
     return response.data;
   },
 
   getUsers: async (): Promise<ApiResponse<User[]>> => {
-    const response = await apiClient.get<ApiResponse<User[]>>("/users");
+    const response = await apiClient.get<ApiResponse<User[]>>("/api/users");
+    return response.data;
+  },
+  // 🆕 公開ユーザー一覧を取得
+  getPublicUsers: async (): Promise<ApiResponse<User[]>> => {
+    const response = await apiClient.get<ApiResponse<User[]>>(
+      "/api/users/public"
+    );
     return response.data;
   },
 
@@ -106,22 +150,25 @@ export const api = {
   getContents: async (
     params?: ContentFilters
   ): Promise<ApiResponse<Content[]>> => {
-    const response = await apiClient.get<ApiResponse<Content[]>>("/contents", {
-      params,
-    });
+    const response = await apiClient.get<ApiResponse<Content[]>>(
+      "/api/contents",
+      {
+        params,
+      }
+    );
     return response.data;
   },
 
   getPublishedContents: async (): Promise<ApiResponse<Content[]>> => {
     const response = await apiClient.get<ApiResponse<Content[]>>(
-      "/contents?status=published"
+      "/api/contents?status=published"
     );
     return response.data;
   },
 
   getContentById: async (id: string): Promise<ApiResponse<Content>> => {
     const response = await apiClient.get<ApiResponse<Content>>(
-      `/contents/${id}`
+      `/api/contents/${id}`
     );
     return response.data;
   },
@@ -130,7 +177,7 @@ export const api = {
     contentData: CreateContentRequest
   ): Promise<ApiResponse<Content>> => {
     const response = await apiClient.post<ApiResponse<Content>>(
-      "/contents",
+      "/api/contents",
       contentData
     );
     return response.data;
@@ -141,7 +188,7 @@ export const api = {
     contentData: UpdateContentRequest
   ): Promise<ApiResponse<Content>> => {
     const response = await apiClient.put<ApiResponse<Content>>(
-      `/contents/${id}`,
+      `/api/contents/${id}`,
       contentData
     );
     return response.data;
@@ -152,7 +199,7 @@ export const api = {
     status: string
   ): Promise<ApiResponse<Content>> => {
     const response = await apiClient.patch<ApiResponse<Content>>(
-      `/contents/${id}/status`,
+      `/api/contents/${id}/status`,
       { status }
     );
     return response.data;
@@ -160,7 +207,7 @@ export const api = {
 
   deleteContent: async (id: string): Promise<ApiResponse<void>> => {
     const response = await apiClient.delete<ApiResponse<void>>(
-      `/contents/${id}`
+      `/api/contents/${id}`
     );
     return response.data;
   },
@@ -169,7 +216,7 @@ export const api = {
     categoryId: string
   ): Promise<ApiResponse<Content[]>> => {
     const response = await apiClient.get<ApiResponse<Content[]>>(
-      `/contents?category_id=${categoryId}`
+      `/api/contents?category_id=${categoryId}`
     );
     return response.data;
   },
@@ -178,7 +225,7 @@ export const api = {
     params: SearchParams
   ): Promise<ApiResponse<Content[]>> => {
     const response = await apiClient.get<ApiResponse<Content[]>>(
-      "/contents/search",
+      "/api/contents/search",
       { params }
     );
     return response.data;
@@ -187,14 +234,14 @@ export const api = {
   // カテゴリ関連
   getCategories: async (): Promise<ApiResponse<Category[]>> => {
     const response = await apiClient.get<ApiResponse<Category[]>>(
-      "/categories"
+      "/api/categories"
     );
     return response.data;
   },
 
   getCategoryById: async (id: string): Promise<ApiResponse<Category>> => {
     const response = await apiClient.get<ApiResponse<Category>>(
-      `/categories/${id}`
+      `/api/categories/${id}`
     );
     return response.data;
   },
@@ -202,7 +249,7 @@ export const api = {
   // 評価関連
   getRatingsByUser: async (userId: string): Promise<ApiResponse<Rating[]>> => {
     const response = await apiClient.get<ApiResponse<Rating[]>>(
-      `/ratings/user/${userId}`
+      `/api/users/${userId}/ratings`
     );
     return response.data;
   },
@@ -211,7 +258,7 @@ export const api = {
     contentId: string,
     value: number
   ): Promise<ApiResponse<Rating>> => {
-    const response = await apiClient.post<ApiResponse<Rating>>("/ratings", {
+    const response = await apiClient.post<ApiResponse<Rating>>("/api/ratings", {
       content_id: contentId,
       value,
     });
@@ -223,7 +270,7 @@ export const api = {
     value: number
   ): Promise<ApiResponse<Rating>> => {
     const response = await apiClient.put<ApiResponse<Rating>>(
-      `/ratings/${ratingId}`,
+      `/api/ratings/${ratingId}`,
       { value }
     );
     return response.data;
@@ -231,17 +278,18 @@ export const api = {
 
   deleteRating: async (ratingId: string): Promise<ApiResponse<void>> => {
     const response = await apiClient.delete<ApiResponse<void>>(
-      `/ratings/${ratingId}`
+      `/api/ratings/${ratingId}`
     );
     return response.data;
   },
+
   // コメント関連
   getCommentsByContentId: async (
     contentId: string
   ): Promise<ApiResponse<Comment[]>> => {
     try {
       const response = await apiClient.get<ApiResponse<Comment[]>>(
-        `/contents/${contentId}/comments`
+        `/api/contents/${contentId}/comments`
       );
       return response.data;
     } catch (error: any) {
@@ -258,7 +306,7 @@ export const api = {
   ): Promise<ApiResponse<Comment>> => {
     try {
       const response = await apiClient.post<ApiResponse<Comment>>(
-        "/comments",
+        "/api/comments",
         commentData
       );
       return response.data;
@@ -277,7 +325,7 @@ export const api = {
   ): Promise<ApiResponse<Comment>> => {
     try {
       const response = await apiClient.put<ApiResponse<Comment>>(
-        `/comments/${commentId}`,
+        `/api/comments/${commentId}`,
         commentData
       );
       return response.data;
@@ -293,7 +341,7 @@ export const api = {
   deleteComment: async (commentId: string): Promise<ApiResponse<void>> => {
     try {
       const response = await apiClient.delete<ApiResponse<void>>(
-        `/comments/${commentId}`
+        `/api/comments/${commentId}`
       );
       return response.data;
     } catch (error: any) {
@@ -311,16 +359,12 @@ export const api = {
   ): Promise<ApiResponse<AverageRating>> => {
     try {
       const response = await apiClient.get<ApiResponse<AverageRating>>(
-        `/contents/${contentId}/rating`
+        `/api/contents/${contentId}/ratings/average`
       );
       return response.data;
     } catch (error: any) {
       return {
-        data: {
-          average: 0,
-          count: 0,
-          like_count: 0,
-        },
+        data: { average: 0, count: 0, like_count: 0 },
         success: false,
         message:
           error.response?.data?.message || "Failed to get average rating",
@@ -333,7 +377,7 @@ export const api = {
   ): Promise<ApiResponse<Rating[]>> => {
     try {
       const response = await apiClient.get<ApiResponse<Rating[]>>(
-        `/contents/${contentId}/ratings`
+        `/api/contents/${contentId}/ratings`
       );
       return response.data;
     } catch (error: any) {
@@ -352,7 +396,7 @@ export const api = {
   ): Promise<ApiResponse<Rating>> => {
     try {
       const response = await apiClient.post<ApiResponse<Rating>>(
-        "/ratings/create-or-update",
+        "/api/ratings/create-or-update",
         {
           content_id: contentId,
           value,
@@ -472,6 +516,18 @@ export const api = {
         message:
           error.response?.data?.message || "Failed to get following feed",
       };
+    }
+  },
+
+  // ヘルスチェック機能を追加
+  healthCheck: async (): Promise<boolean> => {
+    try {
+      const response = await apiClient.get("/health");
+      console.log("✅ API Health Check: OK");
+      return response.status === 200;
+    } catch (error) {
+      console.error("❌ API Health Check: Failed", error);
+      return false;
     }
   },
 };

@@ -50,6 +50,7 @@ const SearchPage: React.FC = () => {
   }, [navigate]);
 
   // useCallbackでfetchInitialDataをメモ化
+  // useCallbackでfetchInitialDataをメモ化
   const fetchInitialData = useCallback(async () => {
     try {
       setInitialLoading(true);
@@ -62,11 +63,12 @@ const SearchPage: React.FC = () => {
 
       console.log("📥 初期データを取得中...");
 
+      // 🔧 getPublicUsersを使用するように変更
       const [userResponse, categoriesResponse, authorsResponse] =
         await Promise.all([
           api.getCurrentUser(),
           api.getCategories(),
-          api.getUsers(),
+          api.getPublicUsers(), // 🆕 getUsers() → getPublicUsers()に変更
         ]);
 
       console.log("👤 ユーザーレスポンス:", userResponse);
@@ -96,10 +98,16 @@ const SearchPage: React.FC = () => {
         setCategories([]);
       }
 
-      // 著者情報の設定
+      // 🔧 著者情報の設定（エラーハンドリング改善）
+      // 著者情報の設定（エラーハンドリング改善）
       if (authorsResponse.success && authorsResponse.data) {
-        setAuthors(authorsResponse.data);
-        console.log("✅ 著者設定完了:", authorsResponse.data.length, "件");
+        // 🔧 型アサーションを使用してレスポンス構造に対応
+        const authorsData = Array.isArray(authorsResponse.data)
+          ? authorsResponse.data
+          : (authorsResponse.data as any).users || [];
+
+        setAuthors(authorsData);
+        console.log("✅ 著者設定完了:", authorsData.length, "件");
       } else {
         console.warn("⚠️ 著者取得失敗:", authorsResponse.message);
         setAuthors([]);
@@ -114,12 +122,18 @@ const SearchPage: React.FC = () => {
         return;
       }
 
-      setError(err.message || "初期データの取得に失敗しました");
+      // 🆕 403エラーの場合は警告のみ表示
+      if (err.response?.status === 403) {
+        console.warn("⚠️ 権限不足 - 公開ユーザー情報のみ表示");
+        setAuthors([]); // 空配列で継続
+        setError(""); // エラーメッセージはクリア
+      } else {
+        setError(err.message || "初期データの取得に失敗しました");
+      }
     } finally {
       setInitialLoading(false);
     }
   }, [checkAuthentication, navigate]);
-
   // useCallbackでperformSearchをメモ化
   const performSearch = useCallback(
     async (searchFilters: SearchFilters) => {

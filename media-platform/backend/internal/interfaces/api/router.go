@@ -65,6 +65,7 @@ func SetupRouter(router *gin.Engine, db persistence.DBConn, jwtConfig *JWTConfig
 		userRoutes.POST("/login", userHandler.Login)
 		userRoutes.GET("/me", authMiddleware, userHandler.GetCurrentUser)
 		userRoutes.PUT("/me", authMiddleware, userHandler.UpdateUser)
+		userRoutes.GET("/public", authMiddleware, userHandler.GetPublicUsers)
 		userRoutes.GET("", authMiddleware, adminMiddleware, userHandler.GetAllUsers)
 		userRoutes.GET("/:id", authMiddleware, adminMiddleware, userHandler.GetUserByID)
 		userRoutes.PUT("/:id", authMiddleware, adminMiddleware, userHandler.UpdateUserByAdmin)

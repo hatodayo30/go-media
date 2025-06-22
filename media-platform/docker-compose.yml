@@ -1,5 +1,7 @@
+version: "3.8"
+
 services:
-  # APIサーバー（バックエンドのみ）
+  # APIサーバー（バックエンド）
   api:
     build:
       context: ./backend
@@ -26,6 +28,16 @@ services:
     restart: unless-stopped
     networks:
       - media-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://localhost:8082/health || exit 1",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   # Reactフロントエンド
   frontend:
@@ -33,9 +45,11 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"  # ← ポート3000で統一
+      - "3000:3000"
     environment:
       - REACT_APP_API_URL=http://localhost:8082
+      - CHOKIDAR_USEPOLLING=true # ホットリロード改善
+      - WATCHPACK_POLLING=true # ホットリロード改善
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -43,7 +57,8 @@ services:
     networks:
       - media-network
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
   # PostgreSQLデータベース
   postgres:
@@ -85,3 +100,4 @@ volumes:
 
 networks:
   media-network:
+    driver: bridge

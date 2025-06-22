@@ -239,3 +239,19 @@ func (u *UserUseCase) generateJWT(user *model.User) (string, error) {
 
 	return tokenString, nil
 }
+
+// GetPublicUsers は公開プロフィール情報のみを返します
+func (u *UserUseCase) GetPublicUsers(ctx context.Context) ([]*model.UserResponse, error) {
+	// パスワードやメールアドレスなど機密情報を除外して取得
+	users, err := u.userRepo.GetPublicUsers(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var responses []*model.UserResponse
+	for _, user := range users {
+		responses = append(responses, user.ToResponse())
+	}
+
+	return responses, nil
+}

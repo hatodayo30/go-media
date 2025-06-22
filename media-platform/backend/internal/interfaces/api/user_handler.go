@@ -381,3 +381,22 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 
 	c.Status(http.StatusNoContent)
 }
+
+// GetPublicUsers は公開プロフィール一覧を取得します
+func (h *UserHandler) GetPublicUsers(c *gin.Context) {
+	users, err := h.userUseCase.GetPublicUsers(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": "error",
+			"error":  "ユーザー一覧の取得に失敗しました: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data": gin.H{
+			"users": users,
+		},
+	})
+}
