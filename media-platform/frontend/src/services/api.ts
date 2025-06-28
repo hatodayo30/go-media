@@ -61,7 +61,7 @@ apiClient.interceptors.request.use(
 // レスポンスインターセプター（エラーハンドリング）
 apiClient.interceptors.response.use(
   (response) => {
-    // デバッグ用ログ
+    // 🔍 完全なレスポンス内容をデバッグ表示
     console.log(
       `✅ ${response.config.method?.toUpperCase()} ${response.config.url} - ${
         response.status
@@ -70,6 +70,16 @@ apiClient.interceptors.response.use(
         status: response.status,
         dataType: typeof response.data,
         hasData: !!response.data,
+        // 🆕 実際のデータ内容を表示
+        actualData: response.data,
+        // 🆕 データの構造を詳細表示
+        dataStructure: response.data
+          ? {
+              keys: Object.keys(response.data),
+              values: Object.values(response.data).map((v) => typeof v),
+              stringified: JSON.stringify(response.data, null, 2),
+            }
+          : null,
       }
     );
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../services/api";
-import { User, Content, Category, ApiResponse } from "../types";
+import { User, Content, Category } from "../types";
 
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
@@ -29,13 +29,18 @@ const DashboardPage: React.FC = () => {
   const fetchUser = useCallback(async () => {
     try {
       console.log("👤 ユーザー情報取得開始");
-      const response: ApiResponse<User> = await api.getCurrentUser();
+      const response = (await api.getCurrentUser()) as any; // 🔧 型キャスト追加
 
-      if (response.success && response.data) {
-        setUser(response.data);
-        console.log("✅ ユーザー情報取得成功:", response.data.username);
+      // 🔧 正確なレスポンス構造に対応
+      if (response && response.status === "success" && response.data) {
+        if (response.data.user) {
+          setUser(response.data.user);
+          console.log("✅ ユーザー情報取得成功:", response.data.user.username);
+        } else {
+          throw new Error("ユーザー情報が見つかりません");
+        }
       } else {
-        throw new Error(response.message || "ユーザー情報の取得に失敗しました");
+        throw new Error("ユーザー情報の取得に失敗しました");
       }
     } catch (error: any) {
       console.error("❌ ユーザー情報取得エラー:", error);
@@ -57,20 +62,30 @@ const DashboardPage: React.FC = () => {
         categoryId ? `カテゴリ${categoryId}` : "全て"
       );
 
-      let response: ApiResponse<Content[]>;
+      let response: any; // 🔧 型を any に変更
       if (categoryId) {
-        response = await api.getContentsByCategory(categoryId.toString());
+        response = (await api.getContentsByCategory(
+          categoryId.toString()
+        )) as any;
       } else {
-        response = await api.getPublishedContents();
+        response = (await api.getPublishedContents()) as any;
       }
 
-      if (response.success && response.data) {
-        setContents(response.data);
-        console.log(`✅ コンテンツ取得成功: ${response.data.length}件`);
+      // 🔧 正確なレスポンス構造に対応
+      if (response && response.status === "success" && response.data) {
+        if (response.data.contents && Array.isArray(response.data.contents)) {
+          setContents(response.data.contents);
+          console.log(
+            `✅ コンテンツ取得成功: ${response.data.contents.length}件`
+          );
+        } else {
+          console.warn("⚠️ コンテンツデータが見つかりません");
+          setContents([]);
+        }
       } else {
-        console.error("❌ コンテンツ取得失敗:", response.message);
+        console.error("❌ コンテンツ取得失敗:", response);
         setContents([]);
-        setError(response.message || "コンテンツの取得に失敗しました");
+        setError("コンテンツの取得に失敗しました");
       }
     } catch (error: any) {
       console.error("❌ コンテンツ取得エラー:", error);
@@ -83,15 +98,30 @@ const DashboardPage: React.FC = () => {
   const fetchCategories = useCallback(async () => {
     try {
       console.log("📂 カテゴリ取得開始");
-      const response: ApiResponse<Category[]> = await api.getCategories();
+      const response = (await api.getCategories()) as any; // 🔧 型キャスト追加
 
-      if (response.success && response.data) {
-        setCategories(response.data);
-        console.log(`✅ カテゴリ取得成功: ${response.data.length}件`);
+      // 🔧 正確なレスポンス構造に対応
+      if (response && response.status === "success" && response.data) {
+        // カテゴリの場合、直接配列またはcategoriesプロパティ
+        if (Array.isArray(response.data)) {
+          setCategories(response.data);
+          console.log(`✅ カテゴリ取得成功: ${response.data.length}件`);
+        } else if (
+          response.data.categories &&
+          Array.isArray(response.data.categories)
+        ) {
+          setCategories(response.data.categories);
+          console.log(
+            `✅ カテゴリ取得成功: ${response.data.categories.length}件`
+          );
+        } else {
+          console.warn("⚠️ カテゴリデータが見つかりません");
+          setCategories([]);
+        }
       } else {
-        console.error("❌ カテゴリ取得失敗:", response.message);
+        console.error("❌ カテゴリ取得失敗:", response);
         setCategories([]);
-        setError(response.message || "カテゴリの取得に失敗しました");
+        setError("カテゴリの取得に失敗しました");
       }
     } catch (error: any) {
       console.error("❌ カテゴリ取得エラー:", error);
