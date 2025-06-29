@@ -14,11 +14,19 @@ import type {
   SearchParams,
   Comment,
   CreateCommentRequest,
-  UpdateCommentRequest,
   Follow,
   FollowStats,
   FollowingFeedParams,
   AverageRating,
+  UserApiResponse,
+  ContentsApiResponse,
+  CategoriesApiResponse,
+  CommentsApiResponse,
+  RatingsApiResponse,
+  FollowStatsApiResponse,
+  FollowersApiResponse,
+  FollowingApiResponse,
+  FollowingFeedApiResponse,
 } from "../types";
 
 // APIのベースURL - Docker環境に合わせて修正
@@ -129,25 +137,23 @@ export const api = {
   },
 
   // ユーザー関連
-  getCurrentUser: async (): Promise<ApiResponse<User>> => {
-    const response = await apiClient.get<ApiResponse<User>>("/api/users/me");
+  getCurrentUser: async (): Promise<ApiResponse<UserApiResponse>> => {
+    const response = await apiClient.get<ApiResponse<UserApiResponse>>(
+      "/api/users/me"
+    );
     return response.data;
   },
 
   updateUser: async (
     userData: UpdateUserRequest
-  ): Promise<ApiResponse<User>> => {
-    const response = await apiClient.put<ApiResponse<User>>(
+  ): Promise<ApiResponse<UserApiResponse>> => {
+    const response = await apiClient.put<ApiResponse<UserApiResponse>>(
       "/api/users/me",
       userData
     );
     return response.data;
   },
 
-  getUsers: async (): Promise<ApiResponse<User[]>> => {
-    const response = await apiClient.get<ApiResponse<User[]>>("/api/users");
-    return response.data;
-  },
   // 🆕 公開ユーザー一覧を取得
   getPublicUsers: async (): Promise<ApiResponse<User[]>> => {
     const response = await apiClient.get<ApiResponse<User[]>>(
@@ -159,8 +165,8 @@ export const api = {
   // コンテンツ関連
   getContents: async (
     params?: ContentFilters
-  ): Promise<ApiResponse<Content[]>> => {
-    const response = await apiClient.get<ApiResponse<Content[]>>(
+  ): Promise<ApiResponse<ContentsApiResponse>> => {
+    const response = await apiClient.get<ApiResponse<ContentsApiResponse>>(
       "/api/contents",
       {
         params,
@@ -169,8 +175,8 @@ export const api = {
     return response.data;
   },
 
-  getPublishedContents: async (): Promise<ApiResponse<Content[]>> => {
-    const response = await apiClient.get<ApiResponse<Content[]>>(
+  getPublishedContents: async (): Promise<ApiResponse<ContentsApiResponse>> => {
+    const response = await apiClient.get<ApiResponse<ContentsApiResponse>>(
       "/api/contents?status=published"
     );
     return response.data;
@@ -224,8 +230,8 @@ export const api = {
 
   getContentsByCategory: async (
     categoryId: string
-  ): Promise<ApiResponse<Content[]>> => {
-    const response = await apiClient.get<ApiResponse<Content[]>>(
+  ): Promise<ApiResponse<ContentsApiResponse>> => {
+    const response = await apiClient.get<ApiResponse<ContentsApiResponse>>(
       `/api/contents?category_id=${categoryId}`
     );
     return response.data;
@@ -233,8 +239,8 @@ export const api = {
 
   searchContents: async (
     params: SearchParams
-  ): Promise<ApiResponse<Content[]>> => {
-    const response = await apiClient.get<ApiResponse<Content[]>>(
+  ): Promise<ApiResponse<ContentsApiResponse>> => {
+    const response = await apiClient.get<ApiResponse<ContentsApiResponse>>(
       "/api/contents/search",
       { params }
     );
@@ -242,46 +248,19 @@ export const api = {
   },
 
   // カテゴリ関連
-  getCategories: async (): Promise<ApiResponse<Category[]>> => {
-    const response = await apiClient.get<ApiResponse<Category[]>>(
+  getCategories: async (): Promise<ApiResponse<CategoriesApiResponse>> => {
+    const response = await apiClient.get<ApiResponse<CategoriesApiResponse>>(
       "/api/categories"
     );
     return response.data;
   },
 
-  getCategoryById: async (id: string): Promise<ApiResponse<Category>> => {
-    const response = await apiClient.get<ApiResponse<Category>>(
-      `/api/categories/${id}`
-    );
-    return response.data;
-  },
-
   // 評価関連
-  getRatingsByUser: async (userId: string): Promise<ApiResponse<Rating[]>> => {
-    const response = await apiClient.get<ApiResponse<Rating[]>>(
+  getRatingsByUser: async (
+    userId: string
+  ): Promise<ApiResponse<RatingsApiResponse>> => {
+    const response = await apiClient.get<ApiResponse<RatingsApiResponse>>(
       `/api/users/${userId}/ratings`
-    );
-    return response.data;
-  },
-
-  createRating: async (
-    contentId: string,
-    value: number
-  ): Promise<ApiResponse<Rating>> => {
-    const response = await apiClient.post<ApiResponse<Rating>>("/api/ratings", {
-      content_id: contentId,
-      value,
-    });
-    return response.data;
-  },
-
-  updateRating: async (
-    ratingId: string,
-    value: number
-  ): Promise<ApiResponse<Rating>> => {
-    const response = await apiClient.put<ApiResponse<Rating>>(
-      `/api/ratings/${ratingId}`,
-      { value }
     );
     return response.data;
   },
@@ -296,15 +275,15 @@ export const api = {
   // コメント関連
   getCommentsByContentId: async (
     contentId: string
-  ): Promise<ApiResponse<Comment[]>> => {
+  ): Promise<ApiResponse<CommentsApiResponse>> => {
     try {
-      const response = await apiClient.get<ApiResponse<Comment[]>>(
+      const response = await apiClient.get<ApiResponse<CommentsApiResponse>>(
         `/api/contents/${contentId}/comments`
       );
       return response.data;
     } catch (error: any) {
       return {
-        data: [],
+        data: { comments: [] },
         success: false,
         message: error.response?.data?.message || "Failed to get comments",
       };
@@ -329,40 +308,6 @@ export const api = {
     }
   },
 
-  updateComment: async (
-    commentId: string,
-    commentData: UpdateCommentRequest
-  ): Promise<ApiResponse<Comment>> => {
-    try {
-      const response = await apiClient.put<ApiResponse<Comment>>(
-        `/api/comments/${commentId}`,
-        commentData
-      );
-      return response.data;
-    } catch (error: any) {
-      return {
-        data: {} as Comment,
-        success: false,
-        message: error.response?.data?.message || "Failed to update comment",
-      };
-    }
-  },
-
-  deleteComment: async (commentId: string): Promise<ApiResponse<void>> => {
-    try {
-      const response = await apiClient.delete<ApiResponse<void>>(
-        `/api/comments/${commentId}`
-      );
-      return response.data;
-    } catch (error: any) {
-      return {
-        data: undefined,
-        success: false,
-        message: error.response?.data?.message || "Failed to delete comment",
-      };
-    }
-  },
-
   // 評価関連の追加メソッド
   getAverageRating: async (
     contentId: string
@@ -378,24 +323,6 @@ export const api = {
         success: false,
         message:
           error.response?.data?.message || "Failed to get average rating",
-      };
-    }
-  },
-
-  getRatingsByContent: async (
-    contentId: string
-  ): Promise<ApiResponse<Rating[]>> => {
-    try {
-      const response = await apiClient.get<ApiResponse<Rating[]>>(
-        `/api/contents/${contentId}/ratings`
-      );
-      return response.data;
-    } catch (error: any) {
-      return {
-        data: [],
-        success: false,
-        message:
-          error.response?.data?.message || "Failed to get content ratings",
       };
     }
   },
@@ -457,10 +384,10 @@ export const api = {
   getFollowStats: async (
     userId: number,
     currentUserId?: number
-  ): Promise<ApiResponse<FollowStats>> => {
+  ): Promise<ApiResponse<FollowStatsApiResponse>> => {
     try {
       const params = currentUserId ? { current_user_id: currentUserId } : {};
-      const response = await apiClient.get<ApiResponse<FollowStats>>(
+      const response = await apiClient.get<ApiResponse<FollowStatsApiResponse>>(
         `/users/${userId}/follow-stats`,
         { params }
       );
@@ -468,10 +395,12 @@ export const api = {
     } catch (error: any) {
       return {
         data: {
-          followers_count: 0,
-          following_count: 0,
-          is_following: false,
-          is_followed_by: false,
+          followStats: {
+            followers_count: 0,
+            following_count: 0,
+            is_following: false,
+            is_followed_by: false,
+          },
         },
         success: false,
         message: error.response?.data?.message || "Failed to get follow stats",
@@ -479,30 +408,34 @@ export const api = {
     }
   },
 
-  getFollowers: async (userId: number): Promise<ApiResponse<User[]>> => {
+  getFollowers: async (
+    userId: number
+  ): Promise<ApiResponse<FollowersApiResponse>> => {
     try {
-      const response = await apiClient.get<ApiResponse<User[]>>(
+      const response = await apiClient.get<ApiResponse<FollowersApiResponse>>(
         `/users/${userId}/followers`
       );
       return response.data;
     } catch (error: any) {
       return {
-        data: [],
+        data: { followers: [] },
         success: false,
         message: error.response?.data?.message || "Failed to get followers",
       };
     }
   },
 
-  getFollowing: async (userId: number): Promise<ApiResponse<User[]>> => {
+  getFollowing: async (
+    userId: number
+  ): Promise<ApiResponse<FollowingApiResponse>> => {
     try {
-      const response = await apiClient.get<ApiResponse<User[]>>(
+      const response = await apiClient.get<ApiResponse<FollowingApiResponse>>(
         `/users/${userId}/following`
       );
       return response.data;
     } catch (error: any) {
       return {
-        data: [],
+        data: { following: [] },
         success: false,
         message: error.response?.data?.message || "Failed to get following",
       };
@@ -512,32 +445,19 @@ export const api = {
   getFollowingFeed: async (
     userId: number,
     params?: FollowingFeedParams
-  ): Promise<ApiResponse<Content[]>> => {
+  ): Promise<ApiResponse<FollowingFeedApiResponse>> => {
     try {
-      const response = await apiClient.get<ApiResponse<Content[]>>(
-        `/users/${userId}/following-feed`,
-        { params }
-      );
+      const response = await apiClient.get<
+        ApiResponse<FollowingFeedApiResponse>
+      >(`/users/${userId}/following-feed`, { params });
       return response.data;
     } catch (error: any) {
       return {
-        data: [],
+        data: { feed: [] },
         success: false,
         message:
           error.response?.data?.message || "Failed to get following feed",
       };
-    }
-  },
-
-  // ヘルスチェック機能を追加
-  healthCheck: async (): Promise<boolean> => {
-    try {
-      const response = await apiClient.get("/health");
-      console.log("✅ API Health Check: OK");
-      return response.status === 200;
-    } catch (error) {
-      console.error("❌ API Health Check: Failed", error);
-      return false;
     }
   },
 };

@@ -1,6 +1,6 @@
 // API レスポンスの基本型
 export interface ApiResponse<T> {
-  data: T;
+  data?: T;
   message?: string;
   success: boolean;
 }
@@ -19,7 +19,7 @@ export interface User {
   email: string;
   bio?: string;
   avatar?: string;
-  role: "user" | "admin";
+  role: string;
   created_at: string;
   updated_at: string;
 }
@@ -183,6 +183,21 @@ export interface FollowingFeedParams {
   page?: number;
   limit?: number;
 }
+export interface FollowersApiResponse {
+  followers: User[];
+}
+
+export interface FollowingApiResponse {
+  following: User[];
+}
+
+export interface FollowingFeedApiResponse {
+  feed: Content[];
+}
+
+export interface FollowStatsApiResponse {
+  followStats: FollowStats;
+}
 
 // ページネーション関連
 export interface PaginationMeta {
@@ -205,4 +220,25 @@ export interface SearchParams {
   type?: string;
   page?: number;
   limit?: number;
+}
+
+export interface UserApiResponse {
+  user: User;
+  // 他のプロパティがある場合は追加
+}
+
+export interface ContentsApiResponse {
+  contents: Content[];
+}
+
+export interface CategoriesApiResponse {
+  categories: Category[];
+}
+
+export interface CommentsApiResponse {
+  comments: Comment[];
+}
+
+export interface RatingsApiResponse {
+  ratings: Rating[];
 }

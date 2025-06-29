@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { api } from "../services/api";
-import { Comment, ApiResponse } from "../types";
+import { Comment, ApiResponse, CommentsApiResponse } from "../types";
 
 interface CommentsProps {
   contentId: number;
@@ -17,17 +17,20 @@ const Comments: React.FC<CommentsProps> = ({ contentId }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   // useCallbackでnormalizeCommentをメモ化
-  const normalizeComment = useCallback((comment: any): Comment => {
+  const normalizeComment = useCallback((comment: Comment): Comment => {
     return {
       ...comment,
       // content と body フィールドの統一（bodyを優先）
-      body: comment.body || comment.content || "",
+      body: comment.body || "",
       // author と user フィールドの統一
-      user: comment.user ||
-        comment.author || {
-          id: 0,
-          username: "不明なユーザー",
-        },
+      user: comment.user || {
+        id: 0,
+        username: "不明なユーザー",
+        email: "",
+        role: "user",
+        created_at: "",
+        updated_at: "",
+      },
       // repliesがある場合は再帰的に正規化
       replies: comment.replies
         ? comment.replies.map(normalizeComment)
@@ -42,14 +45,25 @@ const Comments: React.FC<CommentsProps> = ({ contentId }) => {
       setError(null);
       console.log(`📥 コメント取得: コンテンツID ${contentId}`);
 
-      const response: ApiResponse<Comment[]> = await api.getCommentsByContentId(
-        contentId.toString()
-      );
+      const response: ApiResponse<CommentsApiResponse> =
+        await api.getCommentsByContentId(contentId.toString());
       console.log("📋 コメントレスポンス:", response);
 
       if (response.success && response.data) {
+        // APIレスポンス構造に対応した修正
+        let commentsData: Comment[] = [];
+
+        if (response.data.comments && Array.isArray(response.data.comments)) {
+          // CommentsApiResponse構造の場合: { comments: Comment[] }
+          commentsData = response.data.comments;
+        } else {
+          // データが期待される構造でない場合
+          console.warn("⚠️ 予期しないコメントデータ構造:", response.data);
+          commentsData = [];
+        }
+
         // コメントデータの正規化
-        const normalizedComments = response.data.map(normalizeComment);
+        const normalizedComments = commentsData.map(normalizeComment);
         console.log("📋 正規化後のコメント:", normalizedComments);
         setComments(normalizedComments);
       } else {
@@ -282,6 +296,10 @@ const Comments: React.FC<CommentsProps> = ({ contentId }) => {
       const user = comment.user || {
         id: 0,
         username: "不明なユーザー",
+        email: "",
+        role: "user",
+        created_at: "",
+        updated_at: "",
       };
 
       // 安全なコンテンツの取得

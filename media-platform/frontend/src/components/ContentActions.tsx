@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "../services/api";
-import { ApiResponse, Rating, AverageRating, User } from "../types";
+import {
+  ApiResponse,
+  Rating,
+  AverageRating,
+  User,
+  RatingsApiResponse,
+} from "../types";
 
 interface ContentActionsProps {
   contentId: number;
@@ -15,6 +21,17 @@ interface ActionStats {
 interface UserActions {
   hasGood: boolean;
   goodId?: number;
+}
+
+// エラー型の定義
+interface ApiError {
+  response?: {
+    status: number;
+    data?: {
+      message?: string;
+    };
+  };
+  message?: string;
 }
 
 const ContentActions: React.FC<ContentActionsProps> = ({
@@ -41,7 +58,7 @@ const ContentActions: React.FC<ContentActionsProps> = ({
 
     if (token && userStr) {
       try {
-        const user = JSON.parse(userStr);
+        const user = JSON.parse(userStr) as User;
         setIsAuthenticated(true);
         setCurrentUser(user);
         console.log("✅ 認証確認: ユーザーID", user.id);
@@ -72,9 +89,10 @@ const ContentActions: React.FC<ContentActionsProps> = ({
         console.warn("⚠️ 統計データなし:", response.message);
         setStats({ goods: 0 });
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("❌ 統計取得エラー:", error);
-      if (error.response?.status !== 404) {
+      const apiError = error as ApiError;
+      if (apiError.response?.status !== 404) {
         throw error; // 404以外のエラーは上位に投げる
       }
       setStats({ goods: 0 });
@@ -90,13 +108,23 @@ const ContentActions: React.FC<ContentActionsProps> = ({
 
     try {
       console.log(`👤 ユーザー評価取得: ユーザーID ${currentUser.id}`);
-      const response: ApiResponse<Rating[]> = await api.getRatingsByUser(
-        currentUser.id.toString()
-      );
+      const response: ApiResponse<RatingsApiResponse> =
+        await api.getRatingsByUser(currentUser.id.toString());
 
       if (response.success && response.data) {
+        // RatingsApiResponse構造に対応した型安全な処理
+        let ratingsData: Rating[] = [];
+
+        if (response.data.ratings && Array.isArray(response.data.ratings)) {
+          // RatingsApiResponse構造の場合: { ratings: Rating[] }
+          ratingsData = response.data.ratings;
+        } else {
+          console.warn("⚠️ 予期しない評価データ構造:", response.data);
+          ratingsData = [];
+        }
+
         // 現在のコンテンツに対するユーザーの評価を検索
-        const userRating = response.data.find(
+        const userRating = ratingsData.find(
           (rating: Rating) =>
             rating.content_id === contentId && rating.value === 1
         );
@@ -111,9 +139,10 @@ const ContentActions: React.FC<ContentActionsProps> = ({
         console.warn("⚠️ ユーザー評価データなし:", response.message);
         setUserActions({ hasGood: false });
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("❌ ユーザー評価取得エラー:", error);
-      if (error.response?.status !== 404) {
+      const apiError = error as ApiError;
+      if (apiError.response?.status !== 404) {
         throw error;
       }
       setUserActions({ hasGood: false });
@@ -130,10 +159,11 @@ const ContentActions: React.FC<ContentActionsProps> = ({
       await Promise.all([fetchStats(), fetchUserActions()]);
 
       console.log("✅ 全評価データ取得完了");
-    } catch (error: any) {
+    } catch (error) {
       console.error("❌ 評価データ取得エラー:", error);
+      const apiError = error as ApiError;
 
-      if (error.response?.status === 404) {
+      if (apiError.response?.status === 404) {
         // データがない場合は正常
         setStats({ goods: 0 });
         setUserActions({ hasGood: false });
@@ -192,9 +222,11 @@ const ContentActions: React.FC<ContentActionsProps> = ({
 
       // データを再取得
       await fetchActions();
-    } catch (error: any) {
+    } catch (error) {
       console.error("❌ グッドエラー:", error);
-      setError(error.message || "グッドの処理に失敗しました");
+      const apiError = error as ApiError;
+      const errorMessage = apiError.message || "グッドの処理に失敗しました";
+      setError(errorMessage);
     } finally {
       setSubmitting(false);
     }
@@ -238,7 +270,7 @@ const ContentActions: React.FC<ContentActionsProps> = ({
         gap: "1rem",
         iconSize: "1.5rem",
       },
-    };
+    } as const;
     return sizes[size];
   }, [size]);
 
