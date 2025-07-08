@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import { api } from "../services/api";
-import { Content, Comment, Rating, ApiResponse } from "../types";
+import { Content, Comment } from "../types";
 import { useAuth } from "../contexts/AuthContext";
 
 const ContentDetailPage: React.FC = () => {
@@ -26,7 +26,8 @@ const ContentDetailPage: React.FC = () => {
 
     try {
       console.log(`📄 コンテンツ ${id} を取得中...`);
-      const response: ApiResponse<Content> = await api.getContentById(id);
+      // 修正: 型注釈を削除
+      const response = await api.getContentById(id);
 
       if (response.success && response.data) {
         setContent(response.data);
@@ -41,36 +42,37 @@ const ContentDetailPage: React.FC = () => {
     }
   }, [id]); // idに依存
 
-  // useCallbackを使用してfetchCommentsをメモ化
+  // useCallbackを使用してfetchCommentsをメモ化 - 修正版
   const fetchComments = useCallback(async () => {
     if (!id) return;
 
     try {
       console.log(`💬 コンテンツ ${id} のコメントを取得中...`);
-      const response: ApiResponse<Comment[]> = await api.getCommentsByContentId(
-        id
-      );
+      // 修正: 型注釈を削除
+      const response = await api.getCommentsByContentId(id);
 
       if (response.success && response.data) {
         setComments(response.data);
         console.log(`✅ コメント取得成功: ${response.data.length}件`);
       } else {
         console.error("❌ コメント取得失敗:", response.message);
+        // エラーの場合も空配列を設定
+        setComments([]);
       }
     } catch (err: any) {
       console.error("❌ コメント取得エラー:", err);
+      setComments([]);
     }
   }, [id]); // idに依存
 
-  // useCallbackを使用してfetchUserRatingをメモ化
+  // useCallbackを使用してfetchUserRatingをメモ化 - 修正版
   const fetchUserRating = useCallback(async () => {
     if (!id || !currentUser) return;
 
     try {
       console.log(`⭐ ユーザー ${currentUser.id} の評価を取得中...`);
-      const response: ApiResponse<Rating[]> = await api.getRatingsByUser(
-        currentUser.id.toString()
-      );
+      // 修正: 型注釈を削除
+      const response = await api.getRatingsByUser(currentUser.id.toString());
 
       if (response.success && response.data) {
         const contentRating = response.data.find(
@@ -81,12 +83,15 @@ const ContentDetailPage: React.FC = () => {
           console.log(`✅ ユーザー評価取得: ${contentRating.value}`);
         } else {
           console.log("📭 このコンテンツの評価なし");
+          setUserRating(null);
         }
       } else {
         console.error("❌ 評価取得失敗:", response.message);
+        setUserRating(null);
       }
     } catch (err: any) {
       console.error("❌ 評価取得エラー:", err);
+      setUserRating(null);
     }
   }, [id, currentUser]); // idとcurrentUserに依存
 
@@ -110,7 +115,7 @@ const ContentDetailPage: React.FC = () => {
     loadData();
   }, [loadData]); // loadDataを依存配列に含める
 
-  // useCallbackを使用してhandleCommentSubmitをメモ化
+  // useCallbackを使用してhandleCommentSubmitをメモ化 - 修正版
   const handleCommentSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
@@ -124,13 +129,15 @@ const ContentDetailPage: React.FC = () => {
 
       try {
         console.log("💬 コメント投稿中...");
-        const response: ApiResponse<Comment> = await api.createComment({
+        // 修正: 型注釈を削除
+        const response = await api.createComment({
           body: commentText.trim(),
           content_id: parseInt(id),
         });
 
         if (response.success && response.data) {
-          setComments((prev) => [...prev, response.data]);
+          // 修正: non-null assertionを使用
+          setComments((prev) => [...prev, response.data!]);
           setCommentText("");
           console.log("✅ コメント投稿成功");
         } else {
@@ -147,7 +154,7 @@ const ContentDetailPage: React.FC = () => {
     [commentText, id, currentUser]
   ); // 状態と依存関係に依存
 
-  // useCallbackを使用してhandleRatingをメモ化
+  // useCallbackを使用してhandleRatingをメモ化 - 修正版
   const handleRating = useCallback(
     async (rating: number) => {
       if (!id || !currentUser) {
@@ -157,10 +164,8 @@ const ContentDetailPage: React.FC = () => {
 
       try {
         console.log(`⭐ 評価更新中: ${rating}`);
-        const response: ApiResponse<Rating> = await api.createOrUpdateRating(
-          parseInt(id),
-          rating
-        );
+        // 修正: 型注釈を削除
+        const response = await api.createOrUpdateRating(parseInt(id), rating);
 
         if (response.success) {
           setUserRating(rating);
@@ -421,6 +426,17 @@ const ContentDetailPage: React.FC = () => {
               👎 バッド
             </button>
           </div>
+          {userRating !== null && (
+            <div
+              style={{
+                marginTop: "0.5rem",
+                fontSize: "0.875rem",
+                color: "#6b7280",
+              }}
+            >
+              現在の評価: {userRating === 1 ? "👍 グッド" : "👎 バッド"}
+            </div>
+          )}
         </div>
       )}
 
@@ -472,6 +488,26 @@ const ContentDetailPage: React.FC = () => {
               </button>
             </div>
           </form>
+        )}
+
+        {!currentUser && (
+          <div
+            style={{
+              marginBottom: "2rem",
+              padding: "1rem",
+              backgroundColor: "#f3f4f6",
+              borderRadius: "4px",
+              textAlign: "center",
+            }}
+          >
+            <p style={{ margin: 0, color: "#6b7280" }}>
+              コメントを投稿するには
+              <Link to="/login" style={{ color: "#3b82f6" }}>
+                ログイン
+              </Link>
+              してください
+            </p>
+          </div>
         )}
 
         {/* コメント一覧 */}

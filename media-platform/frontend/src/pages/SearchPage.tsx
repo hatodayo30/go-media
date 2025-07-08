@@ -1,13 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../services/api";
-import type {
-  User,
-  Content,
-  Category,
-  SearchParams,
-  ApiResponse,
-} from "../types";
+import type { User, Content, Category, SearchParams } from "../types";
 
 interface SearchFilters {
   query: string;
@@ -49,8 +43,7 @@ const SearchPage: React.FC = () => {
     return true;
   }, [navigate]);
 
-  // useCallbackでfetchInitialDataをメモ化
-  // useCallbackでfetchInitialDataをメモ化
+  // useCallbackでfetchInitialDataをメモ化 - 修正版
   const fetchInitialData = useCallback(async () => {
     try {
       setInitialLoading(true);
@@ -63,12 +56,12 @@ const SearchPage: React.FC = () => {
 
       console.log("📥 初期データを取得中...");
 
-      // 🔧 getPublicUsersを使用するように変更
+      // 修正: 型注釈を削除し、並列取得を実行
       const [userResponse, categoriesResponse, authorsResponse] =
         await Promise.all([
           api.getCurrentUser(),
           api.getCategories(),
-          api.getPublicUsers(), // 🆕 getUsers() → getPublicUsers()に変更
+          api.getPublicUsers(),
         ]);
 
       console.log("👤 ユーザーレスポンス:", userResponse);
@@ -98,16 +91,11 @@ const SearchPage: React.FC = () => {
         setCategories([]);
       }
 
-      // 🔧 著者情報の設定（エラーハンドリング改善）
-      // 著者情報の設定（エラーハンドリング改善）
+      // 著者情報の設定 - 修正版
       if (authorsResponse.success && authorsResponse.data) {
-        // 🔧 型アサーションを使用してレスポンス構造に対応
-        const authorsData = Array.isArray(authorsResponse.data)
-          ? authorsResponse.data
-          : (authorsResponse.data as any).users || [];
-
-        setAuthors(authorsData);
-        console.log("✅ 著者設定完了:", authorsData.length, "件");
+        // api.tsで既に正しい形式のUser[]が返されるため、直接設定
+        setAuthors(authorsResponse.data);
+        console.log("✅ 著者設定完了:", authorsResponse.data.length, "件");
       } else {
         console.warn("⚠️ 著者取得失敗:", authorsResponse.message);
         setAuthors([]);
@@ -122,11 +110,11 @@ const SearchPage: React.FC = () => {
         return;
       }
 
-      // 🆕 403エラーの場合は警告のみ表示
+      // 403エラーの場合は警告のみ表示
       if (err.response?.status === 403) {
         console.warn("⚠️ 権限不足 - 公開ユーザー情報のみ表示");
-        setAuthors([]); // 空配列で継続
-        setError(""); // エラーメッセージはクリア
+        setAuthors([]);
+        setError("");
       } else {
         setError(err.message || "初期データの取得に失敗しました");
       }
@@ -134,7 +122,8 @@ const SearchPage: React.FC = () => {
       setInitialLoading(false);
     }
   }, [checkAuthentication, navigate]);
-  // useCallbackでperformSearchをメモ化
+
+  // useCallbackでperformSearchをメモ化 - 修正版
   const performSearch = useCallback(
     async (searchFilters: SearchFilters) => {
       if (!searchFilters.query.trim()) {
@@ -165,9 +154,8 @@ const SearchPage: React.FC = () => {
           params.type = searchFilters.type;
         }
 
-        const response: ApiResponse<Content[]> = await api.searchContents(
-          params
-        );
+        // 修正: 型注釈を削除
+        const response = await api.searchContents(params);
         console.log("📥 検索レスポンス:", response);
 
         if (response.success && response.data) {

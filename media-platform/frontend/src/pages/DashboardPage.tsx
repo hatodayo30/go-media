@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../services/api";
-import { ApiResponse, User, Content, Category } from "../types";
+import { User, Content, Category } from "../types";
 
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
@@ -13,11 +13,6 @@ const DashboardPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
-
-  // 型ガード関数（実際のAPI構造に対応）
-  const isSuccessResponse = (response: any): boolean => {
-    return response && response.status === "success" && response.data;
-  };
 
   // useCallbackで認証チェックをメモ化
   const checkAuthentication = useCallback(() => {
@@ -36,18 +31,9 @@ const DashboardPage: React.FC = () => {
       console.log("👤 ユーザー情報取得開始");
       const response = await api.getCurrentUser();
 
-      if (isSuccessResponse(response)) {
-        // 実際のAPIレスポンス構造に対応
-        if (response.data && response.data.user) {
-          setUser(response.data.user);
-          console.log("✅ ユーザー情報取得成功:", response.data.user.username);
-        } else if (response.data && response.data.id) {
-          // dataが直接Userオブジェクトの場合
-          setUser(response.data);
-          console.log("✅ ユーザー情報取得成功:", response.data.username);
-        } else {
-          throw new Error("ユーザー情報が見つかりません");
-        }
+      if (response.success && response.data) {
+        setUser(response.data);
+        console.log("✅ ユーザー情報取得成功:", response.data.username);
       } else {
         throw new Error(response.message || "ユーザー情報の取得に失敗しました");
       }
@@ -78,25 +64,9 @@ const DashboardPage: React.FC = () => {
         response = await api.getPublishedContents();
       }
 
-      if (isSuccessResponse(response)) {
-        // 実際のAPIレスポンス構造に対応
-        let contentsData;
-        if (
-          response.data &&
-          response.data.contents &&
-          Array.isArray(response.data.contents)
-        ) {
-          contentsData = response.data.contents;
-        } else if (Array.isArray(response.data)) {
-          contentsData = response.data;
-        } else {
-          console.warn("⚠️ コンテンツデータが見つかりません", response.data);
-          setContents([]);
-          return;
-        }
-
-        setContents(contentsData);
-        console.log(`✅ コンテンツ取得成功: ${contentsData.length}件`);
+      if (response.success && response.data) {
+        setContents(response.data);
+        console.log(`✅ コンテンツ取得成功: ${response.data.length}件`);
       } else {
         console.error("❌ コンテンツ取得失敗:", response);
         setContents([]);
@@ -115,25 +85,9 @@ const DashboardPage: React.FC = () => {
       console.log("📂 カテゴリ取得開始");
       const response = await api.getCategories();
 
-      if (isSuccessResponse(response)) {
-        // 実際のAPIレスポンス構造に対応
-        let categoriesData;
-        if (
-          response.data &&
-          response.data.categories &&
-          Array.isArray(response.data.categories)
-        ) {
-          categoriesData = response.data.categories;
-        } else if (Array.isArray(response.data)) {
-          categoriesData = response.data;
-        } else {
-          console.warn("⚠️ カテゴリデータが見つかりません", response.data);
-          setCategories([]);
-          return;
-        }
-
-        setCategories(categoriesData);
-        console.log(`✅ カテゴリ取得成功: ${categoriesData.length}件`);
+      if (response.success && response.data) {
+        setCategories(response.data);
+        console.log(`✅ カテゴリ取得成功: ${response.data.length}件`);
       } else {
         console.error("❌ カテゴリ取得失敗:", response);
         setCategories([]);

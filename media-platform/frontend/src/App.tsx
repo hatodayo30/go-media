@@ -12,10 +12,10 @@ import DashboardPage from "./pages/DashboardPage";
 import CreateContentPage from "./pages/CreateContentPage";
 import EditContentPage from "./pages/EditContentPage";
 import DraftsPage from "./pages/DraftsPage";
-import MyPage from "./pages/MyPage";
 import ProfilePage from "./pages/ProfilePage";
 import SearchPage from "./pages/SearchPage";
 import ContentDetailPage from "./pages/ContentDetailPage";
+import NotFoundPage from "./pages/NotFoundPage";
 import "./App.css";
 
 // 認証が必要なルートのためのコンポーネント
@@ -68,6 +68,8 @@ const App: React.FC = () => {
                 </PrivateRoute>
               }
             />
+
+            {/* コンテンツ関連 */}
             <Route
               path="/create"
               element={
@@ -77,7 +79,15 @@ const App: React.FC = () => {
               }
             />
             <Route
-              path="/edit/:id"
+              path="/contents/:id"
+              element={
+                <PrivateRoute>
+                  <ContentDetailPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/contents/:id/edit"
               element={
                 <PrivateRoute>
                   <EditContentPage />
@@ -92,14 +102,8 @@ const App: React.FC = () => {
                 </PrivateRoute>
               }
             />
-            <Route
-              path="/my-posts"
-              element={
-                <PrivateRoute>
-                  <MyPage />
-                </PrivateRoute>
-              }
-            />
+
+            {/* ユーザー関連 */}
             <Route
               path="/profile"
               element={
@@ -108,6 +112,8 @@ const App: React.FC = () => {
                 </PrivateRoute>
               }
             />
+
+            {/* その他 */}
             <Route
               path="/search"
               element={
@@ -116,17 +122,9 @@ const App: React.FC = () => {
                 </PrivateRoute>
               }
             />
-            <Route
-              path="/contents/:id"
-              element={
-                <PrivateRoute>
-                  <ContentDetailPage />
-                </PrivateRoute>
-              }
-            />
 
             {/* 404ページ */}
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </div>
       </Router>

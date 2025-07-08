@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { ThumbsUp, ThumbsDown } from "lucide-react";
 import { api } from "../services/api";
-import { ApiResponse, Rating as RatingType, User } from "../types";
+import { User } from "../types";
 
 interface RatingProps {
   contentId: number;
@@ -80,7 +80,7 @@ const Rating: React.FC<RatingProps> = ({
     }
   }, []);
 
-  // useCallbackでfetchUserRatingをメモ化
+  // useCallbackでfetchUserRatingをメモ化 - 修正版
   const fetchUserRating = useCallback(async (): Promise<number | undefined> => {
     if (!isAuthenticated || !currentUser) {
       return undefined;
@@ -88,14 +88,13 @@ const Rating: React.FC<RatingProps> = ({
 
     try {
       console.log(`👤 ユーザー評価取得: ユーザーID ${currentUser.id}`);
-      const response: ApiResponse<RatingType[]> = await api.getRatingsByUser(
-        currentUser.id.toString()
-      );
+      // 修正: 型注釈を削除し、api.tsの戻り値に依存
+      const response = await api.getRatingsByUser(currentUser.id.toString());
 
       if (response.success && response.data) {
         // 現在のコンテンツに対するユーザーの評価を検索
         const userRating = response.data.find(
-          (rating: RatingType) => rating.content_id === contentId
+          (rating) => rating.content_id === contentId
         );
 
         if (userRating) {
@@ -169,7 +168,7 @@ const Rating: React.FC<RatingProps> = ({
     }
   }, [contentId, fetchUserRating]);
 
-  // useCallbackでhandleRatingをメモ化
+  // useCallbackでhandleRatingをメモ化 - 修正版
   const handleRating = useCallback(
     async (rating: number) => {
       if (!isAuthenticated || !currentUser) {
@@ -185,8 +184,8 @@ const Rating: React.FC<RatingProps> = ({
       try {
         console.log("🔄 評価送信中...", { contentId, rating });
 
-        const response: ApiResponse<RatingType> =
-          await api.createOrUpdateRating(contentId, rating);
+        // 修正: 型注釈を削除し、api.tsの戻り値に依存
+        const response = await api.createOrUpdateRating(contentId, rating);
 
         if (response.success) {
           console.log("✅ 評価投稿成功:", response);

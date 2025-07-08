@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../services/api";
-import { Follow, FollowStats, User, ApiResponse } from "../types";
+import { FollowStats, User } from "../types";
 
 interface UserFollowProps {
   userId: number;
@@ -30,17 +30,15 @@ const UserFollow: React.FC<UserFollowProps> = ({
   const [showFollowList, setShowFollowList] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // useCallbackでfetchFollowStatsをメモ化
+  // useCallbackでfetchFollowStatsをメモ化 - 修正版
   const fetchFollowStats = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       console.log(`📊 フォロー統計取得: ユーザーID ${userId}`);
 
-      const response: ApiResponse<FollowStats> = await api.getFollowStats(
-        userId,
-        currentUserId
-      );
+      // 修正: 型注釈を削除
+      const response = await api.getFollowStats(userId, currentUserId);
 
       if (response.success && response.data) {
         setFollowStats(response.data);
@@ -57,14 +55,15 @@ const UserFollow: React.FC<UserFollowProps> = ({
     }
   }, [userId, currentUserId]);
 
-  // useCallbackでfetchFollowersをメモ化
+  // useCallbackでfetchFollowersをメモ化 - 修正版
   const fetchFollowers = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       console.log(`👥 フォロワー一覧取得: ユーザーID ${userId}`);
 
-      const response: ApiResponse<User[]> = await api.getFollowers(userId);
+      // 修正: 型注釈を削除
+      const response = await api.getFollowers(userId);
 
       if (response.success && response.data) {
         setFollowers(response.data);
@@ -83,14 +82,15 @@ const UserFollow: React.FC<UserFollowProps> = ({
     }
   }, [userId]);
 
-  // useCallbackでfetchFollowingをメモ化
+  // useCallbackでfetchFollowingをメモ化 - 修正版
   const fetchFollowing = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       console.log(`➡️ フォロー中一覧取得: ユーザーID ${userId}`);
 
-      const response: ApiResponse<User[]> = await api.getFollowing(userId);
+      // 修正: 型注釈を削除
+      const response = await api.getFollowing(userId);
 
       if (response.success && response.data) {
         setFollowing(response.data);
@@ -109,7 +109,7 @@ const UserFollow: React.FC<UserFollowProps> = ({
     }
   }, [userId]);
 
-  // useCallbackでhandleFollowをメモ化
+  // useCallbackでhandleFollowをメモ化 - 修正版
   const handleFollow = useCallback(async () => {
     if (!currentUserId || currentUserId === userId || followLoading) return;
 
@@ -119,7 +119,8 @@ const UserFollow: React.FC<UserFollowProps> = ({
 
       if (followStats.is_following) {
         console.log(`🚫 アンフォロー実行: ユーザーID ${userId}`);
-        const response: ApiResponse<void> = await api.unfollowUser(userId);
+        // 修正: 型注釈を削除
+        const response = await api.unfollowUser(userId);
 
         if (response.success) {
           setFollowStats((prev) => ({
@@ -133,7 +134,8 @@ const UserFollow: React.FC<UserFollowProps> = ({
         }
       } else {
         console.log(`➕ フォロー実行: ユーザーID ${userId}`);
-        const response: ApiResponse<Follow> = await api.followUser(userId);
+        // 修正: 型注釈を削除
+        const response = await api.followUser(userId);
 
         if (response.success) {
           setFollowStats((prev) => ({
@@ -191,7 +193,7 @@ const UserFollow: React.FC<UserFollowProps> = ({
     [fetchFollowers, fetchFollowing]
   );
 
-  // useCallbackでhandleUserFollowをメモ化
+  // useCallbackでhandleUserFollowをメモ化 - 修正版
   const handleUserFollow = useCallback(
     async (targetUserId: number, isCurrentlyFollowing: boolean) => {
       if (!currentUserId) return;
@@ -200,16 +202,14 @@ const UserFollow: React.FC<UserFollowProps> = ({
         setError(null);
 
         if (isCurrentlyFollowing) {
-          const response: ApiResponse<void> = await api.unfollowUser(
-            targetUserId
-          );
+          // 修正: 型注釈を削除
+          const response = await api.unfollowUser(targetUserId);
           if (!response.success) {
             throw new Error(response.message || "アンフォローに失敗しました");
           }
         } else {
-          const response: ApiResponse<Follow> = await api.followUser(
-            targetUserId
-          );
+          // 修正: 型注釈を削除
+          const response = await api.followUser(targetUserId);
           if (!response.success) {
             throw new Error(response.message || "フォローに失敗しました");
           }
@@ -628,7 +628,7 @@ const FollowListModal: React.FC<FollowListModalProps> = React.memo(
   }
 );
 
-// フォローボタンコンポーネント
+// フォローボタンコンポーネント - 修正版
 interface FollowButtonProps {
   userId: number;
   currentUserId: number;
@@ -643,13 +643,11 @@ const FollowButton: React.FC<FollowButtonProps> = ({
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // useCallbackでcheckFollowStatusをメモ化
+  // useCallbackでcheckFollowStatusをメモ化 - 修正版
   const checkFollowStatus = useCallback(async () => {
     try {
-      const response: ApiResponse<FollowStats> = await api.getFollowStats(
-        userId,
-        currentUserId
-      );
+      // 修正: 型注釈を削除
+      const response = await api.getFollowStats(userId, currentUserId);
       if (response.success && response.data) {
         setIsFollowing(response.data.is_following);
       }
@@ -658,7 +656,7 @@ const FollowButton: React.FC<FollowButtonProps> = ({
     }
   }, [userId, currentUserId]);
 
-  // useCallbackでhandleFollowをメモ化
+  // useCallbackでhandleFollowをメモ化 - 修正版
   const handleFollow = useCallback(async () => {
     if (loading) return;
 
@@ -666,13 +664,15 @@ const FollowButton: React.FC<FollowButtonProps> = ({
       setLoading(true);
 
       if (isFollowing) {
-        const response: ApiResponse<void> = await api.unfollowUser(userId);
+        // 修正: 型注釈を削除
+        const response = await api.unfollowUser(userId);
         if (response.success) {
           setIsFollowing(false);
           onFollowChange(userId, false);
         }
       } else {
-        const response: ApiResponse<Follow> = await api.followUser(userId);
+        // 修正: 型注釈を削除
+        const response = await api.followUser(userId);
         if (response.success) {
           setIsFollowing(true);
           onFollowChange(userId, true);
