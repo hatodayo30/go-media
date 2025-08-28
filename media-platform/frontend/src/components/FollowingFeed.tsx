@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../services/api";
-import { Content, ApiResponse, FollowingFeedApiResponse } from "../types";
+import { Content } from "../types";
 
 interface FollowingFeedProps {
   currentUserId: number;
@@ -39,23 +39,14 @@ const FollowingFeed: React.FC<FollowingFeedProps> = ({ currentUserId }) => {
           console.log(`📡 フィード追加読み込み: ページ ${pageNum}`);
         }
 
-        const response: ApiResponse<FollowingFeedApiResponse> =
-          await api.getFollowingFeed(currentUserId, {
-            page: pageNum,
-            limit: 10,
-          });
+        const response = await api.getFollowingFeed(currentUserId, {
+          page: pageNum,
+          limit: 10,
+        });
 
+        // データアクセス方法も変更
         if (response.success && response.data) {
-          // FollowingFeedApiResponse構造に対応した型安全な処理
-          let newContents: Content[] = [];
-
-          if (response.data.feed && Array.isArray(response.data.feed)) {
-            // FollowingFeedApiResponse構造の場合: { feed: Content[] }
-            newContents = response.data.feed;
-          } else {
-            console.warn("⚠️ 予期しないフィードデータ構造:", response.data);
-            newContents = [];
-          }
+          const newContents = response.data;
 
           console.log(`✅ フィード取得成功: ${newContents.length}件`);
 

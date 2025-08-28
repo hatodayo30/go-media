@@ -1,12 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "../services/api";
-import {
-  ApiResponse,
-  Rating,
-  AverageRating,
-  User,
-  RatingsApiResponse,
-} from "../types";
+import { ApiResponse, Rating, AverageRating, User } from "../types";
 
 interface ContentActionsProps {
   contentId: number;
@@ -108,20 +102,11 @@ const ContentActions: React.FC<ContentActionsProps> = ({
 
     try {
       console.log(`👤 ユーザー評価取得: ユーザーID ${currentUser.id}`);
-      const response: ApiResponse<RatingsApiResponse> =
-        await api.getRatingsByUser(currentUser.id.toString());
+      const response = await api.getRatingsByUser(currentUser.id.toString());
 
       if (response.success && response.data) {
-        // RatingsApiResponse構造に対応した型安全な処理
-        let ratingsData: Rating[] = [];
-
-        if (response.data.ratings && Array.isArray(response.data.ratings)) {
-          // RatingsApiResponse構造の場合: { ratings: Rating[] }
-          ratingsData = response.data.ratings;
-        } else {
-          console.warn("⚠️ 予期しない評価データ構造:", response.data);
-          ratingsData = [];
-        }
+        // 修正: api.tsは既にRating[]を返すため、直接使用
+        const ratingsData = response.data;
 
         // 現在のコンテンツに対するユーザーの評価を検索
         const userRating = ratingsData.find(

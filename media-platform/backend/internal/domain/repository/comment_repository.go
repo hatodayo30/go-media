@@ -2,30 +2,33 @@ package repository
 
 import (
 	"context"
-	"media-platform/internal/domain/model"
+
+	"media-platform/internal/domain/entity"
+	"media-platform/internal/presentation/dto"
 )
 
+// CommentRepository はコメントの永続化に関するインターフェースです
 type CommentRepository interface {
 	// Find は指定したIDのコメントを取得します
-	Find(ctx context.Context, id int64) (*model.Comment, error)
+	Find(ctx context.Context, id int64) (*entity.Comment, error)
 
 	// FindAll は条件に合うコメントを取得します
-	FindAll(ctx context.Context, query *model.CommentQuery) ([]*model.Comment, error)
+	FindAll(ctx context.Context, query *dto.CommentQuery) ([]*entity.Comment, error)
 
 	// FindByContent はコンテンツに関連するコメントを取得します
-	FindByContent(ctx context.Context, contentID int64, limit, offset int) ([]*model.Comment, error)
+	FindByContent(ctx context.Context, contentID int64, limit, offset int) ([]*entity.Comment, error)
 
 	// FindByUser はユーザーが投稿したコメントを取得します
-	FindByUser(ctx context.Context, userID int64, limit, offset int) ([]*model.Comment, error)
+	FindByUser(ctx context.Context, userID int64, limit, offset int) ([]*entity.Comment, error)
 
 	// FindReplies はコメントに対する返信を取得します
-	FindReplies(ctx context.Context, parentID int64, limit, offset int) ([]*model.Comment, error)
+	FindReplies(ctx context.Context, parentID int64, limit, offset int) ([]*entity.Comment, error)
 
 	// Create は新しいコメントを作成します
-	Create(ctx context.Context, comment *model.Comment) error
+	Create(ctx context.Context, comment *entity.Comment) error
 
 	// Update は既存のコメントを更新します
-	Update(ctx context.Context, comment *model.Comment) error
+	Update(ctx context.Context, comment *entity.Comment) error
 
 	// Delete は指定したIDのコメントを削除します
 	Delete(ctx context.Context, id int64) error

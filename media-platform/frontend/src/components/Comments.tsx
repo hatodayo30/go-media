@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { api } from "../services/api";
-import { Comment, ApiResponse, CommentsApiResponse } from "../types";
+import { Comment, ApiResponse } from "../types";
 
 interface CommentsProps {
   contentId: number;
@@ -45,25 +45,12 @@ const Comments: React.FC<CommentsProps> = ({ contentId }) => {
       setError(null);
       console.log(`📥 コメント取得: コンテンツID ${contentId}`);
 
-      const response: ApiResponse<CommentsApiResponse> =
-        await api.getCommentsByContentId(contentId.toString());
+      const response = await api.getCommentsByContentId(contentId.toString());
       console.log("📋 コメントレスポンス:", response);
 
       if (response.success && response.data) {
-        // APIレスポンス構造に対応した修正
-        let commentsData: Comment[] = [];
-
-        if (response.data.comments && Array.isArray(response.data.comments)) {
-          // CommentsApiResponse構造の場合: { comments: Comment[] }
-          commentsData = response.data.comments;
-        } else {
-          // データが期待される構造でない場合
-          console.warn("⚠️ 予期しないコメントデータ構造:", response.data);
-          commentsData = [];
-        }
-
-        // コメントデータの正規化
-        const normalizedComments = commentsData.map(normalizeComment);
+        // 修正: api.tsは既にComment[]を返すため、直接使用
+        const normalizedComments = response.data.map(normalizeComment);
         console.log("📋 正規化後のコメント:", normalizedComments);
         setComments(normalizedComments);
       } else {
@@ -104,7 +91,6 @@ const Comments: React.FC<CommentsProps> = ({ contentId }) => {
       setLoading(false);
     }
   }, [contentId, normalizeComment]);
-
   // useCallbackでauthCheckをメモ化
   const checkAuth = useCallback(() => {
     const token = localStorage.getItem("token");
