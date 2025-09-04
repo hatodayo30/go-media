@@ -1,4 +1,4 @@
-package persistence
+package repository
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"media-platform/internal/domain/model"
+	"media-platform/internal/domain/entity"
 	"media-platform/internal/domain/repository"
 )
 
@@ -21,14 +21,14 @@ func NewUserRepository(db *sql.DB) repository.UserRepository {
 }
 
 // IDによるユーザー検索
-func (r *userRepository) Find(ctx context.Context, id int64) (*model.User, error) {
+func (r *userRepository) Find(ctx context.Context, id int64) (*entity.User, error) {
 	query := `
 		SELECT id, username, email, password, bio, avatar, role, created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
 
-	var user model.User
+	var user entity.User
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&user.ID,
 		&user.Username,
@@ -52,14 +52,14 @@ func (r *userRepository) Find(ctx context.Context, id int64) (*model.User, error
 }
 
 // メールアドレスによるユーザー検索
-func (r *userRepository) FindByEmail(ctx context.Context, email string) (*model.User, error) {
+func (r *userRepository) FindByEmail(ctx context.Context, email string) (*entity.User, error) {
 	query := `
 		SELECT id, username, email, password, bio, avatar, role, created_at, updated_at
 		FROM users
 		WHERE email = $1
 	`
 
-	var user model.User
+	var user entity.User
 	err := r.db.QueryRowContext(ctx, query, email).Scan(
 		&user.ID,
 		&user.Username,
@@ -82,8 +82,39 @@ func (r *userRepository) FindByEmail(ctx context.Context, email string) (*model.
 	return &user, nil
 }
 
+// ユーザー名によるユーザー検索（ドメインサービス用に追加）
+func (r *userRepository) FindByUsername(ctx context.Context, username string) (*entity.User, error) {
+	query := `
+		SELECT id, username, email, password, bio, avatar, role, created_at, updated_at
+		FROM users
+		WHERE username = $1
+	`
+
+	var user entity.User
+	err := r.db.QueryRowContext(ctx, query, username).Scan(
+		&user.ID,
+		&user.Username,
+		&user.Email,
+		&user.Password,
+		&user.Bio,
+		&user.Avatar,
+		&user.Role,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &user, nil
+}
+
 // 全ユーザーの取得（ページネーション付き）
-func (r *userRepository) FindAll(ctx context.Context, limit, offset int) ([]*model.User, error) {
+func (r *userRepository) FindAll(ctx context.Context, limit, offset int) ([]*entity.User, error) {
 	query := `
 		SELECT id, username, email, password, bio, avatar, role, created_at, updated_at
 		FROM users
@@ -97,9 +128,9 @@ func (r *userRepository) FindAll(ctx context.Context, limit, offset int) ([]*mod
 	}
 	defer rows.Close()
 
-	var users []*model.User
+	var users []*entity.User
 	for rows.Next() {
-		var user model.User
+		var user entity.User
 		err := rows.Scan(
 			&user.ID,
 			&user.Username,
@@ -125,7 +156,7 @@ func (r *userRepository) FindAll(ctx context.Context, limit, offset int) ([]*mod
 }
 
 // ユーザーの作成
-func (r *userRepository) Create(ctx context.Context, user *model.User) error {
+func (r *userRepository) Create(ctx context.Context, user *entity.User) error {
 	query := `
 		INSERT INTO users (username, email, password, bio, avatar, role, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -151,7 +182,7 @@ func (r *userRepository) Create(ctx context.Context, user *model.User) error {
 }
 
 // ユーザーの更新
-func (r *userRepository) Update(ctx context.Context, user *model.User) error {
+func (r *userRepository) Update(ctx context.Context, user *entity.User) error {
 	query := `
 		UPDATE users
 		SET username = $1, email = $2, password = $3, bio = $4, avatar = $5, role = $6, updated_at = $7
@@ -207,7 +238,7 @@ func (r *userRepository) Delete(ctx context.Context, id int64) error {
 }
 
 // GetPublicUsers は公開情報のみを取得します
-func (r *userRepository) GetPublicUsers(ctx context.Context) ([]*model.User, error) {
+func (r *userRepository) GetPublicUsers(ctx context.Context) ([]*entity.User, error) {
 	query := `
 		SELECT id, username, bio, role, created_at, updated_at
 		FROM users
@@ -220,9 +251,9 @@ func (r *userRepository) GetPublicUsers(ctx context.Context) ([]*model.User, err
 	}
 	defer rows.Close()
 
-	var users []*model.User
+	var users []*entity.User
 	for rows.Next() {
-		var user model.User
+		var user entity.User
 		// パスワードとメールアドレスは取得しない
 		err := rows.Scan(
 			&user.ID,

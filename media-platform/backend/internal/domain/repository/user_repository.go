@@ -14,6 +14,9 @@ type UserRepository interface {
 	// FindByEmail はメールアドレスでユーザーを取得します
 	FindByEmail(ctx context.Context, email string) (*entity.User, error)
 
+	// FindByUsername はユーザー名でユーザーを取得します
+	FindByUsername(ctx context.Context, username string) (*entity.User, error)
+
 	// FindAll は全てのユーザーを取得します（ページング対応）
 	FindAll(ctx context.Context, limit, offset int) ([]*entity.User, error)
 

@@ -1,4 +1,4 @@
-package persistence
+package repository
 
 import (
 	"context"
@@ -8,8 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"media-platform/internal/domain/model"
+	"media-platform/internal/domain/entity"
 	"media-platform/internal/domain/repository"
+	"media-platform/internal/presentation/dto"
 )
 
 // CommentRepositoryImpl はCommentRepositoryインターフェースの実装です
@@ -25,14 +26,14 @@ func NewCommentRepository(db *sql.DB) repository.CommentRepository {
 }
 
 // Find は指定したIDのコメントを取得します
-func (r *CommentRepositoryImpl) Find(ctx context.Context, id int64) (*model.Comment, error) {
+func (r *CommentRepositoryImpl) Find(ctx context.Context, id int64) (*entity.Comment, error) {
 	query := `
 		SELECT id, body, user_id, content_id, parent_id, created_at, updated_at
 		FROM comments
 		WHERE id = $1
 	`
 
-	var comment model.Comment
+	var comment entity.Comment
 	var parentID sql.NullInt64
 
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
@@ -60,7 +61,7 @@ func (r *CommentRepositoryImpl) Find(ctx context.Context, id int64) (*model.Comm
 }
 
 // FindAll は条件に合うコメントを取得します
-func (r *CommentRepositoryImpl) FindAll(ctx context.Context, query *model.CommentQuery) ([]*model.Comment, error) {
+func (r *CommentRepositoryImpl) FindAll(ctx context.Context, query *dto.CommentQuery) ([]*entity.Comment, error) {
 	// ベースクエリ
 	baseQuery := `
 		SELECT id, body, user_id, content_id, parent_id, created_at, updated_at
@@ -84,9 +85,9 @@ func (r *CommentRepositoryImpl) FindAll(ctx context.Context, query *model.Commen
 	defer rows.Close()
 
 	// 結果をスライスに格納
-	var comments []*model.Comment
+	var comments []*entity.Comment
 	for rows.Next() {
-		var comment model.Comment
+		var comment entity.Comment
 		var parentID sql.NullInt64
 
 		err := rows.Scan(
@@ -117,7 +118,7 @@ func (r *CommentRepositoryImpl) FindAll(ctx context.Context, query *model.Commen
 }
 
 // FindByContent はコンテンツに関連するコメントを取得します
-func (r *CommentRepositoryImpl) FindByContent(ctx context.Context, contentID int64, limit, offset int) ([]*model.Comment, error) {
+func (r *CommentRepositoryImpl) FindByContent(ctx context.Context, contentID int64, limit, offset int) ([]*entity.Comment, error) {
 	query := `
 		SELECT id, body, user_id, content_id, parent_id, created_at, updated_at
 		FROM comments
@@ -134,9 +135,9 @@ func (r *CommentRepositoryImpl) FindByContent(ctx context.Context, contentID int
 	defer rows.Close()
 
 	// 結果をスライスに格納
-	var comments []*model.Comment
+	var comments []*entity.Comment
 	for rows.Next() {
-		var comment model.Comment
+		var comment entity.Comment
 		var parentID sql.NullInt64
 
 		err := rows.Scan(
@@ -167,7 +168,7 @@ func (r *CommentRepositoryImpl) FindByContent(ctx context.Context, contentID int
 }
 
 // FindByUser はユーザーが投稿したコメントを取得します
-func (r *CommentRepositoryImpl) FindByUser(ctx context.Context, userID int64, limit, offset int) ([]*model.Comment, error) {
+func (r *CommentRepositoryImpl) FindByUser(ctx context.Context, userID int64, limit, offset int) ([]*entity.Comment, error) {
 	query := `
 		SELECT id, body, user_id, content_id, parent_id, created_at, updated_at
 		FROM comments
@@ -184,9 +185,9 @@ func (r *CommentRepositoryImpl) FindByUser(ctx context.Context, userID int64, li
 	defer rows.Close()
 
 	// 結果をスライスに格納
-	var comments []*model.Comment
+	var comments []*entity.Comment
 	for rows.Next() {
-		var comment model.Comment
+		var comment entity.Comment
 		var parentID sql.NullInt64
 
 		err := rows.Scan(
@@ -217,7 +218,7 @@ func (r *CommentRepositoryImpl) FindByUser(ctx context.Context, userID int64, li
 }
 
 // FindReplies はコメントに対する返信を取得します
-func (r *CommentRepositoryImpl) FindReplies(ctx context.Context, parentID int64, limit, offset int) ([]*model.Comment, error) {
+func (r *CommentRepositoryImpl) FindReplies(ctx context.Context, parentID int64, limit, offset int) ([]*entity.Comment, error) {
 	query := `
 		SELECT id, body, user_id, content_id, parent_id, created_at, updated_at
 		FROM comments
@@ -234,9 +235,9 @@ func (r *CommentRepositoryImpl) FindReplies(ctx context.Context, parentID int64,
 	defer rows.Close()
 
 	// 結果をスライスに格納
-	var comments []*model.Comment
+	var comments []*entity.Comment
 	for rows.Next() {
-		var comment model.Comment
+		var comment entity.Comment
 		var dbParentID sql.NullInt64
 
 		err := rows.Scan(
@@ -267,7 +268,7 @@ func (r *CommentRepositoryImpl) FindReplies(ctx context.Context, parentID int64,
 }
 
 // Create は新しいコメントを作成します
-func (r *CommentRepositoryImpl) Create(ctx context.Context, comment *model.Comment) error {
+func (r *CommentRepositoryImpl) Create(ctx context.Context, comment *entity.Comment) error {
 	query := `
 		INSERT INTO comments (body, user_id, content_id, parent_id, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
@@ -299,7 +300,7 @@ func (r *CommentRepositoryImpl) Create(ctx context.Context, comment *model.Comme
 }
 
 // Update は既存のコメントを更新します
-func (r *CommentRepositoryImpl) Update(ctx context.Context, comment *model.Comment) error {
+func (r *CommentRepositoryImpl) Update(ctx context.Context, comment *entity.Comment) error {
 	query := `
 		UPDATE comments
 		SET body = $1, updated_at = $2
@@ -393,7 +394,7 @@ func (r *CommentRepositoryImpl) CountByUser(ctx context.Context, userID int64) (
 }
 
 // buildWhereClause は検索条件からWHERE句を構築します
-func (r *CommentRepositoryImpl) buildWhereClause(query *model.CommentQuery) (string, []interface{}) {
+func (r *CommentRepositoryImpl) buildWhereClause(query *dto.CommentQuery) (string, []interface{}) {
 	var conditions []string
 	var args []interface{}
 	argCount := 1

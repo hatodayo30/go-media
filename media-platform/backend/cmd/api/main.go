@@ -4,11 +4,12 @@ import (
 	"log"
 	"os"
 
-	"media-platform/internal/infrastructure/db"
-	"media-platform/internal/interfaces/api"
+	"media-platform/internal/controller/http"
+	"media-platform/internal/controller/middleware"
+	"media-platform/internal/infrastructure/database"
 
-	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"github.com/labstack/echo/v4"
 )
 
 func main() {
@@ -18,32 +19,32 @@ func main() {
 	}
 
 	// データベース接続
-	dbConn, err := db.NewConnection()
+	dbConn, err := database.NewConnection()
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 	defer dbConn.Close()
 
-	// Ginルーターの初期化
-	router := gin.Default()
+	// Echoインスタンスの作成
+	e := echo.New()
 
 	// JWTの設定
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
 		jwtSecret = "your-secret-key"
 	}
-	jwtConfig := api.NewJWTConfig(jwtSecret)
+	jwtConfig := middleware.NewJWTConfig(jwtSecret)
 
 	// API専用ルーターの設定
-	api.SetupRouter(router, dbConn, jwtConfig)
+	http.SetupRouter(e, dbConn, jwtConfig)
 
 	// サーバー起動
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8082"
 	}
-	log.Printf("API Server starting on port %s", port)
-	if err := router.Run(":" + port); err != nil {
+	log.Printf("Echo API Server starting on port %s", port)
+	if err := e.Start(":" + port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }

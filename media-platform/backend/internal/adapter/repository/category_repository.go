@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"media-platform/internal/domain/model"
 	"media-platform/internal/domain/repository"
 	"time"
 )

@@ -21,6 +21,27 @@ type User struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// NewUser は新しいユーザーエンティティを作成します
+func NewUser(username, email, password, bio, avatar string) (*User, error) {
+	user := &User{
+		Username:  username,
+		Email:     email,
+		Password:  password,
+		Bio:       bio,
+		Avatar:    avatar,
+		Role:      "user", // デフォルトロール
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	// バリデーション実行
+	if err := user.Validate(); err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
 // Validate はユーザーエンティティのドメインルールを検証します
 func (u *User) Validate() error {
 	var errorMessages []string
@@ -157,13 +178,49 @@ func (u *User) SetRole(role string) error {
 }
 
 // SetBio はプロフィール文を設定します
-func (u *User) SetBio(bio string) {
+func (u *User) SetBio(bio string) error {
+	// Bio長さ制限（例：500文字以内）
+	if len(bio) > 500 {
+		return errors.New("プロフィール文は500文字以内である必要があります")
+	}
+
 	u.Bio = bio
 	u.UpdatedAt = time.Now()
+	return nil
 }
 
 // SetAvatar はアバター画像のURLを設定します
-func (u *User) SetAvatar(avatar string) {
+func (u *User) SetAvatar(avatar string) error {
+	// URL形式の簡単なチェック（必要に応じて）
+	if avatar != "" && len(avatar) > 255 {
+		return errors.New("アバターURLは255文字以内である必要があります")
+	}
+
 	u.Avatar = avatar
 	u.UpdatedAt = time.Now()
+	return nil
+}
+
+// CanBeDeleted はユーザーが削除可能かどうかを判定します
+func (u *User) CanBeDeleted() bool {
+	// 管理者は削除できない（ビジネスルール例）
+	if u.Role == "admin" {
+		return false
+	}
+
+	// その他の削除制限ロジック
+	// 例：コンテンツを多数投稿しているユーザーは削除できない等
+
+	return true
+}
+
+// IsAdmin はユーザーが管理者かどうかを判定します
+func (u *User) IsAdmin() bool {
+	return u.Role == "admin"
+}
+
+// IsActive はユーザーがアクティブかどうかを判定します（将来の拡張用）
+func (u *User) IsActive() bool {
+	// 現在は常にアクティブとする（将来的にis_activeフィールドを追加可能）
+	return true
 }
