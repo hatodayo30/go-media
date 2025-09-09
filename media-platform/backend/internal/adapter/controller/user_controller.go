@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"media-platform/internal/application/service"
+	"media-platform/internal/adapter/presenter"
 	domainErrors "media-platform/internal/domain/errors"
-	"media-platform/internal/presentation/dto"
-	"media-platform/internal/presentation/presenter"
+	"media-platform/internal/usecase/dto"
+	"media-platform/internal/usecase/service"
 
 	"github.com/labstack/echo/v4"
 )
@@ -33,129 +33,20 @@ func (ctrl *UserController) Register(c echo.Context) error {
 
 	// リクエストボディの取得とバインド
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusOK, map[string]interface{}{
-		"status": "success",
-		"data": map[string]interface{}{
-			"users": responses,
-		},
-	})
-}
-
-// ========== ヘルパーメソッド ==========
-
-// getPaginationParams はリクエストからページネーションパラメータを取得します
-func (ctrl *UserController) getPaginationParams(c echo.Context) (int, int) {
-	limit := 10 // デフォルト値
-	offset := 0 // デフォルト値
-
-	if limitStr := c.QueryParam("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-			limit = l
-		}
-	}
-
-	if offsetStr := c.QueryParam("offset"); offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
-			offset = o
-		}
-	}
-
-	return limit, offset
-}
-
-// getUserIDFromContext はJWTミドルウェアからユーザーIDを取得します
-func (ctrl *UserController) getUserIDFromContext(c echo.Context) (int64, error) {
-	userIDInterface := c.Get("user_id")
-	if userIDInterface == nil {
-		return 0, domainErrors.NewValidationError("認証が必要です")
-	}
-
-	// float64から int64に変換（JWTのclaimsは通常float64）
-	switch v := userIDInterface.(type) {
-	case float64:
-		return int64(v), nil
-	case int64:
-		return v, nil
-	case int:
-		return int64(v), nil
-	default:
-		return 0, domainErrors.NewValidationError("ユーザー情報の取得に失敗しました")
-	}
-}
-
-// getCurrentUserInfo は現在のユーザーIDと管理者権限を取得します
-func (ctrl *UserController) getCurrentUserInfo(c echo.Context) (int64, bool) {
-	userID, _ := ctrl.getUserIDFromContext(c)
-	
-	// ロール情報を取得
-	roleInterface := c.Get("user_role")
-	isAdmin := false
-	if role, ok := roleInterface.(string); ok && role == "admin" {
-		isAdmin = true
-	}
-
-	return userID, isAdmin
-}
-
-// handleError はエラーを適切なHTTPステータスコードでレスポンスします
-func (ctrl *UserController) handleError(c echo.Context, err error) error {
-	// Domain Errorの種類に応じてステータスコードを決定
-	if domainErrors.IsValidationError(err) {
 		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"status": "error",
-			"error":  err.Error(),
-		})
-	}
-
-	if domainErrors.IsNotFoundError(err) {
-		return c.JSON(http.StatusNotFound, map[string]interface{}{
-			"status": "error",
-			"error":  err.Error(),
-		})
-	}
-
-	if domainErrors.IsConflictError(err) {
-		return c.JSON(http.StatusConflict, map[string]interface{}{
-			"status": "error",
-			"error":  err.Error(),
-		})
-	}
-
-	if domainErrors.IsPermissionError(err) {
-		return c.JSON(http.StatusForbidden, map[string]interface{}{
-			"status": "error",
-			"error":  err.Error(),
-		})
-	}
-
-	// その他のエラーは内部サーバーエラー
-	return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-		"status": "error",
-		"error":  "内部サーバーエラーが発生しました",
-	})
-}(http.StatusBadRequest, map[string]interface{}{
 			"status": "error",
 			"error":  "無効なリクエストです: " + err.Error(),
 		})
 	}
 
-	// DTOをService DTOに変換
-	serviceReq := &service.CreateUserRequest{
-		Username: req.Username,
-		Email:    req.Email,
-		Password: req.Password,
-		Bio:      req.Bio,
-		Avatar:   req.Avatar,
-	}
-
 	// ユーザー登録の実行
-	serviceResp, err := ctrl.userService.RegisterUser(c.Request().Context(), serviceReq)
+	serviceResp, err := ctrl.userService.RegisterUser(c.Request().Context(), &req)
 	if err != nil {
 		return ctrl.handleError(c, err)
 	}
 
 	// Service DTOをPresentation DTOに変換
-	response := ctrl.userPresenter.ToLoginResponseDTO(serviceResp)
+	response := ctrl.userPresenter.ToHTTPLoginResponse(serviceResp)
 
 	return c.JSON(http.StatusCreated, map[string]interface{}{
 		"status": "success",
@@ -175,20 +66,14 @@ func (ctrl *UserController) Login(c echo.Context) error {
 		})
 	}
 
-	// DTOをService DTOに変換
-	serviceReq := &service.LoginRequest{
-		Email:    req.Email,
-		Password: req.Password,
-	}
-
 	// ログインの実行
-	serviceResp, err := ctrl.userService.LoginUser(c.Request().Context(), serviceReq)
+	serviceResp, err := ctrl.userService.LoginUser(c.Request().Context(), &req)
 	if err != nil {
 		return ctrl.handleError(c, err)
 	}
 
 	// Service DTOをPresentation DTOに変換
-	response := ctrl.userPresenter.ToLoginResponseDTO(serviceResp)
+	response := ctrl.userPresenter.ToHTTPLoginResponse(serviceResp)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "success",
@@ -216,7 +101,7 @@ func (ctrl *UserController) GetUser(c echo.Context) error {
 	}
 
 	// Service DTOをPresentation DTOに変換
-	response := ctrl.userPresenter.ToUserResponseDTO(serviceResp)
+	response := ctrl.userPresenter.ToHTTPUserResponse(serviceResp)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "success",
@@ -239,7 +124,7 @@ func (ctrl *UserController) GetAllUsers(c echo.Context) error {
 	}
 
 	// Service DTOをPresentation DTOに変換
-	responses := ctrl.userPresenter.ToUserResponseListDTO(serviceResponses)
+	responses := ctrl.userPresenter.ToHTTPUserResponseList(serviceResponses)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "success",
@@ -274,23 +159,14 @@ func (ctrl *UserController) UpdateUserByAdmin(c echo.Context) error {
 		})
 	}
 
-	// DTOをService DTOに変換
-	serviceReq := &service.UpdateUserRequest{
-		Username: req.Username,
-		Email:    req.Email,
-		Password: req.Password,
-		Bio:      req.Bio,
-		Avatar:   req.Avatar,
-	}
-
 	// ユーザー更新の実行
-	serviceResp, err := ctrl.userService.UpdateUser(c.Request().Context(), id, serviceReq)
+	serviceResp, err := ctrl.userService.UpdateUser(c.Request().Context(), id, &req)
 	if err != nil {
 		return ctrl.handleError(c, err)
 	}
 
 	// Service DTOをPresentation DTOに変換
-	response := ctrl.userPresenter.ToUserResponseDTO(serviceResp)
+	response := ctrl.userPresenter.ToHTTPUserResponse(serviceResp)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "success",
@@ -320,23 +196,14 @@ func (ctrl *UserController) UpdateCurrentUser(c echo.Context) error {
 		})
 	}
 
-	// DTOをService DTOに変換
-	serviceReq := &service.UpdateUserRequest{
-		Username: req.Username,
-		Email:    req.Email,
-		Password: req.Password,
-		Bio:      req.Bio,
-		Avatar:   req.Avatar,
-	}
-
 	// ユーザー更新の実行
-	serviceResp, err := ctrl.userService.UpdateUser(c.Request().Context(), userID, serviceReq)
+	serviceResp, err := ctrl.userService.UpdateUser(c.Request().Context(), userID, &req)
 	if err != nil {
 		return ctrl.handleError(c, err)
 	}
 
 	// Service DTOをPresentation DTOに変換
-	response := ctrl.userPresenter.ToUserResponseDTO(serviceResp)
+	response := ctrl.userPresenter.ToHTTPUserResponse(serviceResp)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "success",
@@ -390,7 +257,7 @@ func (ctrl *UserController) GetCurrentUser(c echo.Context) error {
 	}
 
 	// Service DTOをPresentation DTOに変換
-	response := ctrl.userPresenter.ToUserResponseDTO(serviceResp)
+	response := ctrl.userPresenter.ToHTTPUserResponse(serviceResp)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "success",
@@ -410,6 +277,106 @@ func (ctrl *UserController) GetPublicUsers(c echo.Context) error {
 	}
 
 	// Service DTOをPresentation DTOに変換
-	responses := ctrl.userPresenter.ToUserResponseListDTO(serviceResponses)
+	responses := ctrl.userPresenter.ToHTTPPublicUserResponseList(serviceResponses)
 
-	return c.JSON
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"status": "success",
+		"data": map[string]interface{}{
+			"users": responses,
+		},
+	})
+}
+
+// ========== ヘルパーメソッド ==========
+
+// getPaginationParams はリクエストからページネーションパラメータを取得します
+func (ctrl *UserController) getPaginationParams(c echo.Context) (int, int) {
+	limit := 10 // デフォルト値
+	offset := 0 // デフォルト値
+
+	if limitStr := c.QueryParam("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
+
+	if offsetStr := c.QueryParam("offset"); offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
+			offset = o
+		}
+	}
+
+	return limit, offset
+}
+
+// getUserIDFromContext はJWTミドルウェアからユーザーIDを取得します
+func (ctrl *UserController) getUserIDFromContext(c echo.Context) (int64, error) {
+	userIDInterface := c.Get("user_id")
+	if userIDInterface == nil {
+		return 0, domainErrors.NewValidationError("認証が必要です")
+	}
+
+	// float64から int64に変換（JWTのclaimsは通常float64）
+	switch v := userIDInterface.(type) {
+	case float64:
+		return int64(v), nil
+	case int64:
+		return v, nil
+	case int:
+		return int64(v), nil
+	default:
+		return 0, domainErrors.NewValidationError("ユーザー情報の取得に失敗しました")
+	}
+}
+
+// getCurrentUserInfo は現在のユーザーIDと管理者権限を取得します
+func (ctrl *UserController) getCurrentUserInfo(c echo.Context) (int64, bool) {
+	userID, _ := ctrl.getUserIDFromContext(c)
+
+	// ロール情報を取得
+	roleInterface := c.Get("user_role")
+	isAdmin := false
+	if role, ok := roleInterface.(string); ok && role == "admin" {
+		isAdmin = true
+	}
+
+	return userID, isAdmin
+}
+
+// handleError はエラーを適切なHTTPステータスコードでレスポンスします
+func (ctrl *UserController) handleError(c echo.Context, err error) error {
+	// Domain Errorの種類に応じてステータスコードを決定
+	if domainErrors.IsValidationError(err) {
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"status": "error",
+			"error":  err.Error(),
+		})
+	}
+
+	if domainErrors.IsNotFoundError(err) {
+		return c.JSON(http.StatusNotFound, map[string]interface{}{
+			"status": "error",
+			"error":  err.Error(),
+		})
+	}
+
+	if domainErrors.IsConflictError(err) {
+		return c.JSON(http.StatusConflict, map[string]interface{}{
+			"status": "error",
+			"error":  err.Error(),
+		})
+	}
+
+	if domainErrors.IsPermissionError(err) {
+		return c.JSON(http.StatusForbidden, map[string]interface{}{
+			"status": "error",
+			"error":  err.Error(),
+		})
+	}
+
+	// その他のエラーは内部サーバーエラー
+	return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+		"status": "error",
+		"error":  "内部サーバーエラーが発生しました",
+	})
+}

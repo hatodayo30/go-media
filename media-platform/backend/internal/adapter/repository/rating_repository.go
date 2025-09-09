@@ -1,4 +1,3 @@
-// infrastructure/persistence/rating_repository.go
 package persistence
 
 import (
