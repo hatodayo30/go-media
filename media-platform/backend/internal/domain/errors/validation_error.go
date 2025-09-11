@@ -23,39 +23,39 @@ type DomainError interface {
 
 // ValidationError はバリデーションエラーを表す構造体です
 type ValidationError struct {
-	Message string
-	Field   string                 // どのフィールドでエラーが発生したか
-	Value   interface{}            // エラーが発生した値
-	Code    string                 // エラーコード（i18n対応等で使用）
-	Meta    map[string]interface{} // 追加情報
+	Message   string
+	Field     string                 // どのフィールドでエラーが発生したか
+	Value     interface{}            // エラーが発生した値
+	ErrorCode string                 // エラーコード（i18n対応等で使用）
+	Meta      map[string]interface{} // 追加情報
 }
 
 // NewValidationError は新しいValidationErrorを作成します
 func NewValidationError(message string) *ValidationError {
 	return &ValidationError{
-		Message: message,
-		Code:    "VALIDATION_FAILED",
-		Meta:    make(map[string]interface{}),
+		Message:   message,
+		ErrorCode: "VALIDATION_FAILED",
+		Meta:      make(map[string]interface{}),
 	}
 }
 
 // NewValidationErrorWithField はフィールド指定付きのValidationErrorを作成します
 func NewValidationErrorWithField(message, field string, value interface{}) *ValidationError {
 	return &ValidationError{
-		Message: message,
-		Field:   field,
-		Value:   value,
-		Code:    "FIELD_VALIDATION_FAILED",
-		Meta:    make(map[string]interface{}),
+		Message:   message,
+		Field:     field,
+		Value:     value,
+		ErrorCode: "FIELD_VALIDATION_FAILED",
+		Meta:      make(map[string]interface{}),
 	}
 }
 
 // NewValidationErrorWithCode はコード指定付きのValidationErrorを作成します
 func NewValidationErrorWithCode(message, code string) *ValidationError {
 	return &ValidationError{
-		Message: message,
-		Code:    code,
-		Meta:    make(map[string]interface{}),
+		Message:   message,
+		ErrorCode: code,
+		Meta:      make(map[string]interface{}),
 	}
 }
 
@@ -74,7 +74,7 @@ func (e *ValidationError) Type() DomainErrorType {
 
 // Code はエラーコードを返します
 func (e *ValidationError) Code() string {
-	return e.Code
+	return e.ErrorCode
 }
 
 // Details はエラーの詳細情報を返します
@@ -109,7 +109,7 @@ func (e *ValidationError) WithField(field string, value interface{}) *Validation
 
 // WithCode はエラーコードを設定します
 func (e *ValidationError) WithCode(code string) *ValidationError {
-	e.Code = code
+	e.ErrorCode = code
 	return e
 }
 
@@ -208,7 +208,14 @@ type PermissionError struct {
 }
 
 // NewPermissionError は新しいPermissionErrorを作成します
-func NewPermissionError(action, resource string, userID int64) *PermissionError {
+func NewPermissionError(message string) *PermissionError {
+	return &PermissionError{
+		Message: message,
+	}
+}
+
+// NewPermissionErrorWithDetails は詳細付きのPermissionErrorを作成します
+func NewPermissionErrorWithDetails(action, resource string, userID int64) *PermissionError {
 	return &PermissionError{
 		Action:   action,
 		Resource: resource,
