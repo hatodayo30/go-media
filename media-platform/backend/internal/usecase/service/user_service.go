@@ -6,10 +6,10 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"media-platform/internal/application/dto"
 	"media-platform/internal/domain/entity"
 	domainErrors "media-platform/internal/domain/errors"
 	"media-platform/internal/domain/repository"
+	"media-platform/internal/usecase/dto"
 )
 
 // ========== Dependencies (Interfaces) ==========

@@ -1,8 +1,8 @@
 package presenter
 
 import (
-	"media-platform/internal/application/dto"
 	"media-platform/internal/domain/entity"
+	"media-platform/internal/usecase/dto"
 )
 
 // UserPresenter はEntity/Use Case DTOからHTTPレスポンス用のDTOに変換します

@@ -1,9 +1,10 @@
-package persistence
+package repository
 
 import (
 	"context"
 	"database/sql"
 	"errors"
+	"media-platform/internal/domain/entity"
 	"media-platform/internal/domain/repository"
 	"time"
 )
@@ -20,7 +21,7 @@ func NewCategoryRepository(db *sql.DB) repository.CategoryRepository {
 }
 
 // FindAll は全てのカテゴリを取得します
-func (r *CategoryRepositoryImpl) FindAll(ctx context.Context) ([]*model.Category, error) {
+func (r *CategoryRepositoryImpl) FindAll(ctx context.Context) ([]*entity.Category, error) {
 	query := `
 		SELECT id, name, description, parent_id, created_at, updated_at
 		FROM categories
@@ -33,9 +34,9 @@ func (r *CategoryRepositoryImpl) FindAll(ctx context.Context) ([]*model.Category
 	}
 	defer rows.Close()
 
-	var categories []*model.Category
+	var categories []*entity.Category
 	for rows.Next() {
-		var category model.Category
+		var category entity.Category
 		var parentID sql.NullInt64
 
 		err := rows.Scan(
@@ -66,14 +67,14 @@ func (r *CategoryRepositoryImpl) FindAll(ctx context.Context) ([]*model.Category
 }
 
 // FindByID は指定したIDのカテゴリを取得します
-func (r *CategoryRepositoryImpl) FindByID(ctx context.Context, id int64) (*model.Category, error) {
+func (r *CategoryRepositoryImpl) FindByID(ctx context.Context, id int64) (*entity.Category, error) {
 	query := `
 		SELECT id, name, description, parent_id, created_at, updated_at
 		FROM categories
 		WHERE id = $1
 	`
 
-	var category model.Category
+	var category entity.Category
 	var parentID sql.NullInt64
 
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
@@ -101,14 +102,14 @@ func (r *CategoryRepositoryImpl) FindByID(ctx context.Context, id int64) (*model
 }
 
 // FindByName は指定した名前のカテゴリを取得します
-func (r *CategoryRepositoryImpl) FindByName(ctx context.Context, name string) (*model.Category, error) {
+func (r *CategoryRepositoryImpl) FindByName(ctx context.Context, name string) (*entity.Category, error) {
 	query := `
 		SELECT id, name, description, parent_id, created_at, updated_at
 		FROM categories
 		WHERE name = $1
 	`
 
-	var category model.Category
+	var category entity.Category
 	var parentID sql.NullInt64
 
 	err := r.db.QueryRowContext(ctx, query, name).Scan(
@@ -136,7 +137,7 @@ func (r *CategoryRepositoryImpl) FindByName(ctx context.Context, name string) (*
 }
 
 // Create は新しいカテゴリを作成します
-func (r *CategoryRepositoryImpl) Create(ctx context.Context, category *model.Category) (*model.Category, error) {
+func (r *CategoryRepositoryImpl) Create(ctx context.Context, category *entity.Category) (*entity.Category, error) {
 	query := `
 		INSERT INTO categories (name, description, parent_id)
 		VALUES ($1, $2, $3)
@@ -169,7 +170,7 @@ func (r *CategoryRepositoryImpl) Create(ctx context.Context, category *model.Cat
 }
 
 // Update は既存のカテゴリを更新します
-func (r *CategoryRepositoryImpl) Update(ctx context.Context, category *model.Category) (*model.Category, error) {
+func (r *CategoryRepositoryImpl) Update(ctx context.Context, category *entity.Category) (*entity.Category, error) {
 	query := `
 		UPDATE categories
 		SET name = $1, description = $2, parent_id = $3, updated_at = $4
