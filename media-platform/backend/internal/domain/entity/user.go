@@ -2,7 +2,7 @@ package entity
 
 import (
 	"errors"
-	domainErrors "media-platform/backend/internal/domain/errors"
+	domainErrors "media-platform/internal/domain/errors"
 	"regexp"
 	"strings"
 	"time"
@@ -199,28 +199,4 @@ func (u *User) SetAvatar(avatar string) error {
 	u.Avatar = avatar
 	u.UpdatedAt = time.Now()
 	return nil
-}
-
-// CanBeDeleted はユーザーが削除可能かどうかを判定します
-func (u *User) CanBeDeleted() bool {
-	// 管理者は削除できない（ビジネスルール例）
-	if u.Role == "admin" {
-		return false
-	}
-
-	// その他の削除制限ロジック
-	// 例：コンテンツを多数投稿しているユーザーは削除できない等
-
-	return true
-}
-
-// IsAdmin はユーザーが管理者かどうかを判定します
-func (u *User) IsAdmin() bool {
-	return u.Role == "admin"
-}
-
-// IsActive はユーザーがアクティブかどうかを判定します（将来の拡張用）
-func (u *User) IsActive() bool {
-	// 現在は常にアクティブとする（将来的にis_activeフィールドを追加可能）
-	return true
 }

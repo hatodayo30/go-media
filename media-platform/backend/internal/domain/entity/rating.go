@@ -94,6 +94,25 @@ func NewRatingStats(contentID int64, likeCount int) *RatingStats {
 	}
 }
 
+// domain/entity/rating.go に追加
+// NewRating は新しい評価エンティティを作成します
+func NewRating(userID, contentID int64, value int) (*Rating, error) {
+	rating := &Rating{
+		UserID:    userID,
+		ContentID: contentID,
+		Value:     1, // 強制的に1に設定（いいね機能）
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	// バリデーション実行
+	if err := rating.Validate(); err != nil {
+		return nil, err
+	}
+
+	return rating, nil
+}
+
 // HasLikes はいいねが存在するかどうかを返します
 func (rs *RatingStats) HasLikes() bool {
 	return rs.LikeCount > 0

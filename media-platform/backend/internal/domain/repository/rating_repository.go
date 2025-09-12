@@ -36,4 +36,6 @@ type RatingRepository interface {
 
 	// 指定期間内の評価数を取得（トレンド分析用）
 	CountByDateRange(ctx context.Context, contentID int64, startDate, endDate string) (int, error)
+
+	FindTopRatedContentIDs(ctx context.Context, limit, days int) ([]int64, error)
 }

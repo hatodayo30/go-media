@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"media-platform/internal/domain/entity"
-	"media-platform/internal/presentation/dto"
+	"media-platform/internal/usecase/dto"
 )
 
 // CommentRepository はコメントの永続化に関するインターフェースです

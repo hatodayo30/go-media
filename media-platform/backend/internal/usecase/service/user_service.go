@@ -305,12 +305,6 @@ func (s *UserService) DeleteUser(ctx context.Context, id int64, userID int64, is
 	if !isAdmin && user.ID != userID {
 		return domainErrors.NewValidationError("このユーザーを削除する権限がありません")
 	}
-
-	// ビジネスルールのチェック（エンティティのドメインロジック）
-	if !user.CanBeDeleted() {
-		return domainErrors.NewValidationError("このユーザーは削除できません")
-	}
-
 	// ユーザーの削除
 	if err := s.userRepo.Delete(ctx, id); err != nil {
 		return fmt.Errorf("user deletion failed: %w", err)

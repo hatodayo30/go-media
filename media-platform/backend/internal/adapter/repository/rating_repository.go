@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"media-platform/internal/domain/model"
+	"media-platform/internal/domain/entity"
 	"media-platform/internal/domain/repository"
 	"time"
 
@@ -23,7 +23,7 @@ func NewRatingRepository(db *sql.DB) repository.RatingRepository {
 }
 
 // FindByContentID はコンテンツIDによる評価一覧を取得します
-func (r *RatingRepositoryImpl) FindByContentID(ctx context.Context, contentID int64) ([]*model.Rating, error) {
+func (r *RatingRepositoryImpl) FindByContentID(ctx context.Context, contentID int64) ([]*entity.Rating, error) {
 	query := `
 		SELECT id, value, user_id, content_id, created_at, updated_at
 		FROM ratings
@@ -37,9 +37,9 @@ func (r *RatingRepositoryImpl) FindByContentID(ctx context.Context, contentID in
 	}
 	defer rows.Close()
 
-	var ratings []*model.Rating
+	var ratings []*entity.Rating
 	for rows.Next() {
-		rating := &model.Rating{}
+		rating := &entity.Rating{}
 		err := rows.Scan(
 			&rating.ID,
 			&rating.Value,
@@ -62,7 +62,7 @@ func (r *RatingRepositoryImpl) FindByContentID(ctx context.Context, contentID in
 }
 
 // FindByUserID はユーザーIDによる評価一覧を取得します
-func (r *RatingRepositoryImpl) FindByUserID(ctx context.Context, userID int64) ([]*model.Rating, error) {
+func (r *RatingRepositoryImpl) FindByUserID(ctx context.Context, userID int64) ([]*entity.Rating, error) {
 	query := `
 		SELECT id, value, user_id, content_id, created_at, updated_at
 		FROM ratings
@@ -76,9 +76,9 @@ func (r *RatingRepositoryImpl) FindByUserID(ctx context.Context, userID int64) (
 	}
 	defer rows.Close()
 
-	var ratings []*model.Rating
+	var ratings []*entity.Rating
 	for rows.Next() {
-		rating := &model.Rating{}
+		rating := &entity.Rating{}
 		err := rows.Scan(
 			&rating.ID,
 			&rating.Value,
@@ -97,14 +97,14 @@ func (r *RatingRepositoryImpl) FindByUserID(ctx context.Context, userID int64) (
 }
 
 // FindByID はIDによる評価を取得します
-func (r *RatingRepositoryImpl) FindByID(ctx context.Context, id int64) (*model.Rating, error) {
+func (r *RatingRepositoryImpl) FindByID(ctx context.Context, id int64) (*entity.Rating, error) {
 	query := `
 		SELECT id, value, user_id, content_id, created_at, updated_at
 		FROM ratings
 		WHERE id = $1
 	`
 
-	rating := &model.Rating{}
+	rating := &entity.Rating{}
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&rating.ID,
 		&rating.Value,
@@ -125,14 +125,14 @@ func (r *RatingRepositoryImpl) FindByID(ctx context.Context, id int64) (*model.R
 }
 
 // FindByUserAndContentID はユーザーIDとコンテンツIDによる評価を取得します
-func (r *RatingRepositoryImpl) FindByUserAndContentID(ctx context.Context, userID, contentID int64) (*model.Rating, error) {
+func (r *RatingRepositoryImpl) FindByUserAndContentID(ctx context.Context, userID, contentID int64) (*entity.Rating, error) {
 	query := `
 		SELECT id, value, user_id, content_id, created_at, updated_at
 		FROM ratings
 		WHERE user_id = $1 AND content_id = $2
 	`
 
-	rating := &model.Rating{}
+	rating := &entity.Rating{}
 	err := r.db.QueryRowContext(ctx, query, userID, contentID).Scan(
 		&rating.ID,
 		&rating.Value,
@@ -153,7 +153,7 @@ func (r *RatingRepositoryImpl) FindByUserAndContentID(ctx context.Context, userI
 }
 
 // Create は評価を作成します
-func (r *RatingRepositoryImpl) Create(ctx context.Context, rating *model.Rating) error {
+func (r *RatingRepositoryImpl) Create(ctx context.Context, rating *entity.Rating) error {
 	query := `
 		INSERT INTO ratings (value, user_id, content_id, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5)
@@ -186,7 +186,7 @@ func (r *RatingRepositoryImpl) Create(ctx context.Context, rating *model.Rating)
 }
 
 // Update は評価を更新します
-func (r *RatingRepositoryImpl) Update(ctx context.Context, rating *model.Rating) error {
+func (r *RatingRepositoryImpl) Update(ctx context.Context, rating *entity.Rating) error {
 	query := `
 		UPDATE ratings
 		SET value = $1, updated_at = $2
@@ -233,7 +233,7 @@ func (r *RatingRepositoryImpl) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-func (r *RatingRepositoryImpl) GetStatsByContentID(ctx context.Context, contentID int64) (*model.RatingStats, error) {
+func (r *RatingRepositoryImpl) GetStatsByContentID(ctx context.Context, contentID int64) (*entity.RatingStats, error) {
 	// グッド評価(value=1)のみカウント
 	countQuery := `SELECT COUNT(*) FROM ratings WHERE content_id = $1 AND value = 1`
 	var likeCount int
@@ -242,9 +242,38 @@ func (r *RatingRepositoryImpl) GetStatsByContentID(ctx context.Context, contentI
 		return nil, fmt.Errorf("評価データの確認に失敗しました: %w", err)
 	}
 
-	return &model.RatingStats{
+	return &entity.RatingStats{
 		ContentID: contentID,
 		LikeCount: likeCount,
 		Count:     likeCount, // グッドのみなので同じ値
 	}, nil
+}
+
+func (r *RatingRepositoryImpl) FindTopRatedContentIDs(ctx context.Context, limit, days int) ([]int64, error) {
+	query := `
+        SELECT content_id, COUNT(*) as like_count
+        FROM ratings 
+        WHERE created_at >= NOW() - INTERVAL '%d days'
+        GROUP BY content_id 
+        ORDER BY like_count DESC, content_id ASC
+        LIMIT $1
+    `
+
+	rows, err := r.db.QueryContext(ctx, fmt.Sprintf(query, days), limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var contentIDs []int64
+	for rows.Next() {
+		var contentID int64
+		var likeCount int64
+		if err := rows.Scan(&contentID, &likeCount); err != nil {
+			return nil, err
+		}
+		contentIDs = append(contentIDs, contentID)
+	}
+
+	return contentIDs, rows.Err()
 }

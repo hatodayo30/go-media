@@ -28,7 +28,7 @@ type RatingStatsResponse struct {
 // UserRatingStatusResponse はユーザーの評価状態のレスポンス用の構造体です
 type UserRatingStatusResponse struct {
 	ContentID int64  `json:"content_id"`
-	HasLiked  bool   `json:"has_liked"`
+	HasRated  bool   `json:"has_rated"` // HasLikedをHasRatedに統一
 	RatingID  *int64 `json:"rating_id,omitempty"`
 }
 
