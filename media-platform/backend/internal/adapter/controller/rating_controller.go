@@ -1,13 +1,13 @@
-package http
+package controller
 
 import (
 	"errors"
 	"net/http"
 	"strconv"
 
-	"media-platform/internal/application/service"
 	domainErrors "media-platform/internal/domain/errors"
-	"media-platform/internal/presentation/dto"
+	"media-platform/internal/usecase/dto"
+	"media-platform/internal/usecase/service"
 
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"

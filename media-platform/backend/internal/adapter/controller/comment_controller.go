@@ -1,11 +1,11 @@
-package http
+package controller
 
 import (
 	"net/http"
 	"strconv"
 
-	"media-platform/internal/application/service"
-	"media-platform/internal/presentation/dto"
+	"media-platform/internal/usecase/dto"
+	"media-platform/internal/usecase/service"
 
 	domainErrors "media-platform/internal/domain/errors"
 

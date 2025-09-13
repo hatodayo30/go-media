@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"media-platform/internal/domain/model"
+	"media-platform/internal/domain/entity"
 	"media-platform/internal/domain/repository"
 )
 
@@ -25,14 +25,14 @@ func NewContentRepository(db *sql.DB) repository.ContentRepository {
 }
 
 // Find は指定したIDのコンテンツを取得します
-func (r *ContentRepositoryImpl) Find(ctx context.Context, id int64) (*model.Content, error) {
+func (r *ContentRepositoryImpl) Find(ctx context.Context, id int64) (*entity.Content, error) {
 	query := `
 		SELECT id, title, body, type, author_id, category_id, status, view_count, published_at, created_at, updated_at
 		FROM contents
 		WHERE id = $1
 	`
 
-	var content model.Content
+	var content entity.Content
 	var publishedAt sql.NullTime
 
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
@@ -64,7 +64,7 @@ func (r *ContentRepositoryImpl) Find(ctx context.Context, id int64) (*model.Cont
 }
 
 // FindAll は条件に合うコンテンツを全て取得します
-func (r *ContentRepositoryImpl) FindAll(ctx context.Context, query *model.ContentQuery) ([]*model.Content, error) {
+func (r *ContentRepositoryImpl) FindAll(ctx context.Context, query *entity.ContentQuery) ([]*entity.Content, error) {
 	// ベースクエリ
 	baseQuery := `
 		SELECT id, title, body, type, author_id, category_id, status, view_count, published_at, created_at, updated_at
@@ -88,9 +88,9 @@ func (r *ContentRepositoryImpl) FindAll(ctx context.Context, query *model.Conten
 	defer rows.Close()
 
 	// 結果をスライスに格納
-	var contents []*model.Content
+	var contents []*entity.Content
 	for rows.Next() {
-		var content model.Content
+		var content entity.Content
 		var publishedAt sql.NullTime
 
 		err := rows.Scan(
@@ -125,7 +125,7 @@ func (r *ContentRepositoryImpl) FindAll(ctx context.Context, query *model.Conten
 }
 
 // CountAll は条件に合うコンテンツの総数を取得します
-func (r *ContentRepositoryImpl) CountAll(ctx context.Context, query *model.ContentQuery) (int, error) {
+func (r *ContentRepositoryImpl) CountAll(ctx context.Context, query *entity.ContentQuery) (int, error) {
 	// ベースクエリ
 	baseQuery := `
 		SELECT COUNT(*)
@@ -150,7 +150,7 @@ func (r *ContentRepositoryImpl) CountAll(ctx context.Context, query *model.Conte
 }
 
 // FindByAuthor は指定した著者のコンテンツを取得します
-func (r *ContentRepositoryImpl) FindByAuthor(ctx context.Context, authorID int64, limit, offset int) ([]*model.Content, error) {
+func (r *ContentRepositoryImpl) FindByAuthor(ctx context.Context, authorID int64, limit, offset int) ([]*entity.Content, error) {
 	query := `
 		SELECT id, title, body, type, author_id, category_id, status, view_count, published_at, created_at, updated_at
 		FROM contents
@@ -167,9 +167,9 @@ func (r *ContentRepositoryImpl) FindByAuthor(ctx context.Context, authorID int64
 	defer rows.Close()
 
 	// 結果をスライスに格納
-	var contents []*model.Content
+	var contents []*entity.Content
 	for rows.Next() {
-		var content model.Content
+		var content entity.Content
 		var publishedAt sql.NullTime
 
 		err := rows.Scan(
@@ -204,7 +204,7 @@ func (r *ContentRepositoryImpl) FindByAuthor(ctx context.Context, authorID int64
 }
 
 // FindByCategory は指定したカテゴリのコンテンツを取得します
-func (r *ContentRepositoryImpl) FindByCategory(ctx context.Context, categoryID int64, limit, offset int) ([]*model.Content, error) {
+func (r *ContentRepositoryImpl) FindByCategory(ctx context.Context, categoryID int64, limit, offset int) ([]*entity.Content, error) {
 	query := `
 		SELECT id, title, body, type, author_id, category_id, status, view_count, published_at, created_at, updated_at
 		FROM contents
@@ -221,9 +221,9 @@ func (r *ContentRepositoryImpl) FindByCategory(ctx context.Context, categoryID i
 	defer rows.Close()
 
 	// 結果をスライスに格納
-	var contents []*model.Content
+	var contents []*entity.Content
 	for rows.Next() {
-		var content model.Content
+		var content entity.Content
 		var publishedAt sql.NullTime
 
 		err := rows.Scan(
@@ -258,7 +258,7 @@ func (r *ContentRepositoryImpl) FindByCategory(ctx context.Context, categoryID i
 }
 
 // FindPublished は公開済みのコンテンツを取得します
-func (r *ContentRepositoryImpl) FindPublished(ctx context.Context, limit, offset int) ([]*model.Content, error) {
+func (r *ContentRepositoryImpl) FindPublished(ctx context.Context, limit, offset int) ([]*entity.Content, error) {
 	query := `
 		SELECT id, title, body, type, author_id, category_id, status, view_count, published_at, created_at, updated_at
 		FROM contents
@@ -275,9 +275,9 @@ func (r *ContentRepositoryImpl) FindPublished(ctx context.Context, limit, offset
 	defer rows.Close()
 
 	// 結果をスライスに格納
-	var contents []*model.Content
+	var contents []*entity.Content
 	for rows.Next() {
-		var content model.Content
+		var content entity.Content
 		var publishedAt sql.NullTime
 
 		err := rows.Scan(
@@ -312,7 +312,7 @@ func (r *ContentRepositoryImpl) FindPublished(ctx context.Context, limit, offset
 }
 
 // FindTrending は閲覧数の多いコンテンツを取得します
-func (r *ContentRepositoryImpl) FindTrending(ctx context.Context, limit int) ([]*model.Content, error) {
+func (r *ContentRepositoryImpl) FindTrending(ctx context.Context, limit int) ([]*entity.Content, error) {
 	query := `
 		SELECT id, title, body, type, author_id, category_id, status, view_count, published_at, created_at, updated_at
 		FROM contents
@@ -329,9 +329,9 @@ func (r *ContentRepositoryImpl) FindTrending(ctx context.Context, limit int) ([]
 	defer rows.Close()
 
 	// 結果をスライスに格納
-	var contents []*model.Content
+	var contents []*entity.Content
 	for rows.Next() {
-		var content model.Content
+		var content entity.Content
 		var publishedAt sql.NullTime
 
 		err := rows.Scan(
@@ -366,7 +366,7 @@ func (r *ContentRepositoryImpl) FindTrending(ctx context.Context, limit int) ([]
 }
 
 // Search はキーワードでコンテンツを検索します
-func (r *ContentRepositoryImpl) Search(ctx context.Context, keyword string, limit, offset int) ([]*model.Content, error) {
+func (r *ContentRepositoryImpl) Search(ctx context.Context, keyword string, limit, offset int) ([]*entity.Content, error) {
 	query := `
 		SELECT id, title, body, type, author_id, category_id, status, view_count, published_at, created_at, updated_at
 		FROM contents
@@ -391,9 +391,9 @@ func (r *ContentRepositoryImpl) Search(ctx context.Context, keyword string, limi
 	defer rows.Close()
 
 	// 結果をスライスに格納
-	var contents []*model.Content
+	var contents []*entity.Content
 	for rows.Next() {
-		var content model.Content
+		var content entity.Content
 		var publishedAt sql.NullTime
 
 		err := rows.Scan(
@@ -428,7 +428,7 @@ func (r *ContentRepositoryImpl) Search(ctx context.Context, keyword string, limi
 }
 
 // Create は新しいコンテンツを作成します
-func (r *ContentRepositoryImpl) Create(ctx context.Context, content *model.Content) error {
+func (r *ContentRepositoryImpl) Create(ctx context.Context, content *entity.Content) error {
 	query := `
 		INSERT INTO contents (title, body, type, author_id, category_id, status, view_count, published_at, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -441,7 +441,7 @@ func (r *ContentRepositoryImpl) Create(ctx context.Context, content *model.Conte
 	content.UpdatedAt = now
 
 	var publishedAt *time.Time
-	if content.Status == model.ContentStatusPublished {
+	if content.Status == entity.ContentStatusPublished {
 		if content.PublishedAt == nil {
 			publishedAt = &now
 		} else {
@@ -465,7 +465,7 @@ func (r *ContentRepositoryImpl) Create(ctx context.Context, content *model.Conte
 }
 
 // Update は既存のコンテンツを更新します
-func (r *ContentRepositoryImpl) Update(ctx context.Context, content *model.Content) error {
+func (r *ContentRepositoryImpl) Update(ctx context.Context, content *entity.Content) error {
 	query := `
 		UPDATE contents
 		SET title = $1, body = $2, type = $3, category_id = $4, status = $5, published_at = $6, updated_at = $7
@@ -476,7 +476,7 @@ func (r *ContentRepositoryImpl) Update(ctx context.Context, content *model.Conte
 	content.UpdatedAt = time.Now()
 
 	var publishedAt *time.Time
-	if content.Status == model.ContentStatusPublished {
+	if content.Status == entity.ContentStatusPublished {
 		if content.PublishedAt == nil {
 			now := time.Now()
 			publishedAt = &now
@@ -570,7 +570,7 @@ func (r *ContentRepositoryImpl) IncrementViewCount(ctx context.Context, id int64
 }
 
 // buildWhereClause は検索条件からWHERE句を構築します
-func (r *ContentRepositoryImpl) buildWhereClause(query *model.ContentQuery) (string, []interface{}) {
+func (r *ContentRepositoryImpl) buildWhereClause(query *entity.ContentQuery) (string, []interface{}) {
 	var conditions []string
 	var args []interface{}
 	argCount := 1
@@ -612,7 +612,7 @@ func (r *ContentRepositoryImpl) buildWhereClause(query *model.ContentQuery) (str
 }
 
 // buildOrderClause は並び替え条件からORDER BY句を構築します
-func (r *ContentRepositoryImpl) buildOrderClause(query *model.ContentQuery) string {
+func (r *ContentRepositoryImpl) buildOrderClause(query *entity.ContentQuery) string {
 	// デフォルトのソート順
 	sortBy := "created_at"
 	sortOrder := "DESC"

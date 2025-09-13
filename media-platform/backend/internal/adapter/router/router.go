@@ -1,10 +1,11 @@
-package http
+package router
 
 import (
 	"log"
 	"net/http"
 
-	"media-platform/internal/adapter/controller/middleware"
+	"media-platform/internal/adapter/controller"
+	"media-platform/internal/adapter/middleware"
 	"media-platform/internal/adapter/presenter"       // ✅ presenter実装用
 	"media-platform/internal/adapter/repository"      // ✅ repository実装用
 	"media-platform/internal/infrastructure/database" // ✅ database DBConnインターフェース用
@@ -79,12 +80,11 @@ func setupDependencies(e *echo.Echo, dbConn database.DBConn, jwtConfig *middlewa
 	ratingService := service.NewRatingService(ratingRepo, contentRepo, userRepo)
 
 	// Controller層の初期化
-	userController := NewUserController(userService, userPresenter)
-	categoryController := NewCategoryController(categoryService, categoryPresenter)
-	contentController := NewContentController(contentService, contentPresenter)
-	commentController := NewCommentController(commentService, commentPresenter)
-	ratingController := NewRatingController(ratingService, ratingPresenter)
-
+	userController := controller.NewUserController(userService, userPresenter)
+	categoryController := controller.NewCategoryController(categoryService, categoryPresenter)
+	contentController := controller.NewContentController(contentService, contentPresenter)
+	commentController := controller.NewCommentController(commentService, commentPresenter)
+	ratingController := controller.NewRatingController(ratingService, ratingPresenter)
 	// ミドルウェアの設定
 	authMiddleware := jwtConfig.AuthMiddleware()
 	adminMiddleware := middleware.AdminMiddleware()
