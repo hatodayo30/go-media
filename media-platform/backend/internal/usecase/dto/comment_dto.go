@@ -47,6 +47,6 @@ type CommentQuery struct {
 // CommentListResponse はコメント一覧のレスポンス用の構造体です
 type CommentListResponse struct {
 	Comments   []*CommentResponse `json:"comments"`
-	TotalCount int                `json:"total_count"`
+	TotalCount int64              `json:"total_count"`
 	HasMore    bool               `json:"has_more"`
 }

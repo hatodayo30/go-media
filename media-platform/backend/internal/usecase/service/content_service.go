@@ -35,16 +35,18 @@ func NewContentService(
 // ✅ Entity → DTO変換をService内で実装（RatingServiceと同じパターン）
 func (s *ContentService) toContentResponse(content *entity.Content) *dto.ContentResponse {
 	return &dto.ContentResponse{
-		ID:         content.ID,
-		Title:      content.Title,
-		Body:       content.Body,
-		Type:       string(content.Type),
-		Status:     string(content.Status),
-		AuthorID:   content.AuthorID,
-		CategoryID: content.CategoryID,
-		ViewCount:  content.ViewCount,
-		CreatedAt:  content.CreatedAt,
-		UpdatedAt:  content.UpdatedAt,
+		ID:          content.ID,
+		Title:       content.Title,
+		Body:        content.Body,
+		Type:        string(content.Type),
+		Status:      string(content.Status),
+		AuthorID:    content.AuthorID,
+		CategoryID:  content.CategoryID,
+		ViewCount:   content.ViewCount,
+		CreatedAt:   content.CreatedAt,
+		UpdatedAt:   content.UpdatedAt,
+		PublishedAt: content.PublishedAt, // DTOに合わせて追加
+
 	}
 }
 

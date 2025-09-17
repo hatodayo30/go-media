@@ -1,11 +1,6 @@
--- ===============================================
--- メディアプラットフォーム統合データベーススキーマ
--- フォロー機能を含む完全版
--- ===============================================
-
 -- ユーザーテーブル
 CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
     username VARCHAR(100) NOT NULL UNIQUE,
     email VARCHAR(255) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
@@ -21,10 +16,10 @@ CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 
 -- カテゴリテーブル
 CREATE TABLE IF NOT EXISTS categories (
-    id SERIAL PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
     description TEXT,
-    parent_id INTEGER REFERENCES categories(id),
+    parent_id BIGINT REFERENCES categories(id),
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
@@ -33,14 +28,14 @@ CREATE INDEX IF NOT EXISTS idx_categories_parent_id ON categories(parent_id);
 
 -- コンテンツテーブル
 CREATE TABLE IF NOT EXISTS contents (
-    id SERIAL PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
     body TEXT NOT NULL,
     type VARCHAR(20) NOT NULL,
-    author_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+    author_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    category_id BIGINT NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
     status VARCHAR(20) NOT NULL DEFAULT 'draft',
-    view_count INTEGER NOT NULL DEFAULT 0,
+    view_count BIGINT NOT NULL DEFAULT 0,
     published_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
@@ -52,14 +47,14 @@ CREATE INDEX IF NOT EXISTS idx_contents_status ON contents(status);
 CREATE INDEX IF NOT EXISTS idx_contents_published_at ON contents(published_at);
 
 -- ===============================================
--- 🔄 フォロー機能テーブル（新規追加）
+-- フォロー機能テーブル
 -- ===============================================
 
 -- フォロー関係テーブル
 CREATE TABLE IF NOT EXISTS follows (
     id BIGSERIAL PRIMARY KEY,
-    follower_id INTEGER NOT NULL,     -- フォローする人のユーザーID
-    following_id INTEGER NOT NULL,    -- フォローされる人のユーザーID
+    follower_id BIGINT NOT NULL,     -- フォローする人のユーザーID
+    following_id BIGINT NOT NULL,    -- フォローされる人のユーザーID
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     
     -- 外部キー制約
@@ -99,7 +94,7 @@ CREATE INDEX IF NOT EXISTS idx_follows_following_id
 -- フォロー通知設定テーブル（将来拡張用）
 CREATE TABLE IF NOT EXISTS follow_notification_settings (
     id BIGSERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL UNIQUE,
+    user_id BIGINT NOT NULL UNIQUE,
     new_follower_notification BOOLEAN NOT NULL DEFAULT TRUE,
     following_post_notification BOOLEAN NOT NULL DEFAULT TRUE,
     mutual_follow_notification BOOLEAN NOT NULL DEFAULT TRUE,
@@ -112,7 +107,7 @@ CREATE TABLE IF NOT EXISTS follow_notification_settings (
 );
 
 -- ===============================================
--- いいね機能テーブル（既存の修正版）
+-- いいね機能テーブル（修正版）
 -- ===============================================
 
 -- 既存のratingsテーブルとビューを完全削除
@@ -121,10 +116,10 @@ DROP TABLE IF EXISTS ratings CASCADE;
 
 -- 新しいいいね専用テーブル
 CREATE TABLE ratings (
-    id SERIAL PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
     value INTEGER NOT NULL DEFAULT 1 CHECK (value = 1), -- いいね(1)のみ許可
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    content_id INTEGER NOT NULL REFERENCES contents(id) ON DELETE CASCADE,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content_id BIGINT NOT NULL REFERENCES contents(id) ON DELETE CASCADE,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     UNIQUE(user_id, content_id)
@@ -136,11 +131,11 @@ CREATE INDEX IF NOT EXISTS idx_ratings_content_id ON ratings(content_id);
 
 -- コメントテーブル
 CREATE TABLE IF NOT EXISTS comments (
-    id SERIAL PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
     body TEXT NOT NULL,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    content_id INTEGER NOT NULL REFERENCES contents(id) ON DELETE CASCADE,
-    parent_id INTEGER REFERENCES comments(id) ON DELETE CASCADE,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content_id BIGINT NOT NULL REFERENCES contents(id) ON DELETE CASCADE,
+    parent_id BIGINT REFERENCES comments(id) ON DELETE CASCADE,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
@@ -244,7 +239,7 @@ BEGIN
     ON CONFLICT (user_id) DO NOTHING;
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS trigger_create_default_follow_settings ON users;
 CREATE TRIGGER trigger_create_default_follow_settings
@@ -322,7 +317,7 @@ ANALYZE comments;
 
 -- 完了メッセージ
 SELECT 
-    'メディアプラットフォームデータベーススキーマ（フォロー機能含む）が正常に作成されました' as status,
+    'メディアプラットフォームデータベーススキーマ（int64統一版）が正常に作成されました' as status,
     (SELECT COUNT(*) FROM users) as users_count,
     (SELECT COUNT(*) FROM categories) as categories_count,
     (SELECT COUNT(*) FROM follows) as follows_count;
