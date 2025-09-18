@@ -34,8 +34,8 @@ type CommentRepository interface {
 	Delete(ctx context.Context, id int64) error
 
 	// CountByContent はコンテンツに関連するコメント数を取得します
-	CountByContent(ctx context.Context, contentID int64) (int, error)
+	CountByContent(ctx context.Context, contentID int64) (int64, error)
 
 	// CountByUser はユーザーが投稿したコメント数を取得します
-	CountByUser(ctx context.Context, userID int64) (int, error)
+	CountByUser(ctx context.Context, userID int64) (int64, error)
 }
