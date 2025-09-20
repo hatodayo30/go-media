@@ -1,13 +1,11 @@
 package presenter
 
 import (
-	"time"
-
 	"media-platform/internal/domain/entity"
-	"media-platform/internal/presentation/dto"
+	"media-platform/internal/usecase/dto" // ✅ 修正: presentation/dto → usecase/dto
 )
 
-// CategoryPresenter はカテゴリエンティティをDTOに変換します
+// CategoryPresenter はカテゴリエンティティをHTTPレスポンスDTOに変換します
 type CategoryPresenter struct{}
 
 // NewCategoryPresenter は新しいCategoryPresenterのインスタンスを生成します
@@ -29,20 +27,13 @@ func (p *CategoryPresenter) ToCategoryResponse(category *entity.Category) *dto.C
 
 // ToCategoryResponseList はCategoryエンティティのスライスをCategoryResponseのスライスに変換します
 func (p *CategoryPresenter) ToCategoryResponseList(categories []*entity.Category) []*dto.CategoryResponse {
-	var responses []*dto.CategoryResponse
+	responses := make([]*dto.CategoryResponse, 0, len(categories))
 	for _, category := range categories {
 		responses = append(responses, p.ToCategoryResponse(category))
 	}
 	return responses
 }
 
-// ToCategoryEntity はCreateCategoryRequestからCategoryエンティティを生成します
-func (p *CategoryPresenter) ToCategoryEntity(req *dto.CreateCategoryRequest) *entity.Category {
-	return &entity.Category{
-		Name:        req.Name,
-		Description: req.Description,
-		ParentID:    req.ParentID,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-	}
-}
+// ⚠️ 注意: ToCategoryEntityメソッドは削除
+// Request → Entity変換はService層の責務です
+// CategoryServiceのtoCategoryEntityメソッドで実装済み
