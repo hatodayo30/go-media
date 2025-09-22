@@ -1,19 +1,39 @@
 package dto
 
-import "time"
+import (
+	domainErrors "media-platform/internal/domain/errors"
+	"regexp"
+	"time"
+)
 
-// ========== Request DTOs ==========
-
-// CreateUserRequest はユーザー作成リクエスト用の構造体です
 type CreateUserRequest struct {
-	Username string `json:"username" binding:"required"`
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
 	Bio      string `json:"bio"`
 	Avatar   string `json:"avatar"`
 }
 
-// UpdateUserRequest はユーザー更新リクエスト用の構造体です
+func (req *CreateUserRequest) Validate() error {
+	if req.Username == "" {
+		return domainErrors.NewValidationError("ユーザー名は必須です")
+	}
+	if req.Email == "" {
+		return domainErrors.NewValidationError("メールアドレスは必須です")
+	}
+	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+	if !emailRegex.MatchString(req.Email) {
+		return domainErrors.NewValidationError("有効なメールアドレス形式ではありません")
+	}
+	if req.Password == "" {
+		return domainErrors.NewValidationError("パスワードは必須です")
+	}
+	if len(req.Password) < 4 {
+		return domainErrors.NewValidationError("パスワードは最低4文字必要です")
+	}
+	return nil
+}
+
 type UpdateUserRequest struct {
 	Username string `json:"username"`
 	Email    string `json:"email"`
@@ -22,15 +42,38 @@ type UpdateUserRequest struct {
 	Avatar   string `json:"avatar"`
 }
 
-// LoginRequest はログインリクエスト用の構造体です
-type LoginRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required"`
+func (req *UpdateUserRequest) Validate() error {
+	if req.Email != "" {
+		emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+		if !emailRegex.MatchString(req.Email) {
+			return domainErrors.NewValidationError("有効なメールアドレス形式ではありません")
+		}
+	}
+	if req.Password != "" && len(req.Password) < 4 {
+		return domainErrors.NewValidationError("パスワードは最低4文字必要です")
+	}
+	return nil
 }
 
-// ========== Response DTOs ==========
+type LoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
 
-// UserResponse はユーザー情報のレスポンス用構造体です
+func (req *LoginRequest) Validate() error {
+	if req.Email == "" {
+		return domainErrors.NewValidationError("メールアドレスは必須です")
+	}
+	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+	if !emailRegex.MatchString(req.Email) {
+		return domainErrors.NewValidationError("有効なメールアドレス形式ではありません")
+	}
+	if req.Password == "" {
+		return domainErrors.NewValidationError("パスワードは必須です")
+	}
+	return nil
+}
+
 type UserResponse struct {
 	ID        int64     `json:"id"`
 	Username  string    `json:"username"`
@@ -42,36 +85,27 @@ type UserResponse struct {
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
 }
 
-// LoginResponse はログイン成功時のレスポンスです
 type LoginResponse struct {
 	Token string       `json:"token"`
 	User  UserResponse `json:"user"`
 }
 
-// ========== List Response DTOs ==========
-
-// UserListResponse はユーザー一覧取得時のレスポンスです
 type UserListResponse struct {
 	Users      []*UserResponse `json:"users"`
 	Pagination PaginationInfo  `json:"pagination"`
 }
 
-// PaginationInfo はページネーション情報です
 type PaginationInfo struct {
 	Limit  int `json:"limit"`
 	Offset int `json:"offset"`
 	Total  int `json:"total,omitempty"`
 }
 
-// ========== Error Response DTOs ==========
-
-// ErrorResponse はエラーレスポンス用の構造体です
 type ErrorResponse struct {
 	Status string `json:"status"`
 	Error  string `json:"error"`
 }
 
-// SuccessResponse は成功レスポンス用の構造体です
 type SuccessResponse struct {
 	Status string      `json:"status"`
 	Data   interface{} `json:"data"`
