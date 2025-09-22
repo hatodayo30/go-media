@@ -1,8 +1,10 @@
 package dto
 
-import "time"
+import (
+	domainErrors "media-platform/internal/domain/errors"
+	"time"
+)
 
-// ContentResponse はコンテンツのレスポンス用の構造体です
 type ContentResponse struct {
 	ID          int64      `json:"id"`
 	Title       string     `json:"title"`
@@ -17,16 +19,30 @@ type ContentResponse struct {
 	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
-// CreateContentRequest はコンテンツ作成リクエスト用の構造体です
 type CreateContentRequest struct {
-	Title      string `json:"title" binding:"required"`
-	Body       string `json:"body" binding:"required"`
-	Type       string `json:"type" binding:"required"`
-	CategoryID int64  `json:"category_id" binding:"required"`
+	Title      string `json:"title"`
+	Body       string `json:"body"`
+	Type       string `json:"type"`
+	CategoryID int64  `json:"category_id"`
 	Status     string `json:"status"`
 }
 
-// UpdateContentRequest はコンテンツ更新リクエスト用の構造体です
+func (req *CreateContentRequest) Validate() error {
+	if req.Title == "" {
+		return domainErrors.NewValidationError("タイトルは必須です")
+	}
+	if req.Body == "" {
+		return domainErrors.NewValidationError("本文は必須です")
+	}
+	if req.Type == "" {
+		return domainErrors.NewValidationError("コンテンツタイプは必須です")
+	}
+	if req.CategoryID == 0 {
+		return domainErrors.NewValidationError("カテゴリIDは必須です")
+	}
+	return nil
+}
+
 type UpdateContentRequest struct {
 	Title      string `json:"title"`
 	Body       string `json:"body"`
@@ -35,12 +51,17 @@ type UpdateContentRequest struct {
 	Status     string `json:"status"`
 }
 
-// UpdateContentStatusRequest はコンテンツステータス更新リクエスト用の構造体です
 type UpdateContentStatusRequest struct {
-	Status string `json:"status" binding:"required"`
+	Status string `json:"status"`
 }
 
-// ContentQuery はコンテンツ検索クエリ用の構造体です
+func (req *UpdateContentStatusRequest) Validate() error {
+	if req.Status == "" {
+		return domainErrors.NewValidationError("ステータスは必須です")
+	}
+	return nil
+}
+
 type ContentQuery struct {
 	AuthorID    *int64  `json:"author_id"`
 	CategoryID  *int64  `json:"category_id"`
