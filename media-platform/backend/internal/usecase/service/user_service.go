@@ -328,10 +328,14 @@ func (s *UserService) GetCurrentUser(ctx context.Context, userID int64) (*dto.Us
 
 // GetPublicUsers は公開ユーザー取得のUse Caseです
 func (s *UserService) GetPublicUsers(ctx context.Context) ([]*dto.UserResponse, error) {
-	users, err := s.userRepo.GetPublicUsers(ctx)
+	// FindAllを使用して完全なEntityを取得
+	// limit, offsetは要件に応じて調整してください
+	users, err := s.userRepo.FindAll(ctx, 100, 0)
 	if err != nil {
 		return nil, fmt.Errorf("public users lookup failed: %w", err)
 	}
 
+	// Entity → DTO変換（完全な情報を持つDTOを作成）
+	// Presenterで公開用に変換するため、ここでは全情報を含める
 	return s.toUserResponseList(users), nil
 }

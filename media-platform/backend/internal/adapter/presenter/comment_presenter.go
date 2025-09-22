@@ -1,64 +1,85 @@
 package presenter
 
 import (
-	"media-platform/internal/domain/entity"
-	"media-platform/internal/usecase/dto" // ✅ 修正: presentation/dto → usecase/dto
+	"media-platform/internal/usecase/dto" // DTOのみに依存
 )
 
-// CommentPresenter はコメントエンティティをHTTPレスポンスDTOに変換します
 type CommentPresenter struct{}
 
-// NewCommentPresenter は新しいCommentPresenterのインスタンスを生成します
 func NewCommentPresenter() *CommentPresenter {
 	return &CommentPresenter{}
 }
 
-// ToCommentResponse はCommentエンティティをCommentResponseに変換します
-func (p *CommentPresenter) ToCommentResponse(comment *entity.Comment) *dto.CommentResponse {
-	return &dto.CommentResponse{
-		ID:        comment.ID,
-		Body:      comment.Body,
-		UserID:    comment.UserID,
-		ContentID: comment.ContentID,
-		ParentID:  comment.ParentID,
-		CreatedAt: comment.CreatedAt,
-		UpdatedAt: comment.UpdatedAt,
-	}
+// HTTP Response DTO構造体
+type HTTPCommentResponse struct {
+	ID        int64          `json:"id"`
+	Body      string         `json:"body"`
+	UserID    int64          `json:"user_id"`
+	ContentID int64          `json:"content_id"`
+	ParentID  *int64         `json:"parent_id,omitempty"`
+	User      *HTTPUserBrief `json:"user,omitempty"`
+	CreatedAt string         `json:"created_at"`
+	UpdatedAt string         `json:"updated_at,omitempty"`
 }
 
-// ToCommentResponseWithUser はユーザー情報付きのCommentResponseを作成します
-func (p *CommentPresenter) ToCommentResponseWithUser(comment *entity.Comment, user *entity.User) *dto.CommentResponse {
-	response := p.ToCommentResponse(comment)
+type HTTPUserBrief struct {
+	ID       int64  `json:"id"`
+	Username string `json:"username"`
+	Avatar   string `json:"avatar,omitempty"`
+}
 
-	if user != nil {
-		response.User = &dto.UserBrief{
-			ID:       user.ID,
-			Username: user.Username,
-			Avatar:   user.Avatar,
+type HTTPCommentListResponse struct {
+	Comments   []*HTTPCommentResponse `json:"comments"`
+	TotalCount int64                  `json:"total_count"`
+	HasMore    bool                   `json:"has_more"`
+}
+
+// UseCase DTO → HTTP Response DTO変換
+func (p *CommentPresenter) ToHTTPCommentResponse(commentDTO *dto.CommentResponse) *HTTPCommentResponse {
+	if commentDTO == nil {
+		return nil
+	}
+
+	response := &HTTPCommentResponse{
+		ID:        commentDTO.ID,
+		Body:      commentDTO.Body,
+		UserID:    commentDTO.UserID,
+		ContentID: commentDTO.ContentID,
+		ParentID:  commentDTO.ParentID,
+		CreatedAt: commentDTO.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt: commentDTO.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	// UserBriefが存在する場合
+	if commentDTO.User != nil {
+		response.User = &HTTPUserBrief{
+			ID:       commentDTO.User.ID,
+			Username: commentDTO.User.Username,
+			Avatar:   commentDTO.User.Avatar,
 		}
 	}
 
 	return response
 }
 
-// ToCommentResponseList はCommentエンティティのスライスをCommentResponseのスライスに変換します
-func (p *CommentPresenter) ToCommentResponseList(comments []*entity.Comment) []*dto.CommentResponse {
-	responses := make([]*dto.CommentResponse, 0, len(comments))
-	for _, comment := range comments {
-		responses = append(responses, p.ToCommentResponse(comment))
+func (p *CommentPresenter) ToHTTPCommentResponseList(commentDTOs []*dto.CommentResponse) []*HTTPCommentResponse {
+	if commentDTOs == nil {
+		return []*HTTPCommentResponse{}
+	}
+
+	responses := make([]*HTTPCommentResponse, 0, len(commentDTOs))
+	for _, commentDTO := range commentDTOs {
+		if commentDTO != nil {
+			responses = append(responses, p.ToHTTPCommentResponse(commentDTO))
+		}
 	}
 	return responses
 }
 
-// ToCommentListResponse はコメント一覧レスポンスを作成します
-func (p *CommentPresenter) ToCommentListResponse(comments []*dto.CommentResponse, totalCount int64, limit int) *dto.CommentListResponse {
-	return &dto.CommentListResponse{
-		Comments:   comments,
+func (p *CommentPresenter) ToHTTPCommentListResponse(commentDTOs []*dto.CommentResponse, totalCount int64, hasMore bool) *HTTPCommentListResponse {
+	return &HTTPCommentListResponse{
+		Comments:   p.ToHTTPCommentResponseList(commentDTOs),
 		TotalCount: totalCount,
-		HasMore:    len(comments) == limit,
+		HasMore:    hasMore,
 	}
 }
-
-// ⚠️ 削除されたメソッド
-// - ToCommentEntity: Service層のtoCommentEntityメソッドで実装済み
-// - ToCommentQueryEntity: 不要なパススルーメソッド

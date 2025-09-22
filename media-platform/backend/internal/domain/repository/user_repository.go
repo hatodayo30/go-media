@@ -28,7 +28,4 @@ type UserRepository interface {
 
 	// Delete は指定されたIDのユーザーを削除します
 	Delete(ctx context.Context, id int64) error
-
-	// GetPublicUsers は公開プロフィール情報のみを取得します
-	GetPublicUsers(ctx context.Context) ([]*entity.User, error)
 }

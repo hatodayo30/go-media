@@ -32,17 +32,17 @@ const (
 
 // Content はコンテンツを表すエンティティです
 type Content struct {
-	ID          int64         `json:"id"`
-	Title       string        `json:"title"`
-	Body        string        `json:"body"`
-	Type        ContentType   `json:"type"`
-	AuthorID    int64         `json:"author_id"`
-	CategoryID  int64         `json:"category_id"`
-	Status      ContentStatus `json:"status"`
-	ViewCount   int64         `json:"view_count"`
-	PublishedAt *time.Time    `json:"published_at"`
-	CreatedAt   time.Time     `json:"created_at"`
-	UpdatedAt   time.Time     `json:"updated_at"`
+	ID          int64 // JSONタグ削除
+	Title       string
+	Body        string
+	Type        ContentType
+	AuthorID    int64
+	CategoryID  int64
+	Status      ContentStatus
+	ViewCount   int64 // int64のまま
+	PublishedAt *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 // Validate はコンテンツのドメインルールを検証します

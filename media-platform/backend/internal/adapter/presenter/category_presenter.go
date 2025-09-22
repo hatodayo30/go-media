@@ -1,39 +1,51 @@
 package presenter
 
 import (
-	"media-platform/internal/domain/entity"
-	"media-platform/internal/usecase/dto" // ✅ 修正: presentation/dto → usecase/dto
+	"media-platform/internal/usecase/dto" // DTOのみに依存
 )
 
-// CategoryPresenter はカテゴリエンティティをHTTPレスポンスDTOに変換します
 type CategoryPresenter struct{}
 
-// NewCategoryPresenter は新しいCategoryPresenterのインスタンスを生成します
 func NewCategoryPresenter() *CategoryPresenter {
 	return &CategoryPresenter{}
 }
 
-// ToCategoryResponse はCategoryエンティティをCategoryResponseに変換します
-func (p *CategoryPresenter) ToCategoryResponse(category *entity.Category) *dto.CategoryResponse {
-	return &dto.CategoryResponse{
-		ID:          category.ID,
-		Name:        category.Name,
-		Description: category.Description,
-		ParentID:    category.ParentID,
-		CreatedAt:   category.CreatedAt,
-		UpdatedAt:   category.UpdatedAt,
+// HTTP Response DTO構造体
+type HTTPCategoryResponse struct {
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	ParentID    *int64 `json:"parent_id,omitempty"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at,omitempty"`
+}
+
+// UseCase DTO → HTTP Response DTO変換
+func (p *CategoryPresenter) ToHTTPCategoryResponse(categoryDTO *dto.CategoryResponse) *HTTPCategoryResponse {
+	if categoryDTO == nil {
+		return nil
+	}
+
+	return &HTTPCategoryResponse{
+		ID:          categoryDTO.ID,
+		Name:        categoryDTO.Name,
+		Description: categoryDTO.Description,
+		ParentID:    categoryDTO.ParentID,
+		CreatedAt:   categoryDTO.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:   categoryDTO.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 }
 
-// ToCategoryResponseList はCategoryエンティティのスライスをCategoryResponseのスライスに変換します
-func (p *CategoryPresenter) ToCategoryResponseList(categories []*entity.Category) []*dto.CategoryResponse {
-	responses := make([]*dto.CategoryResponse, 0, len(categories))
-	for _, category := range categories {
-		responses = append(responses, p.ToCategoryResponse(category))
+func (p *CategoryPresenter) ToHTTPCategoryResponseList(categoryDTOs []*dto.CategoryResponse) []*HTTPCategoryResponse {
+	if categoryDTOs == nil {
+		return []*HTTPCategoryResponse{}
+	}
+
+	responses := make([]*HTTPCategoryResponse, 0, len(categoryDTOs))
+	for _, categoryDTO := range categoryDTOs {
+		if categoryDTO != nil {
+			responses = append(responses, p.ToHTTPCategoryResponse(categoryDTO))
+		}
 	}
 	return responses
 }
-
-// ⚠️ 注意: ToCategoryEntityメソッドは削除
-// Request → Entity変換はService層の責務です
-// CategoryServiceのtoCategoryEntityメソッドで実装済み

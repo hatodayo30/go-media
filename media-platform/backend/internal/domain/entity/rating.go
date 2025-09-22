@@ -8,12 +8,12 @@ import (
 
 // Rating は評価を表すエンティティです
 type Rating struct {
-	ID        int64     `json:"id"`
-	Value     int       `json:"value"` // 1 = いいね（固定値）
-	UserID    int64     `json:"user_id"`
-	ContentID int64     `json:"content_id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        int64
+	Value     int
+	UserID    int64
+	ContentID int64
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // Validate は評価のドメインルールを検証します

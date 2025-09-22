@@ -3,10 +3,10 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 
 	"media-platform/internal/domain/entity"
+	domainErrors "media-platform/internal/domain/errors"
 	"media-platform/internal/domain/repository"
 )
 
@@ -43,9 +43,9 @@ func (r *userRepository) Find(ctx context.Context, id int64) (*entity.User, erro
 
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, nil // ユーザーが見つからない場合はnilを返す
+			return nil, domainErrors.NewNotFoundError("user", id)
 		}
-		return nil, err
+		return nil, fmt.Errorf("failed to find user: %w", err)
 	}
 
 	return &user, nil
@@ -74,15 +74,15 @@ func (r *userRepository) FindByEmail(ctx context.Context, email string) (*entity
 
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, nil // ユーザーが見つからない場合はnilを返す
+			return nil, domainErrors.NewNotFoundError("user", email)
 		}
-		return nil, err
+		return nil, fmt.Errorf("failed to find user by email: %w", err)
 	}
 
 	return &user, nil
 }
 
-// ユーザー名によるユーザー検索（ドメインサービス用に追加）
+// ユーザー名によるユーザー検索
 func (r *userRepository) FindByUsername(ctx context.Context, username string) (*entity.User, error) {
 	query := `
 		SELECT id, username, email, password, bio, avatar, role, created_at, updated_at
@@ -105,9 +105,9 @@ func (r *userRepository) FindByUsername(ctx context.Context, username string) (*
 
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, nil
+			return nil, domainErrors.NewNotFoundError("user", username)
 		}
-		return nil, err
+		return nil, fmt.Errorf("failed to find user by username: %w", err)
 	}
 
 	return &user, nil
@@ -124,7 +124,7 @@ func (r *userRepository) FindAll(ctx context.Context, limit, offset int) ([]*ent
 
 	rows, err := r.db.QueryContext(ctx, query, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to query users: %w", err)
 	}
 	defer rows.Close()
 
@@ -143,13 +143,13 @@ func (r *userRepository) FindAll(ctx context.Context, limit, offset int) ([]*ent
 			&user.UpdatedAt,
 		)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to scan user: %w", err)
 		}
 		users = append(users, &user)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("row iteration error: %w", err)
 	}
 
 	return users, nil
@@ -175,7 +175,9 @@ func (r *userRepository) Create(ctx context.Context, user *entity.User) error {
 	).Scan(&user.ID)
 
 	if err != nil {
-		return fmt.Errorf("ユーザー作成エラー: %w", err)
+		// UNIQUE制約違反などのチェック
+		// PostgreSQLの場合: pq.Errorを使ってエラーコードをチェック
+		return fmt.Errorf("failed to create user: %w", err)
 	}
 
 	return nil
@@ -201,16 +203,16 @@ func (r *userRepository) Update(ctx context.Context, user *entity.User) error {
 	)
 
 	if err != nil {
-		return fmt.Errorf("ユーザー更新エラー: %w", err)
+		return fmt.Errorf("failed to update user: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
 	if rowsAffected == 0 {
-		return errors.New("更新対象のユーザーが見つかりません")
+		return domainErrors.NewNotFoundError("user", user.ID)
 	}
 
 	return nil
@@ -222,59 +224,19 @@ func (r *userRepository) Delete(ctx context.Context, id int64) error {
 
 	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
-		return fmt.Errorf("ユーザー削除エラー: %w", err)
+		return fmt.Errorf("failed to delete user: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
 	if rowsAffected == 0 {
-		return errors.New("削除対象のユーザーが見つかりません")
+		return domainErrors.NewNotFoundError("user", id)
 	}
 
 	return nil
 }
 
-// GetPublicUsers は公開情報のみを取得します
-func (r *userRepository) GetPublicUsers(ctx context.Context) ([]*entity.User, error) {
-	query := `
-		SELECT id, username, bio, role, created_at, updated_at
-		FROM users
-		ORDER BY id
-	`
-
-	rows, err := r.db.QueryContext(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var users []*entity.User
-	for rows.Next() {
-		var user entity.User
-		// パスワードとメールアドレスは取得しない
-		err := rows.Scan(
-			&user.ID,
-			&user.Username,
-			&user.Bio,
-			&user.Role,
-			&user.CreatedAt,
-			&user.UpdatedAt,
-		)
-		if err != nil {
-			return nil, err
-		}
-		// パスワードとメールは空にしておく
-		user.Password = ""
-		user.Email = ""
-		users = append(users, &user)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return users, nil
-}
+// GetPublicUsers は削除してください - これはPresenter層の責務です

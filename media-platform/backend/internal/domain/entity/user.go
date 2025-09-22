@@ -10,15 +10,15 @@ import (
 
 // User はユーザーエンティティを表す構造体です
 type User struct {
-	ID        int64     `json:"id"`
-	Username  string    `json:"username"`
-	Email     string    `json:"email"`
-	Password  string    `json:"-"` // レスポンスにはパスワードを含めない
-	Bio       string    `json:"bio"`
-	Avatar    string    `json:"avatar"`
-	Role      string    `json:"role"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        int64
+	Username  string
+	Email     string
+	Password  string
+	Bio       string
+	Avatar    string
+	Role      string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // NewUser は新しいユーザーエンティティを作成します

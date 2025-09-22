@@ -12,27 +12,21 @@
 
 ## プロジェクト構造
 
-```
-media-platform/
-├── cmd/
-│   └── api/
-│       └── main.go        # アプリケーションのエントリーポイント
-├── configs/
-│   └── config.go          # 設定情報
-├── internal/
-│   ├── domain/            # ドメイン層
-│   ├── infrastructure/    # インフラ層
-│   ├── usecase/           # ユースケース層
-│   └── interfaces/        # インターフェース層
-├── scripts/
-│   └── init.sql           # データベース初期化スクリプト
-├── pkg/                   # 共通パッケージ
-├── docker-compose.yml     # Docker Compose設定
-├── Dockerfile             # APIサーバービルド用
-├── Makefile               # 便利なコマンド集
-├── go.mod                 # Goモジュール定義
-└── go.sum                 # 依存関係のチェックサム
-```
+HTTP Request
+↓
+Controller (Echo)
+↓ バインド
+Request DTO (Validate()メソッドで検証)
+↓
+UseCase/Service
+↓ Repository 呼び出し
+Domain Entity
+↓ Entity → DTO 変換（UseCase 層）
+Response DTO
+↓ Presenter 呼び出し
+HTTP Response DTO
+↓
+JSON Response
 
 ## セットアップと実行方法
 
