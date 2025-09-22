@@ -1,22 +1,29 @@
 package dto
 
-import "time"
+import (
+	domainErrors "media-platform/internal/domain/errors"
+	"time"
+)
 
-// CreateCategoryRequest はカテゴリ作成のリクエストを表す構造体です
 type CreateCategoryRequest struct {
-	Name        string `json:"name" binding:"required"`
+	Name        string `json:"name"`
 	Description string `json:"description"`
 	ParentID    *int64 `json:"parent_id"`
 }
 
-// UpdateCategoryRequest はカテゴリ更新のリクエストを表す構造体です
+func (req *CreateCategoryRequest) Validate() error {
+	if req.Name == "" {
+		return domainErrors.NewValidationError("カテゴリ名は必須です")
+	}
+	return nil
+}
+
 type UpdateCategoryRequest struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	ParentID    *int64 `json:"parent_id"`
 }
 
-// CategoryResponse はカテゴリレスポンスを表す構造体です
 type CategoryResponse struct {
 	ID          int64     `json:"id"`
 	Name        string    `json:"name"`
