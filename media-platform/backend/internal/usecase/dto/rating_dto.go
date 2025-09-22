@@ -1,8 +1,10 @@
 package dto
 
-import "time"
+import (
+	domainErrors "media-platform/internal/domain/errors"
+	"time"
+)
 
-// RatingResponse は評価のレスポンス用の構造体です
 type RatingResponse struct {
 	ID        int64     `json:"id"`
 	Value     int       `json:"value"`
@@ -12,27 +14,33 @@ type RatingResponse struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// CreateRatingRequest は評価作成リクエスト用の構造体です
 type CreateRatingRequest struct {
-	ContentID int64 `json:"content_id" binding:"required"`
-	Value     int   `json:"value" binding:"required"` // 1のみ有効
+	ContentID int64 `json:"content_id"`
+	Value     int   `json:"value"`
 }
 
-// RatingStatsResponse は評価統計のレスポンス用の構造体です
+func (req *CreateRatingRequest) Validate() error {
+	if req.ContentID == 0 {
+		return domainErrors.NewValidationError("コンテンツIDは必須です")
+	}
+	if req.Value != 1 {
+		return domainErrors.NewValidationError("評価値は1（グッド）である必要があります")
+	}
+	return nil
+}
+
 type RatingStatsResponse struct {
 	ContentID int64 `json:"content_id"`
 	LikeCount int   `json:"like_count"`
 	Count     int   `json:"count"`
 }
 
-// UserRatingStatusResponse はユーザーの評価状態のレスポンス用の構造体です
 type UserRatingStatusResponse struct {
 	ContentID int64  `json:"content_id"`
-	HasRated  bool   `json:"has_rated"` // HasLikedをHasRatedに統一
+	HasRated  bool   `json:"has_rated"`
 	RatingID  *int64 `json:"rating_id,omitempty"`
 }
 
-// RatingQuery は評価検索クエリ用の構造体です
 type RatingQuery struct {
 	UserID    *int64 `json:"user_id,omitempty"`
 	ContentID *int64 `json:"content_id,omitempty"`
