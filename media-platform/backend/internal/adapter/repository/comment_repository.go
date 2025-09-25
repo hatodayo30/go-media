@@ -3,29 +3,32 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
-	"strings"
-	"time"
 
 	"media-platform/internal/domain/entity"
+	domainErrors "media-platform/internal/domain/errors"
 	"media-platform/internal/domain/repository"
-	"media-platform/internal/presentation/dto"
 )
 
-// CommentRepositoryImpl はCommentRepositoryインターフェースの実装です
 type CommentRepositoryImpl struct {
 	db *sql.DB
 }
 
-// NewCommentRepository は新しいCommentRepositoryのインスタンスを生成します
 func NewCommentRepository(db *sql.DB) repository.CommentRepository {
 	return &CommentRepositoryImpl{
 		db: db,
 	}
 }
 
-// Find は指定したIDのコメントを取得します
+// CommentQuery をRepository内で定義（または別の方法で解決）
+type CommentQuery struct {
+	ContentID *int64
+	UserID    *int64
+	ParentID  *int64
+	Limit     int
+	Offset    int
+}
+
 func (r *CommentRepositoryImpl) Find(ctx context.Context, id int64) (*entity.Comment, error) {
 	query := `
 		SELECT id, body, user_id, content_id, parent_id, created_at, updated_at
@@ -47,10 +50,10 @@ func (r *CommentRepositoryImpl) Find(ctx context.Context, id int64) (*entity.Com
 	)
 
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
+		if err == sql.ErrNoRows {
+			return nil, domainErrors.NewNotFoundError("comment", id)
 		}
-		return nil, err
+		return nil, fmt.Errorf("failed to find comment: %w", err)
 	}
 
 	if parentID.Valid {
@@ -60,81 +63,22 @@ func (r *CommentRepositoryImpl) Find(ctx context.Context, id int64) (*entity.Com
 	return &comment, nil
 }
 
-// FindAll は条件に合うコメントを取得します
-func (r *CommentRepositoryImpl) FindAll(ctx context.Context, query *dto.CommentQuery) ([]*entity.Comment, error) {
-	// ベースクエリ
-	baseQuery := `
-		SELECT id, body, user_id, content_id, parent_id, created_at, updated_at
-		FROM comments
-		WHERE 1=1
-	`
-
-	// WHERE句の条件とパラメータを構築
-	whereClause, args := r.buildWhereClause(query)
-
-	// 最終的なクエリを構築
-	finalQuery := fmt.Sprintf("%s %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d",
-		baseQuery, whereClause, len(args)+1, len(args)+2)
-	args = append(args, query.Limit, query.Offset)
-
-	// クエリ実行
-	rows, err := r.db.QueryContext(ctx, finalQuery, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	// 結果をスライスに格納
-	var comments []*entity.Comment
-	for rows.Next() {
-		var comment entity.Comment
-		var parentID sql.NullInt64
-
-		err := rows.Scan(
-			&comment.ID,
-			&comment.Body,
-			&comment.UserID,
-			&comment.ContentID,
-			&parentID,
-			&comment.CreatedAt,
-			&comment.UpdatedAt,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		if parentID.Valid {
-			comment.ParentID = &parentID.Int64
-		}
-
-		comments = append(comments, &comment)
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return comments, nil
-}
-
-// FindByContent はコンテンツに関連するコメントを取得します
+// シンプルなメソッドに分割（複雑なクエリビルダーを削除）
 func (r *CommentRepositoryImpl) FindByContent(ctx context.Context, contentID int64, limit, offset int) ([]*entity.Comment, error) {
 	query := `
 		SELECT id, body, user_id, content_id, parent_id, created_at, updated_at
 		FROM comments
-		WHERE content_id = $1
+		WHERE content_id = $1 AND parent_id IS NULL
 		ORDER BY created_at DESC
 		LIMIT $2 OFFSET $3
 	`
 
-	// クエリ実行
 	rows, err := r.db.QueryContext(ctx, query, contentID, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to query comments: %w", err)
 	}
 	defer rows.Close()
 
-	// 結果をスライスに格納
 	var comments []*entity.Comment
 	for rows.Next() {
 		var comment entity.Comment
@@ -150,7 +94,7 @@ func (r *CommentRepositoryImpl) FindByContent(ctx context.Context, contentID int
 			&comment.UpdatedAt,
 		)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to scan comment: %w", err)
 		}
 
 		if parentID.Valid {
@@ -161,13 +105,12 @@ func (r *CommentRepositoryImpl) FindByContent(ctx context.Context, contentID int
 	}
 
 	if err = rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("row iteration error: %w", err)
 	}
 
 	return comments, nil
 }
 
-// FindByUser はユーザーが投稿したコメントを取得します
 func (r *CommentRepositoryImpl) FindByUser(ctx context.Context, userID int64, limit, offset int) ([]*entity.Comment, error) {
 	query := `
 		SELECT id, body, user_id, content_id, parent_id, created_at, updated_at
@@ -177,14 +120,12 @@ func (r *CommentRepositoryImpl) FindByUser(ctx context.Context, userID int64, li
 		LIMIT $2 OFFSET $3
 	`
 
-	// クエリ実行
 	rows, err := r.db.QueryContext(ctx, query, userID, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to query comments by user: %w", err)
 	}
 	defer rows.Close()
 
-	// 結果をスライスに格納
 	var comments []*entity.Comment
 	for rows.Next() {
 		var comment entity.Comment
@@ -200,7 +141,7 @@ func (r *CommentRepositoryImpl) FindByUser(ctx context.Context, userID int64, li
 			&comment.UpdatedAt,
 		)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to scan comment: %w", err)
 		}
 
 		if parentID.Valid {
@@ -211,13 +152,12 @@ func (r *CommentRepositoryImpl) FindByUser(ctx context.Context, userID int64, li
 	}
 
 	if err = rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("row iteration error: %w", err)
 	}
 
 	return comments, nil
 }
 
-// FindReplies はコメントに対する返信を取得します
 func (r *CommentRepositoryImpl) FindReplies(ctx context.Context, parentID int64, limit, offset int) ([]*entity.Comment, error) {
 	query := `
 		SELECT id, body, user_id, content_id, parent_id, created_at, updated_at
@@ -227,14 +167,12 @@ func (r *CommentRepositoryImpl) FindReplies(ctx context.Context, parentID int64,
 		LIMIT $2 OFFSET $3
 	`
 
-	// クエリ実行
 	rows, err := r.db.QueryContext(ctx, query, parentID, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to query replies: %w", err)
 	}
 	defer rows.Close()
 
-	// 結果をスライスに格納
 	var comments []*entity.Comment
 	for rows.Next() {
 		var comment entity.Comment
@@ -250,7 +188,7 @@ func (r *CommentRepositoryImpl) FindReplies(ctx context.Context, parentID int64,
 			&comment.UpdatedAt,
 		)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to scan reply: %w", err)
 		}
 
 		if dbParentID.Valid {
@@ -261,13 +199,12 @@ func (r *CommentRepositoryImpl) FindReplies(ctx context.Context, parentID int64,
 	}
 
 	if err = rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("row iteration error: %w", err)
 	}
 
 	return comments, nil
 }
 
-// Create は新しいコメントを作成します
 func (r *CommentRepositoryImpl) Create(ctx context.Context, comment *entity.Comment) error {
 	query := `
 		INSERT INTO comments (body, user_id, content_id, parent_id, created_at, updated_at)
@@ -275,18 +212,12 @@ func (r *CommentRepositoryImpl) Create(ctx context.Context, comment *entity.Comm
 		RETURNING id
 	`
 
-	// 現在時刻の設定
-	now := time.Now()
-	comment.CreatedAt = now
-	comment.UpdatedAt = now
-
 	var parentID sql.NullInt64
 	if comment.ParentID != nil {
 		parentID.Int64 = *comment.ParentID
 		parentID.Valid = true
 	}
 
-	// クエリ実行
 	err := r.db.QueryRowContext(ctx, query,
 		comment.Body,
 		comment.UserID,
@@ -296,10 +227,13 @@ func (r *CommentRepositoryImpl) Create(ctx context.Context, comment *entity.Comm
 		comment.UpdatedAt,
 	).Scan(&comment.ID)
 
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to create comment: %w", err)
+	}
+
+	return nil
 }
 
-// Update は既存のコメントを更新します
 func (r *CommentRepositoryImpl) Update(ctx context.Context, comment *entity.Comment) error {
 	query := `
 		UPDATE comments
@@ -307,131 +241,67 @@ func (r *CommentRepositoryImpl) Update(ctx context.Context, comment *entity.Comm
 		WHERE id = $3
 	`
 
-	// 現在時刻の設定
-	comment.UpdatedAt = time.Now()
-
-	// クエリ実行
 	result, err := r.db.ExecContext(ctx, query,
 		comment.Body,
 		comment.UpdatedAt,
 		comment.ID,
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to update comment: %w", err)
 	}
 
-	// 更新された行数をチェック
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
 	if rowsAffected == 0 {
-		return errors.New("コメントが見つかりません")
+		return domainErrors.NewNotFoundError("comment", comment.ID)
 	}
 
 	return nil
 }
 
-// Delete は指定したIDのコメントを削除します
 func (r *CommentRepositoryImpl) Delete(ctx context.Context, id int64) error {
-	query := `
-		DELETE FROM comments
-		WHERE id = $1
-	`
+	query := `DELETE FROM comments WHERE id = $1`
 
-	// クエリ実行
 	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to delete comment: %w", err)
 	}
 
-	// 削除された行数をチェック
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
 	if rowsAffected == 0 {
-		return errors.New("コメントが見つかりません")
+		return domainErrors.NewNotFoundError("comment", id)
 	}
 
 	return nil
 }
 
-// CountByContent はコンテンツに関連するコメント数を取得します
-func (r *CommentRepositoryImpl) CountByContent(ctx context.Context, contentID int64) (int, error) {
-	query := `
-		SELECT COUNT(*)
-		FROM comments
-		WHERE content_id = $1
-	`
+func (r *CommentRepositoryImpl) CountByContent(ctx context.Context, contentID int64) (int64, error) {
+	query := `SELECT COUNT(*) FROM comments WHERE content_id = $1`
 
-	var count int
+	var count int64
 	err := r.db.QueryRowContext(ctx, query, contentID).Scan(&count)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to count comments: %w", err)
 	}
 
 	return count, nil
 }
 
-// CountByUser はユーザーが投稿したコメント数を取得します
-func (r *CommentRepositoryImpl) CountByUser(ctx context.Context, userID int64) (int, error) {
-	query := `
-		SELECT COUNT(*)
-		FROM comments
-		WHERE user_id = $1
-	`
+func (r *CommentRepositoryImpl) CountByUser(ctx context.Context, userID int64) (int64, error) {
+	query := `SELECT COUNT(*) FROM comments WHERE user_id = $1`
 
-	var count int
+	var count int64
 	err := r.db.QueryRowContext(ctx, query, userID).Scan(&count)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to count user comments: %w", err)
 	}
 
 	return count, nil
-}
-
-// buildWhereClause は検索条件からWHERE句を構築します
-func (r *CommentRepositoryImpl) buildWhereClause(query *dto.CommentQuery) (string, []interface{}) {
-	var conditions []string
-	var args []interface{}
-	argCount := 1
-
-	// コンテンツIDによるフィルタリング
-	if query.ContentID != nil {
-		conditions = append(conditions, fmt.Sprintf("content_id = $%d", argCount))
-		args = append(args, *query.ContentID)
-		argCount++
-	}
-
-	// ユーザーIDによるフィルタリング
-	if query.UserID != nil {
-		conditions = append(conditions, fmt.Sprintf("user_id = $%d", argCount))
-		args = append(args, *query.UserID)
-		argCount++
-	}
-
-	// 親コメントIDによるフィルタリング
-	if query.ParentID != nil {
-		if *query.ParentID == 0 {
-			// 親コメントが0の場合はNULL（トップレベルコメント）を指定
-			conditions = append(conditions, "parent_id IS NULL")
-		} else {
-			conditions = append(conditions, fmt.Sprintf("parent_id = $%d", argCount))
-			args = append(args, *query.ParentID)
-			argCount++
-		}
-	} else {
-		// 親コメントの指定がない場合は、親コメント（トップレベル）のみを取得
-		conditions = append(conditions, "parent_id IS NULL")
-	}
-
-	// 条件がある場合は WHERE 句を構築
-	if len(conditions) > 0 {
-		return " AND " + strings.Join(conditions, " AND "), args
-	}
-
-	return "", args
 }

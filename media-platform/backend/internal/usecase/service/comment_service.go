@@ -11,14 +11,12 @@ import (
 	"media-platform/internal/usecase/dto"
 )
 
-// CommentService はコメントに関するアプリケーションサービスを提供します
 type CommentService struct {
 	commentRepo repository.CommentRepository
 	contentRepo repository.ContentRepository
 	userRepo    repository.UserRepository
 }
 
-// NewCommentService は新しいCommentServiceのインスタンスを生成します
 func NewCommentService(
 	commentRepo repository.CommentRepository,
 	contentRepo repository.ContentRepository,
@@ -31,9 +29,8 @@ func NewCommentService(
 	}
 }
 
-// ========== Entity to DTO変換メソッド（Service内で実装） ==========
+// ========== Entity to DTO変換メソッド ==========
 
-// toCommentResponse はEntityをCommentResponseに変換します
 func (s *CommentService) toCommentResponse(comment *entity.Comment) *dto.CommentResponse {
 	return &dto.CommentResponse{
 		ID:        comment.ID,
@@ -46,7 +43,6 @@ func (s *CommentService) toCommentResponse(comment *entity.Comment) *dto.Comment
 	}
 }
 
-// toCommentResponseWithUser はEntityとUserをCommentResponseに変換します
 func (s *CommentService) toCommentResponseWithUser(comment *entity.Comment, user *entity.User) *dto.CommentResponse {
 	response := s.toCommentResponse(comment)
 	if user != nil {
@@ -59,7 +55,6 @@ func (s *CommentService) toCommentResponseWithUser(comment *entity.Comment, user
 	return response
 }
 
-// toCommentResponseList はEntityスライスをCommentResponseスライスに変換します
 func (s *CommentService) toCommentResponseList(comments []*entity.Comment) []*dto.CommentResponse {
 	responses := make([]*dto.CommentResponse, len(comments))
 	for i, comment := range comments {
@@ -68,7 +63,6 @@ func (s *CommentService) toCommentResponseList(comments []*entity.Comment) []*dt
 	return responses
 }
 
-// toCommentListResponse はCommentResponseリストをCommentListResponseに変換します
 func (s *CommentService) toCommentListResponse(responses []*dto.CommentResponse, totalCount int64, limit int) *dto.CommentListResponse {
 	return &dto.CommentListResponse{
 		Comments:   responses,
@@ -77,22 +71,28 @@ func (s *CommentService) toCommentListResponse(responses []*dto.CommentResponse,
 	}
 }
 
-// toCommentEntity はCreateCommentRequestからEntityを作成します
-func (s *CommentService) toCommentEntity(req *dto.CreateCommentRequest, userID int64) *entity.Comment {
-	now := time.Now()
-	return &entity.Comment{
+// toCommentEntity はEntityファクトリメソッドを使用するように修正
+func (s *CommentService) CreateCommentEntity(req *dto.CreateCommentRequest, userID int64) (*entity.Comment, error) {
+	// entity.NewCommentがある場合はそれを使用、なければ直接作成
+	comment := &entity.Comment{
 		Body:      req.Body,
 		UserID:    userID,
 		ContentID: req.ContentID,
 		ParentID:  req.ParentID,
-		CreatedAt: now,
-		UpdatedAt: now,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
+
+	// バリデーション
+	if err := comment.Validate(); err != nil {
+		return nil, err
+	}
+
+	return comment, nil
 }
 
 // ========== Use Cases ==========
 
-// GetCommentByID は指定したIDのコメントを取得します
 func (s *CommentService) GetCommentByID(ctx context.Context, id int64) (*dto.CommentResponse, error) {
 	comment, err := s.commentRepo.Find(ctx, id)
 	if err != nil {
@@ -102,7 +102,6 @@ func (s *CommentService) GetCommentByID(ctx context.Context, id int64) (*dto.Com
 		return nil, domainErrors.NewNotFoundError("Comment", id)
 	}
 
-	// ユーザー情報の取得
 	user, err := s.userRepo.Find(ctx, comment.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("user lookup failed: %w", err)
@@ -111,7 +110,7 @@ func (s *CommentService) GetCommentByID(ctx context.Context, id int64) (*dto.Com
 	return s.toCommentResponseWithUser(comment, user), nil
 }
 
-// GetCommentsByContent はコンテンツに対するコメント一覧を取得します
+// GetCommentsByContent - FindAllを使わずにFindByContentを使用
 func (s *CommentService) GetCommentsByContent(ctx context.Context, contentID int64, limit, offset int) (*dto.CommentListResponse, error) {
 	// コンテンツの存在確認
 	content, err := s.contentRepo.Find(ctx, contentID)
@@ -133,15 +132,8 @@ func (s *CommentService) GetCommentsByContent(ctx context.Context, contentID int
 		offset = 0
 	}
 
-	// 親コメントのみを取得（ParentID=null）
-	query := &dto.CommentQuery{
-		ContentID: &contentID,
-		ParentID:  nil, // 親コメントのみ
-		Limit:     limit,
-		Offset:    offset,
-	}
-
-	comments, err := s.commentRepo.FindAll(ctx, query)
+	// 親コメント（トップレベル）を取得
+	comments, err := s.commentRepo.FindByContent(ctx, contentID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("comments lookup failed: %w", err)
 	}
@@ -158,8 +150,7 @@ func (s *CommentService) GetCommentsByContent(ctx context.Context, contentID int
 		// ユーザー情報の取得
 		user, err := s.userRepo.Find(ctx, comment.UserID)
 		if err != nil {
-			// ユーザー情報取得エラーは無視してコメントは表示
-			user = nil
+			user = nil // ユーザー情報取得エラーは無視
 		}
 
 		response := s.toCommentResponseWithUser(comment, user)
@@ -169,7 +160,6 @@ func (s *CommentService) GetCommentsByContent(ctx context.Context, contentID int
 		if err == nil && len(replies) > 0 {
 			response.Replies = make([]*dto.CommentResponse, 0, len(replies))
 			for _, reply := range replies {
-				// 返信のユーザー情報も取得
 				replyUser, err := s.userRepo.Find(ctx, reply.UserID)
 				if err != nil {
 					replyUser = nil
@@ -186,7 +176,6 @@ func (s *CommentService) GetCommentsByContent(ctx context.Context, contentID int
 	return s.toCommentListResponse(responses, totalCount, limit), nil
 }
 
-// GetReplies はコメントに対する返信を取得します
 func (s *CommentService) GetReplies(ctx context.Context, parentID int64, limit, offset int) ([]*dto.CommentResponse, error) {
 	// 親コメントの存在確認
 	parentComment, err := s.commentRepo.Find(ctx, parentID)
@@ -217,7 +206,6 @@ func (s *CommentService) GetReplies(ctx context.Context, parentID int64, limit, 
 	// レスポンスの作成
 	var responses []*dto.CommentResponse
 	for _, reply := range replies {
-		// ユーザー情報の取得
 		user, err := s.userRepo.Find(ctx, reply.UserID)
 		if err != nil {
 			user = nil
@@ -230,7 +218,6 @@ func (s *CommentService) GetReplies(ctx context.Context, parentID int64, limit, 
 	return responses, nil
 }
 
-// GetCommentsByUser はユーザーが投稿したコメント一覧を取得します
 func (s *CommentService) GetCommentsByUser(ctx context.Context, userID int64, limit, offset int) (*dto.CommentListResponse, error) {
 	// ユーザーの存在確認
 	user, err := s.userRepo.Find(ctx, userID)
@@ -274,7 +261,6 @@ func (s *CommentService) GetCommentsByUser(ctx context.Context, userID int64, li
 	return s.toCommentListResponse(responses, totalCount, limit), nil
 }
 
-// CreateComment は新しいコメントを作成します
 func (s *CommentService) CreateComment(ctx context.Context, userID int64, req *dto.CreateCommentRequest) (*dto.CommentResponse, error) {
 	// コンテンツの存在確認
 	content, err := s.contentRepo.Find(ctx, req.ContentID)
@@ -307,11 +293,9 @@ func (s *CommentService) CreateComment(ctx context.Context, userID int64, req *d
 	}
 
 	// コメントエンティティの作成
-	comment := s.toCommentEntity(req, userID)
-
-	// ドメインルールのバリデーション
-	if err := comment.Validate(); err != nil {
-		return nil, domainErrors.NewValidationError(err.Error())
+	comment, err := s.CreateCommentEntity(req, userID)
+	if err != nil {
+		return nil, err
 	}
 
 	// コメントの保存
@@ -328,7 +312,6 @@ func (s *CommentService) CreateComment(ctx context.Context, userID int64, req *d
 	return s.toCommentResponseWithUser(comment, user), nil
 }
 
-// UpdateComment はコメントを更新します
 func (s *CommentService) UpdateComment(ctx context.Context, id int64, userID int64, userRole string, req *dto.UpdateCommentRequest) (*dto.CommentResponse, error) {
 	// コメントの取得
 	comment, err := s.commentRepo.Find(ctx, id)
@@ -349,11 +332,6 @@ func (s *CommentService) UpdateComment(ctx context.Context, id int64, userID int
 		return nil, domainErrors.NewValidationError(err.Error())
 	}
 
-	// ドメインルールのバリデーション
-	if err := comment.Validate(); err != nil {
-		return nil, domainErrors.NewValidationError(err.Error())
-	}
-
 	// コメントの更新
 	if err := s.commentRepo.Update(ctx, comment); err != nil {
 		return nil, fmt.Errorf("comment update failed: %w", err)
@@ -368,7 +346,6 @@ func (s *CommentService) UpdateComment(ctx context.Context, id int64, userID int
 	return s.toCommentResponseWithUser(comment, user), nil
 }
 
-// DeleteComment はコメントを削除します
 func (s *CommentService) DeleteComment(ctx context.Context, id int64, userID int64, userRole string) error {
 	// コメントの取得
 	comment, err := s.commentRepo.Find(ctx, id)

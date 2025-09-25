@@ -4,16 +4,12 @@ import (
 	"context"
 
 	"media-platform/internal/domain/entity"
-	"media-platform/internal/usecase/dto"
 )
 
 // CommentRepository はコメントの永続化に関するインターフェースです
 type CommentRepository interface {
 	// Find は指定したIDのコメントを取得します
 	Find(ctx context.Context, id int64) (*entity.Comment, error)
-
-	// FindAll は条件に合うコメントを取得します
-	FindAll(ctx context.Context, query *dto.CommentQuery) ([]*entity.Comment, error)
 
 	// FindByContent はコンテンツに関連するコメントを取得します
 	FindByContent(ctx context.Context, contentID int64, limit, offset int) ([]*entity.Comment, error)
