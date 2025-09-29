@@ -2,21 +2,13 @@ package repository
 
 import (
 	"context"
-
 	"media-platform/internal/domain/entity"
-	"media-platform/internal/usecase/dto"
 )
 
 // ContentRepository はコンテンツの永続化に関するインターフェースです
 type ContentRepository interface {
 	// Find は指定されたIDのコンテンツを取得します
 	Find(ctx context.Context, id int64) (*entity.Content, error)
-
-	// FindAll は条件に合うコンテンツの一覧を取得します
-	FindAll(ctx context.Context, query *dto.ContentQuery) ([]*entity.Content, error)
-
-	// CountAll は条件に合うコンテンツの総数を取得します
-	CountAll(ctx context.Context, query *dto.ContentQuery) (int, error)
 
 	// FindPublished は公開済みのコンテンツ一覧を取得します
 	FindPublished(ctx context.Context, limit, offset int) ([]*entity.Content, error)
@@ -30,7 +22,7 @@ type ContentRepository interface {
 	// FindTrending は人気のコンテンツ一覧を取得します
 	FindTrending(ctx context.Context, limit int) ([]*entity.Content, error)
 
-	// Search はキーワードでコンテンツを検索します（フォールバック用）
+	// Search はキーワードでコンテンツを検索します
 	Search(ctx context.Context, keyword string, limit, offset int) ([]*entity.Content, error)
 
 	// Create は新しいコンテンツを作成します

@@ -47,6 +47,221 @@ CREATE INDEX IF NOT EXISTS idx_contents_status ON contents(status);
 CREATE INDEX IF NOT EXISTS idx_contents_published_at ON contents(published_at);
 
 -- ===============================================
+-- 検索機能強化のための追加・修正
+-- ===============================================
+
+-- 1. 全文検索用のカラムを追加
+ALTER TABLE contents ADD COLUMN IF NOT EXISTS search_vector tsvector;
+
+-- 2. 全文検索用のGINインデックス作成（日本語対応）
+CREATE INDEX IF NOT EXISTS idx_contents_search_vector 
+    ON contents USING gin(search_vector);
+
+-- 3. title と body の部分一致検索用のトライグラムインデックス（日本語に強い）
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+CREATE INDEX IF NOT EXISTS idx_contents_title_trgm 
+    ON contents USING gin(title gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS idx_contents_body_trgm 
+    ON contents USING gin(body gin_trgm_ops);
+
+-- 4. 複合検索用のインデックス（ステータス + 日付 + 閲覧数）
+CREATE INDEX IF NOT EXISTS idx_contents_search_ranking 
+    ON contents (status, published_at DESC, view_count DESC)
+    WHERE status = 'published' AND published_at <= NOW();
+
+-- 5. カテゴリ別検索の最適化
+CREATE INDEX IF NOT EXISTS idx_contents_category_published 
+    ON contents (category_id, published_at DESC, status)
+    WHERE status = 'published';
+
+-- 6. 著者別検索の最適化
+CREATE INDEX IF NOT EXISTS idx_contents_author_published 
+    ON contents (author_id, published_at DESC, status)
+    WHERE status = 'published';
+
+-- ===============================================
+-- 検索ベクター自動更新のトリガー
+-- ===============================================
+
+-- 検索ベクター更新関数（日本語対応版）
+CREATE OR REPLACE FUNCTION update_contents_search_vector()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- title の重み: A (最高), body の重み: B (次点)
+    NEW.search_vector = 
+        setweight(to_tsvector('simple', COALESCE(NEW.title, '')), 'A') ||
+        setweight(to_tsvector('simple', COALESCE(NEW.body, '')), 'B');
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 既存のトリガーを削除して再作成
+DROP TRIGGER IF EXISTS trigger_update_contents_search_vector ON contents;
+
+CREATE TRIGGER trigger_update_contents_search_vector
+    BEFORE INSERT OR UPDATE OF title, body ON contents
+    FOR EACH ROW
+    EXECUTE FUNCTION update_contents_search_vector();
+
+-- ===============================================
+-- 既存データの検索ベクター初期化
+-- ===============================================
+
+-- 既存の全コンテンツの検索ベクターを更新
+UPDATE contents 
+SET search_vector = 
+    setweight(to_tsvector('simple', COALESCE(title, '')), 'A') ||
+    setweight(to_tsvector('simple', COALESCE(body, '')), 'B')
+WHERE search_vector IS NULL;
+
+-- ===============================================
+-- 検索用のビューとヘルパー関数
+-- ===============================================
+
+-- コンテンツの検索スコア付きビュー
+CREATE OR REPLACE VIEW content_search_view AS
+SELECT 
+    c.id,
+    c.title,
+    c.body,
+    c.type,
+    c.author_id,
+    c.category_id,
+    c.status,
+    c.view_count,
+    c.published_at,
+    c.created_at,
+    c.updated_at,
+    c.search_vector,
+    u.username as author_name,
+    cat.name as category_name,
+    -- 人気度スコア計算
+    CASE 
+        WHEN c.view_count > 1000 THEN 3
+        WHEN c.view_count > 100 THEN 2
+        WHEN c.view_count > 10 THEN 1
+        ELSE 0
+    END as popularity_score,
+    -- 新鮮度スコア計算（最近の投稿ほど高スコア）
+    CASE 
+        WHEN c.published_at > NOW() - INTERVAL '7 days' THEN 3
+        WHEN c.published_at > NOW() - INTERVAL '30 days' THEN 2
+        WHEN c.published_at > NOW() - INTERVAL '90 days' THEN 1
+        ELSE 0
+    END as freshness_score
+FROM contents c
+LEFT JOIN users u ON c.author_id = u.id
+LEFT JOIN categories cat ON c.category_id = cat.id
+WHERE c.status = 'published' 
+    AND c.published_at <= NOW();
+
+-- 検索関数（関連性スコア付き）
+CREATE OR REPLACE FUNCTION search_contents(
+    search_query TEXT,
+    search_limit INTEGER DEFAULT 10,
+    search_offset INTEGER DEFAULT 0
+)
+RETURNS TABLE (
+    id BIGINT,
+    title VARCHAR(255),
+    body TEXT,
+    type VARCHAR(20),
+    author_id BIGINT,
+    category_id BIGINT,
+    status VARCHAR(20),
+    view_count BIGINT,
+    published_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE,
+    updated_at TIMESTAMP WITH TIME ZONE,
+    relevance_score REAL
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        c.id,
+        c.title,
+        c.body,
+        c.type,
+        c.author_id,
+        c.category_id,
+        c.status,
+        c.view_count,
+        c.published_at,
+        c.created_at,
+        c.updated_at,
+        -- 関連性スコア計算
+        (
+            -- 全文検索スコア（最重要）
+            ts_rank(c.search_vector, plainto_tsquery('simple', search_query)) * 10 +
+            -- タイトル完全一致ボーナス
+            CASE WHEN LOWER(c.title) = LOWER(search_query) THEN 50 ELSE 0 END +
+            -- タイトル部分一致ボーナス
+            CASE WHEN c.title ILIKE '%' || search_query || '%' THEN 20 ELSE 0 END +
+            -- 人気度ボーナス
+            CASE 
+                WHEN c.view_count > 1000 THEN 5
+                WHEN c.view_count > 100 THEN 3
+                WHEN c.view_count > 10 THEN 1
+                ELSE 0
+            END +
+            -- 新鮮度ボーナス
+            CASE 
+                WHEN c.published_at > NOW() - INTERVAL '7 days' THEN 3
+                WHEN c.published_at > NOW() - INTERVAL '30 days' THEN 2
+                ELSE 0
+            END
+        )::REAL as relevance_score
+    FROM contents c
+    WHERE c.status = 'published'
+        AND c.published_at <= NOW()
+        AND (
+            c.search_vector @@ plainto_tsquery('simple', search_query)
+            OR c.title ILIKE '%' || search_query || '%'
+            OR c.body ILIKE '%' || search_query || '%'
+        )
+    ORDER BY relevance_score DESC, c.view_count DESC, c.published_at DESC
+    LIMIT search_limit
+    OFFSET search_offset;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ===============================================
+-- 検索パフォーマンス最適化
+-- ===============================================
+
+-- VACUUMとANALYZEで統計情報を更新
+VACUUM ANALYZE contents;
+
+-- インデックスの再構築（断片化解消）
+REINDEX TABLE contents;
+
+-- ===============================================
+-- 検索機能のテストクエリ
+-- ===============================================
+
+-- テスト1: 基本的な検索
+-- SELECT * FROM search_contents('テクノロジー', 10, 0);
+
+-- テスト2: 部分一致検索
+-- SELECT id, title, view_count FROM contents 
+-- WHERE title ILIKE '%ニュース%' OR body ILIKE '%ニュース%'
+-- ORDER BY view_count DESC LIMIT 10;
+
+-- テスト3: 全文検索（トライグラム）
+-- SELECT id, title, similarity(title, 'テクノロジー') as sim
+-- FROM contents
+-- WHERE title % 'テクノロジー'
+-- ORDER BY sim DESC LIMIT 10;
+
+-- 完了メッセージ
+SELECT 
+    '検索機能強化が完了しました' as status,
+    (SELECT COUNT(*) FROM contents WHERE search_vector IS NOT NULL) as indexed_contents_count,
+    (SELECT COUNT(*) FROM pg_indexes WHERE tablename = 'contents') as index_count;
+    
+-- ===============================================
 -- フォロー機能テーブル
 -- ===============================================
 
