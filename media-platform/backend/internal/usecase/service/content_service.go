@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"media-platform/internal/domain/entity"
 	domainErrors "media-platform/internal/domain/errors"
@@ -28,7 +29,7 @@ func NewContentService(
 	}
 }
 
-// ✅ Entity → DTO 変換（Service層の責務）
+// Entity → DTO 変換（Service層の責務）
 func (s *ContentService) toContentResponse(content *entity.Content) *dto.ContentResponse {
 	return &dto.ContentResponse{
 		ID:          content.ID,
@@ -53,7 +54,60 @@ func (s *ContentService) toContentResponseList(contents []*entity.Content) []*dt
 	return responses
 }
 
-// ✅ DTOを返す（HTTP表現は返さない）
+// ✅ 追加：GetContents - 条件に応じた検索
+func (s *ContentService) GetContents(ctx context.Context, query *dto.ContentQuery) ([]*dto.ContentResponse, int, error) {
+	// デフォルト値の設定
+	if query.Limit <= 0 {
+		query.Limit = 10
+	}
+	if query.Limit > 100 {
+		query.Limit = 100
+	}
+	if query.Offset < 0 {
+		query.Offset = 0
+	}
+
+	var contents []*entity.Content
+	var err error
+
+	// ビジネスロジック: 条件に応じて適切なRepositoryメソッドを選択
+	switch {
+	case query.SearchQuery != nil && *query.SearchQuery != "":
+		// 検索クエリがある場合
+		if query.CategoryID != nil {
+			// カテゴリ + 検索
+			contents, err = s.searchByKeywordAndCategory(ctx, *query.SearchQuery, *query.CategoryID, query.Limit, query.Offset)
+		} else if query.AuthorID != nil {
+			// 著者 + 検索
+			contents, err = s.searchByKeywordAndAuthor(ctx, *query.SearchQuery, *query.AuthorID, query.Limit, query.Offset)
+		} else {
+			// 検索のみ
+			contents, err = s.contentRepo.Search(ctx, *query.SearchQuery, query.Limit, query.Offset)
+		}
+
+	case query.AuthorID != nil:
+		// 著者別
+		contents, err = s.contentRepo.FindByAuthor(ctx, *query.AuthorID, query.Limit, query.Offset)
+
+	case query.CategoryID != nil:
+		// カテゴリ別
+		contents, err = s.contentRepo.FindByCategory(ctx, *query.CategoryID, query.Limit, query.Offset)
+
+	default:
+		// デフォルトは公開済みコンテンツ
+		contents, err = s.contentRepo.FindPublished(ctx, query.Limit, query.Offset)
+	}
+
+	if err != nil {
+		return nil, 0, fmt.Errorf("contents lookup failed: %w", err)
+	}
+
+	// 総数の計算（簡易実装）
+	totalCount := len(contents)
+
+	return s.toContentResponseList(contents), totalCount, nil
+}
+
 func (s *ContentService) GetContentByID(ctx context.Context, id int64) (*dto.ContentResponse, error) {
 	content, err := s.contentRepo.Find(ctx, id)
 	if err != nil {
@@ -86,6 +140,34 @@ func (s *ContentService) GetPublishedContents(ctx context.Context, limit, offset
 	return s.toContentResponseList(contents), nil
 }
 
+func (s *ContentService) GetContentsByAuthor(ctx context.Context, authorID int64, limit, offset int) ([]*dto.ContentResponse, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	// 著者の存在チェック
+	author, err := s.userRepo.Find(ctx, authorID)
+	if err != nil {
+		return nil, fmt.Errorf("author lookup failed: %w", err)
+	}
+	if author == nil {
+		return nil, domainErrors.NewNotFoundError("User", authorID)
+	}
+
+	contents, err := s.contentRepo.FindByAuthor(ctx, authorID, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("contents by author lookup failed: %w", err)
+	}
+
+	return s.toContentResponseList(contents), nil
+}
+
 func (s *ContentService) GetContentsByCategory(ctx context.Context, categoryID int64, limit, offset int) ([]*dto.ContentResponse, error) {
 	if limit <= 0 {
 		limit = 10
@@ -109,6 +191,22 @@ func (s *ContentService) GetContentsByCategory(ctx context.Context, categoryID i
 	contents, err := s.contentRepo.FindByCategory(ctx, categoryID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("contents by category lookup failed: %w", err)
+	}
+
+	return s.toContentResponseList(contents), nil
+}
+
+func (s *ContentService) GetTrendingContents(ctx context.Context, limit int) ([]*dto.ContentResponse, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 50 {
+		limit = 50
+	}
+
+	contents, err := s.contentRepo.FindTrending(ctx, limit)
+	if err != nil {
+		return nil, fmt.Errorf("trending contents lookup failed: %w", err)
 	}
 
 	return s.toContentResponseList(contents), nil
@@ -193,16 +291,33 @@ func (s *ContentService) UpdateContent(ctx context.Context, id int64, userID int
 
 	// フィールドの更新
 	if req.Title != "" {
-		content.Title = req.Title
+		if err := content.SetTitle(req.Title); err != nil {
+			return nil, domainErrors.NewValidationError(err.Error())
+		}
 	}
 	if req.Body != "" {
-		content.Body = req.Body
+		if err := content.SetBody(req.Body); err != nil {
+			return nil, domainErrors.NewValidationError(err.Error())
+		}
 	}
 	if req.Type != "" {
-		content.Type = entity.ContentType(req.Type)
+		if err := content.SetType(entity.ContentType(req.Type)); err != nil {
+			return nil, domainErrors.NewValidationError(err.Error())
+		}
 	}
 	if req.CategoryID != 0 {
-		content.CategoryID = req.CategoryID
+		// カテゴリの存在チェック
+		category, err := s.categoryRepo.FindByID(ctx, req.CategoryID)
+		if err != nil {
+			return nil, fmt.Errorf("category lookup failed: %w", err)
+		}
+		if category == nil {
+			return nil, domainErrors.NewNotFoundError("Category", req.CategoryID)
+		}
+
+		if err := content.SetCategoryID(req.CategoryID); err != nil {
+			return nil, domainErrors.NewValidationError(err.Error())
+		}
 	}
 
 	// ドメインルールのバリデーション
@@ -213,6 +328,35 @@ func (s *ContentService) UpdateContent(ctx context.Context, id int64, userID int
 	// コンテンツの更新
 	if err := s.contentRepo.Update(ctx, content); err != nil {
 		return nil, fmt.Errorf("content update failed: %w", err)
+	}
+
+	return s.toContentResponse(content), nil
+}
+
+// ✅ 追加：UpdateContentStatus
+func (s *ContentService) UpdateContentStatus(ctx context.Context, id int64, userID int64, userRole string, req *dto.UpdateContentStatusRequest) (*dto.ContentResponse, error) {
+	// コンテンツの取得
+	content, err := s.contentRepo.Find(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("content lookup failed: %w", err)
+	}
+	if content == nil {
+		return nil, domainErrors.NewNotFoundError("Content", id)
+	}
+
+	// 編集権限チェック
+	if !content.CanEdit(userID, userRole) {
+		return nil, domainErrors.NewValidationError("このコンテンツを編集する権限がありません")
+	}
+
+	// ステータスの更新
+	if err := content.SetStatus(entity.ContentStatus(req.Status)); err != nil {
+		return nil, domainErrors.NewValidationError(err.Error())
+	}
+
+	// コンテンツの更新
+	if err := s.contentRepo.Update(ctx, content); err != nil {
+		return nil, fmt.Errorf("content status update failed: %w", err)
 	}
 
 	return s.toContentResponse(content), nil
@@ -239,4 +383,46 @@ func (s *ContentService) DeleteContent(ctx context.Context, id int64, userID int
 	}
 
 	return nil
+}
+
+// ========== ヘルパーメソッド ==========
+
+// searchByKeywordAndCategory はキーワード + カテゴリ検索
+func (s *ContentService) searchByKeywordAndCategory(ctx context.Context, keyword string, categoryID int64, limit, offset int) ([]*entity.Content, error) {
+	// カテゴリ別取得後にキーワードでフィルタリング
+	contents, err := s.contentRepo.FindByCategory(ctx, categoryID, limit*2, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.filterByKeyword(contents, keyword, limit), nil
+}
+
+// searchByKeywordAndAuthor はキーワード + 著者検索
+func (s *ContentService) searchByKeywordAndAuthor(ctx context.Context, keyword string, authorID int64, limit, offset int) ([]*entity.Content, error) {
+	// 著者別取得後にキーワードでフィルタリング
+	contents, err := s.contentRepo.FindByAuthor(ctx, authorID, limit*2, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.filterByKeyword(contents, keyword, limit), nil
+}
+
+// filterByKeyword はキーワードでコンテンツをフィルタリング
+func (s *ContentService) filterByKeyword(contents []*entity.Content, keyword string, limit int) []*entity.Content {
+	var filtered []*entity.Content
+	lowerKeyword := strings.ToLower(keyword)
+
+	for _, content := range contents {
+		if strings.Contains(strings.ToLower(content.Title), lowerKeyword) ||
+			strings.Contains(strings.ToLower(content.Body), lowerKeyword) {
+			filtered = append(filtered, content)
+			if len(filtered) >= limit {
+				break
+			}
+		}
+	}
+
+	return filtered
 }
