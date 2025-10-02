@@ -15,13 +15,12 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// ContentController はコンテンツに関するHTTPハンドラを提供します
+// ContentController の定義を修正
 type ContentController struct {
-	contentService service.ContentService
+	contentService *service.ContentService // ポインタに変更
 }
 
-// NewContentController は新しいContentControllerのインスタンスを生成します
-func NewContentController(contentService service.ContentService) *ContentController {
+func NewContentController(contentService *service.ContentService) *ContentController {
 	return &ContentController{
 		contentService: contentService,
 	}
