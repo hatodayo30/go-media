@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"media-platform/internal/adapter/presenter"
 	domainErrors "media-platform/internal/domain/errors"
 	"media-platform/internal/usecase/dto"
 	"media-platform/internal/usecase/service"
@@ -15,13 +16,18 @@ import (
 
 // RatingController は評価に関するHTTPハンドラを提供します
 type RatingController struct {
-	ratingService service.RatingService
+	ratingService   *service.RatingService
+	ratingPresenter *presenter.RatingPresenter
 }
 
 // NewRatingController は新しいRatingControllerのインスタンスを生成します
-func NewRatingController(ratingService service.RatingService) *RatingController {
+func NewRatingController(
+	ratingService *service.RatingService,
+	ratingPresenter *presenter.RatingPresenter,
+) *RatingController {
 	return &RatingController{
-		ratingService: ratingService,
+		ratingService:   ratingService,
+		ratingPresenter: ratingPresenter,
 	}
 }
 
@@ -39,18 +45,19 @@ func (ctrl *RatingController) GetRatingsByContentID(c echo.Context) error {
 	// ページネーションパラメータの取得
 	limit, offset := ctrl.getPaginationParams(c)
 
-	ratings, err := ctrl.ratingService.GetRatingsByContentID(c.Request().Context(), contentID, limit, offset)
+	// UseCaseから評価を取得
+	ratingDTOs, err := ctrl.ratingService.GetRatingsByContentID(c.Request().Context(), contentID, limit, offset)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"status": "error",
-			"error":  "評価の取得に失敗しました: " + err.Error(),
-		})
+		return ctrl.handleError(c, err)
 	}
+
+	// PresenterでHTTPレスポンス用に変換
+	httpRatings := ctrl.ratingPresenter.ToHTTPRatingResponseList(ratingDTOs)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "success",
 		"data": map[string]interface{}{
-			"ratings": ratings,
+			"ratings": httpRatings,
 			"pagination": map[string]interface{}{
 				"limit":  limit,
 				"offset": offset,
@@ -74,18 +81,19 @@ func (ctrl *RatingController) GetRatingsByUserID(c echo.Context) error {
 	// ページネーションパラメータの取得
 	limit, offset := ctrl.getPaginationParams(c)
 
-	ratings, err := ctrl.ratingService.GetRatingsByUserID(c.Request().Context(), userID, limit, offset)
+	// UseCaseから評価を取得
+	ratingDTOs, err := ctrl.ratingService.GetRatingsByUserID(c.Request().Context(), userID, limit, offset)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"status": "error",
-			"error":  "評価の取得に失敗しました: " + err.Error(),
-		})
+		return ctrl.handleError(c, err)
 	}
+
+	// PresenterでHTTPレスポンス用に変換
+	httpRatings := ctrl.ratingPresenter.ToHTTPRatingResponseList(ratingDTOs)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "success",
 		"data": map[string]interface{}{
-			"ratings": ratings,
+			"ratings": httpRatings,
 			"pagination": map[string]interface{}{
 				"limit":  limit,
 				"offset": offset,
@@ -95,7 +103,7 @@ func (ctrl *RatingController) GetRatingsByUserID(c echo.Context) error {
 	})
 }
 
-// GetAverageRatingByContentID は指定したコンテンツIDの評価統計を取得するハンドラです
+// GetAverageRatingByContentID は指定したコンテンツIDの評価統計を取得するハンドラです（旧API互換性）
 func (ctrl *RatingController) GetAverageRatingByContentID(c echo.Context) error {
 	contentIDStr := c.Param("contentId")
 	contentID, err := strconv.ParseInt(contentIDStr, 10, 64)
@@ -106,24 +114,25 @@ func (ctrl *RatingController) GetAverageRatingByContentID(c echo.Context) error 
 		})
 	}
 
-	stats, err := ctrl.ratingService.GetStatsByContentID(c.Request().Context(), contentID)
+	// UseCaseから統計を取得
+	statsDTO, err := ctrl.ratingService.GetStatsByContentID(c.Request().Context(), contentID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"status": "error",
-			"error":  "評価統計の取得に失敗しました: " + err.Error(),
-		})
+		return ctrl.handleError(c, err)
 	}
+
+	// PresenterでHTTPレスポンス用に変換
+	httpStats := ctrl.ratingPresenter.ToHTTPRatingStatsResponse(statsDTO)
 
 	// 下位互換性のため、両方のフィールド名で返す
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "success",
 		"data": map[string]interface{}{
 			// 新形式
-			"good_count": stats.LikeCount,
-			"count":      stats.Count,
-			"content_id": stats.ContentID,
+			"good_count": httpStats.LikeCount,
+			"count":      httpStats.Count,
+			"content_id": httpStats.ContentID,
 			// 旧形式（下位互換性）
-			"like_count":    stats.LikeCount,
+			"like_count":    httpStats.LikeCount,
 			"dislike_count": 0,   // 常に0
 			"average":       1.0, // グッドのみなので常に1.0
 		},
@@ -141,21 +150,21 @@ func (ctrl *RatingController) GetGoodStatsByContentID(c echo.Context) error {
 		})
 	}
 
-	stats, err := ctrl.ratingService.GetStatsByContentID(c.Request().Context(), contentID)
+	// UseCaseから統計を取得
+	statsDTO, err := ctrl.ratingService.GetStatsByContentID(c.Request().Context(), contentID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"status": "error",
-			"error":  "グッド統計取得に失敗しました: " + err.Error(),
-		})
+		return ctrl.handleError(c, err)
 	}
 
-	// フロントエンドの期待する形式に変換
+	// PresenterでHTTPレスポンス用に変換
+	httpStats := ctrl.ratingPresenter.ToHTTPRatingStatsResponse(statsDTO)
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "success",
 		"data": map[string]interface{}{
-			"good_count": stats.LikeCount, // like_count → good_count
-			"count":      stats.Count,
-			"content_id": stats.ContentID,
+			"good_count": httpStats.LikeCount,
+			"count":      httpStats.Count,
+			"content_id": httpStats.ContentID,
 		},
 	})
 }
@@ -188,18 +197,17 @@ func (ctrl *RatingController) GetUserRatingStatus(c echo.Context) error {
 		})
 	}
 
-	status, err := ctrl.ratingService.GetUserRatingStatus(c.Request().Context(), userID, contentID)
+	// UseCaseから評価状態を取得
+	statusDTO, err := ctrl.ratingService.GetUserRatingStatus(c.Request().Context(), userID, contentID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"status": "error",
-			"error":  "評価状態の取得に失敗しました: " + err.Error(),
-		})
+		return ctrl.handleError(c, err)
 	}
 
+	// DTOをそのまま返す（シンプルな構造のため変換不要）
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "success",
 		"data": map[string]interface{}{
-			"user_rating_status": status,
+			"user_rating_status": statusDTO,
 		},
 	})
 }
@@ -234,24 +242,14 @@ func (ctrl *RatingController) CreateRating(c echo.Context) error {
 	// 値を1（グッド）に強制
 	req.Value = 1
 
-	rating, err := ctrl.ratingService.CreateOrUpdateRating(c.Request().Context(), userID, &req)
+	// UseCaseで評価を作成/削除
+	ratingDTO, err := ctrl.ratingService.CreateOrUpdateRating(c.Request().Context(), userID, &req)
 	if err != nil {
-		// ValidationError か判断
-		if _, ok := err.(*domainErrors.ValidationError); ok {
-			return c.JSON(http.StatusBadRequest, map[string]interface{}{
-				"status": "error",
-				"error":  err.Error(),
-			})
-		}
-
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"status": "error",
-			"error":  "評価の作成に失敗しました: " + err.Error(),
-		})
+		return ctrl.handleError(c, err)
 	}
 
 	// トグル動作の結果に応じてレスポンスを変更
-	if rating == nil {
+	if ratingDTO == nil {
 		// 評価が削除された場合（トグルオフ）
 		return c.JSON(http.StatusOK, map[string]interface{}{
 			"status": "success",
@@ -260,17 +258,20 @@ func (ctrl *RatingController) CreateRating(c echo.Context) error {
 				"message": "評価を取り消しました",
 			},
 		})
-	} else {
-		// 評価が作成された場合（トグルオン）
-		return c.JSON(http.StatusCreated, map[string]interface{}{
-			"status": "success",
-			"data": map[string]interface{}{
-				"rating":  rating,
-				"action":  "created",
-				"message": "評価を追加しました",
-			},
-		})
 	}
+
+	// PresenterでHTTPレスポンス用に変換
+	httpRating := ctrl.ratingPresenter.ToHTTPRatingResponse(ratingDTO)
+
+	// 評価が作成された場合（トグルオン）
+	return c.JSON(http.StatusCreated, map[string]interface{}{
+		"status": "success",
+		"data": map[string]interface{}{
+			"rating":  httpRating,
+			"action":  "created",
+			"message": "評価を追加しました",
+		},
+	})
 }
 
 // DeleteRating は評価を削除するハンドラです
@@ -310,26 +311,11 @@ func (ctrl *RatingController) DeleteRating(c echo.Context) error {
 	}
 
 	isAdmin := userRole == "admin"
+
+	// UseCaseで評価を削除
 	err = ctrl.ratingService.DeleteRating(c.Request().Context(), id, userID, isAdmin)
 	if err != nil {
-		// ValidationError か判断
-		if _, ok := err.(*domainErrors.ValidationError); ok {
-			statusCode := http.StatusBadRequest
-			if err.Error() == "この評価を削除する権限がありません" {
-				statusCode = http.StatusForbidden
-			} else if err.Error() == "指定された評価が見つかりません" {
-				statusCode = http.StatusNotFound
-			}
-			return c.JSON(statusCode, map[string]interface{}{
-				"status": "error",
-				"error":  err.Error(),
-			})
-		}
-
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"status": "error",
-			"error":  "評価の削除に失敗しました: " + err.Error(),
-		})
+		return ctrl.handleError(c, err)
 	}
 
 	return c.NoContent(http.StatusNoContent)
@@ -369,16 +355,14 @@ func (ctrl *RatingController) ToggleLike(c echo.Context) error {
 		Value:     1, // 常に1（グッド）
 	}
 
-	rating, err := ctrl.ratingService.CreateOrUpdateRating(c.Request().Context(), userID, req)
+	// UseCaseで評価を作成/削除
+	ratingDTO, err := ctrl.ratingService.CreateOrUpdateRating(c.Request().Context(), userID, req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"status": "error",
-			"error":  "いいねの操作に失敗しました: " + err.Error(),
-		})
+		return ctrl.handleError(c, err)
 	}
 
 	// トグル動作の結果に応じてレスポンスを変更
-	if rating == nil {
+	if ratingDTO == nil {
 		// 評価が削除された場合（トグルオフ）
 		return c.JSON(http.StatusOK, map[string]interface{}{
 			"status": "success",
@@ -388,45 +372,151 @@ func (ctrl *RatingController) ToggleLike(c echo.Context) error {
 				"message":   "いいねを取り消しました",
 			},
 		})
-	} else {
-		// 評価が作成された場合（トグルオン）
-		return c.JSON(http.StatusOK, map[string]interface{}{
-			"status": "success",
-			"data": map[string]interface{}{
-				"action":    "created",
-				"has_liked": true,
-				"rating_id": rating.ID,
-				"message":   "いいねしました",
-			},
+	}
+
+	// PresenterでHTTPレスポンス用に変換
+	httpRating := ctrl.ratingPresenter.ToHTTPRatingResponse(ratingDTO)
+
+	// 評価が作成された場合（トグルオン）
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"status": "success",
+		"data": map[string]interface{}{
+			"action":    "created",
+			"has_liked": true,
+			"rating_id": httpRating.ID,
+			"message":   "いいねしました",
+		},
+	})
+}
+
+// GetUserLikedContents はユーザーがいいねしたコンテンツを取得するハンドラです
+func (ctrl *RatingController) GetUserLikedContents(c echo.Context) error {
+	userIDStr := c.Param("userId")
+	userID, err := strconv.ParseInt(userIDStr, 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"status": "error",
+			"error":  "無効なユーザーIDです",
 		})
 	}
+
+	// ページネーションパラメータの取得
+	limit, offset := ctrl.getPaginationParams(c)
+
+	// UseCaseからいいねしたコンテンツIDを取得
+	contentIDs, err := ctrl.ratingService.GetUserLikedContentIDs(c.Request().Context(), userID, limit, offset)
+	if err != nil {
+		return ctrl.handleError(c, err)
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"status": "success",
+		"data": map[string]interface{}{
+			"content_ids": contentIDs,
+			"pagination": map[string]interface{}{
+				"limit":  limit,
+				"offset": offset,
+			},
+			"user_id": userID,
+		},
+	})
 }
+
+// GetTopRatedContents は人気コンテンツを取得するハンドラです
+func (ctrl *RatingController) GetTopRatedContents(c echo.Context) error {
+	// クエリパラメータの取得
+	limit := 10
+	days := 7
+
+	if limitStr := c.QueryParam("limit"); limitStr != "" {
+		if val, err := strconv.Atoi(limitStr); err == nil && val > 0 {
+			limit = val
+		}
+	}
+
+	if daysStr := c.QueryParam("days"); daysStr != "" {
+		if val, err := strconv.Atoi(daysStr); err == nil && val > 0 {
+			days = val
+		}
+	}
+
+	// 人気コンテンツIDを取得
+	contentIDs, err := ctrl.ratingService.GetTopRatedContents(c.Request().Context(), limit, days)
+	if err != nil {
+		return ctrl.handleError(c, err)
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"status": "success",
+		"data": map[string]interface{}{
+			"content_ids": contentIDs,
+			"limit":       limit,
+			"days":        days,
+		},
+	})
+}
+
+// GetBulkRatingStats は複数コンテンツの評価統計を一括取得するハンドラです
+func (ctrl *RatingController) GetBulkRatingStats(c echo.Context) error {
+	// リクエストボディから取得
+	var req struct {
+		ContentIDs []int64 `json:"content_ids"`
+	}
+
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"status": "error",
+			"error":  "リクエストデータが無効です: " + err.Error(),
+		})
+	}
+
+	if len(req.ContentIDs) == 0 {
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"status": "error",
+			"error":  "content_idsは必須です",
+		})
+	}
+
+	// 評価統計を一括取得
+	statsDTOMap, err := ctrl.ratingService.GetRatingsByContentIDs(c.Request().Context(), req.ContentIDs)
+	if err != nil {
+		return ctrl.handleError(c, err)
+	}
+
+	// PresenterでHTTPレスポンス用に変換
+	httpStatsMap := ctrl.ratingPresenter.ToHTTPRatingStatsResponseMap(statsDTOMap)
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"status": "success",
+		"data": map[string]interface{}{
+			"stats": httpStatsMap,
+		},
+	})
+}
+
+// ========== ヘルパーメソッド ==========
 
 // getPaginationParams はリクエストからページネーションパラメータを取得します
 func (ctrl *RatingController) getPaginationParams(c echo.Context) (int, int) {
 	limit := 10
 	offset := 0
 
-	limitStr := c.QueryParam("limit")
-	if limitStr == "" {
-		limitStr = "10"
-	}
-	if val, err := strconv.Atoi(limitStr); err == nil && val > 0 {
-		limit = val
+	if limitStr := c.QueryParam("limit"); limitStr != "" {
+		if val, err := strconv.Atoi(limitStr); err == nil && val > 0 {
+			limit = val
+		}
 	}
 
-	offsetStr := c.QueryParam("offset")
-	if offsetStr == "" {
-		offsetStr = "0"
-	}
-	if val, err := strconv.Atoi(offsetStr); err == nil && val >= 0 {
-		offset = val
+	if offsetStr := c.QueryParam("offset"); offsetStr != "" {
+		if val, err := strconv.Atoi(offsetStr); err == nil && val >= 0 {
+			offset = val
+		}
 	}
 
 	return limit, offset
 }
 
-// ヘルパーメソッド：ユーザー認証情報をコンテキストから取得
+// getUserClaimsFromContext はユーザー認証情報をコンテキストから取得します
 func (ctrl *RatingController) getUserClaimsFromContext(c echo.Context) (jwt.MapClaims, error) {
 	userClaims := c.Get("user")
 	if userClaims == nil {
@@ -441,7 +531,7 @@ func (ctrl *RatingController) getUserClaimsFromContext(c echo.Context) (jwt.MapC
 	return claims, nil
 }
 
-// ヘルパーメソッド：クレームからユーザーIDを取得
+// getUserIDFromClaims はクレームからユーザーIDを取得します
 func (ctrl *RatingController) getUserIDFromClaims(claims jwt.MapClaims) (int64, error) {
 	userIDInterface, exists := claims["user_id"]
 	if !exists {
@@ -456,7 +546,7 @@ func (ctrl *RatingController) getUserIDFromClaims(claims jwt.MapClaims) (int64, 
 	return int64(userIDFloat), nil
 }
 
-// ヘルパーメソッド：クレームからユーザーロールを取得
+// getUserRoleFromClaims はクレームからユーザーロールを取得します
 func (ctrl *RatingController) getUserRoleFromClaims(claims jwt.MapClaims) (string, error) {
 	userRoleInterface, exists := claims["role"]
 	if !exists {
@@ -469,4 +559,42 @@ func (ctrl *RatingController) getUserRoleFromClaims(claims jwt.MapClaims) (strin
 	}
 
 	return userRole, nil
+}
+
+// handleError はエラーを適切なHTTPステータスコードでレスポンスします
+func (ctrl *RatingController) handleError(c echo.Context, err error) error {
+	// Domain Errorの種類に応じてステータスコードを決定
+	if domainErrors.IsValidationError(err) {
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"status": "error",
+			"error":  err.Error(),
+		})
+	}
+
+	if domainErrors.IsNotFoundError(err) {
+		return c.JSON(http.StatusNotFound, map[string]interface{}{
+			"status": "error",
+			"error":  err.Error(),
+		})
+	}
+
+	if domainErrors.IsConflictError(err) {
+		return c.JSON(http.StatusConflict, map[string]interface{}{
+			"status": "error",
+			"error":  err.Error(),
+		})
+	}
+
+	if domainErrors.IsPermissionError(err) {
+		return c.JSON(http.StatusForbidden, map[string]interface{}{
+			"status": "error",
+			"error":  err.Error(),
+		})
+	}
+
+	// その他のエラーは内部サーバーエラー
+	return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+		"status": "error",
+		"error":  "内部サーバーエラーが発生しました",
+	})
 }

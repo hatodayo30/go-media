@@ -111,8 +111,8 @@ func setupDependencies(e *echo.Echo, dbConn database.DBConn, jwtConfig *middlewa
 		userRoutes.DELETE("/:id", userController.DeleteUser, authMiddleware, adminMiddleware)
 
 		// ユーザー関連の評価履歴
-		userRoutes.GET("/:id/ratings", ratingController.GetRatingsByUserID, authMiddleware)
-		userRoutes.GET("/:id/liked-contents", ratingController.GetUserLikedContents, authMiddleware)
+		userRoutes.GET("/:userId/ratings", ratingController.GetRatingsByUserID, authMiddleware)
+		userRoutes.GET("/:userId/liked-contents", ratingController.GetUserLikedContents, authMiddleware)
 	}
 
 	// ========== カテゴリAPI ==========
@@ -141,12 +141,12 @@ func setupDependencies(e *echo.Echo, dbConn database.DBConn, jwtConfig *middlewa
 		contentRoutes.GET("/:id", contentController.GetContent)
 
 		// コメント関連（コンテンツに紐づく）
-		contentRoutes.GET("/:id/comments", commentController.GetCommentsByContent)
+		contentRoutes.GET("/:contentId/comments", commentController.GetCommentsByContent)
 
 		// 評価関連（コンテンツに紐づく）
-		contentRoutes.GET("/:id/ratings", ratingController.GetRatingsByContentID)
-		contentRoutes.GET("/:id/ratings/stats", ratingController.GetGoodStatsByContentID) // ✅ 修正
-		contentRoutes.GET("/:id/ratings/user-status", ratingController.GetUserRatingStatus, authMiddleware)
+		contentRoutes.GET("/:contentId/ratings", ratingController.GetRatingsByContentID)
+		contentRoutes.GET("/:contentId/ratings/stats", ratingController.GetGoodStatsByContentID)
+		contentRoutes.GET("/:contentId/ratings/user-status", ratingController.GetUserRatingStatus, authMiddleware)
 
 		// 認証必要エンドポイント
 		contentRoutes.POST("", contentController.CreateContent, authMiddleware)
@@ -159,7 +159,7 @@ func setupDependencies(e *echo.Echo, dbConn database.DBConn, jwtConfig *middlewa
 	commentRoutes := api.Group("/comments")
 	{
 		// 認証不要エンドポイント（公開コメント）
-		commentRoutes.GET("/:id", commentController.GetComment) // ✅ 修正
+		commentRoutes.GET("/:id", commentController.GetComment)
 		commentRoutes.GET("/parent/:parentId/replies", commentController.GetReplies)
 
 		// 認証必要エンドポイント
@@ -172,12 +172,12 @@ func setupDependencies(e *echo.Echo, dbConn database.DBConn, jwtConfig *middlewa
 	ratingRoutes := api.Group("/ratings")
 	{
 		// 認証必要エンドポイント
-		ratingRoutes.POST("/create-or-update", ratingController.CreateRating, authMiddleware) // ✅ 修正
+		ratingRoutes.POST("/create-or-update", ratingController.CreateRating, authMiddleware)
 		ratingRoutes.DELETE("/:id", ratingController.DeleteRating, authMiddleware)
 
 		// 認証不要エンドポイント（統計情報）
-		ratingRoutes.GET("/top-contents", handleGetTopRatedContents) // TODO: 実装
-		ratingRoutes.POST("/bulk-stats", handleGetBulkRatingStats)   // TODO: 実装
+		ratingRoutes.GET("/top-contents", ratingController.GetTopRatedContents)
+		ratingRoutes.POST("/bulk-stats", ratingController.GetBulkRatingStats)
 
 		// いいねトグル機能
 		ratingRoutes.POST("/toggle/:contentId", ratingController.ToggleLike, authMiddleware)
@@ -188,15 +188,12 @@ func setupDependencies(e *echo.Echo, dbConn database.DBConn, jwtConfig *middlewa
 	{
 		// ユーザー管理
 		adminRoutes.GET("/users", userController.GetAllUsers)
-		adminRoutes.GET("/users/stats", handleGetUserStats) // TODO: 実装
 
-		// コンテンツ管理
-		adminRoutes.GET("/contents/pending", handleGetPendingContents)  // TODO: 実装
-		adminRoutes.POST("/contents/:id/approve", handleApproveContent) // TODO: 実装
-		adminRoutes.POST("/contents/:id/reject", handleRejectContent)   // TODO: 実装
-
-		// システム統計
-		adminRoutes.GET("/stats/dashboard", handleGetAdminDashboard)
+		// TODO: 将来的に必要に応じて以下の機能を実装
+		// - ユーザー統計: GET /users/stats
+		// - コンテンツモデレーション: GET /contents/pending
+		// - コンテンツ承認/却下: POST /contents/:id/approve, POST /contents/:id/reject
+		// - ダッシュボード統計: GET /stats/dashboard
 	}
 
 	// 設定完了ログ
@@ -208,67 +205,4 @@ func setupDependencies(e *echo.Echo, dbConn database.DBConn, jwtConfig *middlewa
 	log.Println("  📁 Ratings: /api/ratings")
 	log.Println("  📁 Admin: /api/admin")
 	log.Println("  🏥 Health: /health")
-}
-
-// ========== 管理者用ハンドラー（TODO実装） ==========
-
-// handleGetUserStats はユーザー統計情報を返します
-func handleGetUserStats(c echo.Context) error {
-	// TODO: UserServiceで統計情報取得メソッドを実装
-	stats := map[string]interface{}{
-		"total_users":         0,
-		"active_users":        0,
-		"new_users_today":     0,
-		"new_users_this_week": 0,
-	}
-
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"status": "success",
-		"data":   stats,
-	})
-}
-
-// handleGetPendingContents は承認待ちコンテンツを返します
-func handleGetPendingContents(c echo.Context) error {
-	// TODO: ContentServiceで承認待ちコンテンツ取得メソッドを実装
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"status": "success",
-		"data":   []interface{}{},
-	})
-}
-
-// handleApproveContent はコンテンツを承認します
-func handleApproveContent(c echo.Context) error {
-	// TODO: ContentServiceでコンテンツ承認メソッドを実装
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"status":  "success",
-		"message": "コンテンツを承認しました",
-	})
-}
-
-// handleRejectContent はコンテンツを却下します
-func handleRejectContent(c echo.Context) error {
-	// TODO: ContentServiceでコンテンツ却下メソッドを実装
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"status":  "success",
-		"message": "コンテンツを却下しました",
-	})
-}
-
-// handleGetAdminDashboard は管理者ダッシュボード用の統計情報を返します
-func handleGetAdminDashboard(c echo.Context) error {
-	// TODO: 各Serviceから統計情報を取得する実装
-	stats := map[string]interface{}{
-		"total_users":      0,
-		"total_contents":   0,
-		"total_comments":   0,
-		"total_ratings":    0,
-		"pending_contents": 0,
-		"system_health":    "healthy",
-	}
-
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"status": "success",
-		"data":   stats,
-	})
 }
