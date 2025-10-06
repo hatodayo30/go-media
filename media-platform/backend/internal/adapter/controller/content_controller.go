@@ -5,8 +5,8 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"strings"
 
+	"media-platform/internal/adapter/presenter"
 	domainErrors "media-platform/internal/domain/errors"
 	"media-platform/internal/usecase/dto"
 	"media-platform/internal/usecase/service"
@@ -15,14 +15,20 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// ContentController の定義を修正
+// ContentController はコンテンツに関するHTTPハンドラを提供します
 type ContentController struct {
-	contentService *service.ContentService // ポインタに変更
+	contentService   *service.ContentService
+	contentPresenter *presenter.ContentPresenter
 }
 
-func NewContentController(contentService *service.ContentService) *ContentController {
+// NewContentController は新しいContentControllerのインスタンスを生成します
+func NewContentController(
+	contentService *service.ContentService,
+	contentPresenter *presenter.ContentPresenter,
+) *ContentController {
 	return &ContentController{
-		contentService: contentService,
+		contentService:   contentService,
+		contentPresenter: contentPresenter,
 	}
 }
 
@@ -37,18 +43,19 @@ func (ctrl *ContentController) GetContent(c echo.Context) error {
 		})
 	}
 
-	content, err := ctrl.contentService.GetContentByID(c.Request().Context(), id)
+	// UseCaseからコンテンツを取得
+	contentDTO, err := ctrl.contentService.GetContentByID(c.Request().Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]interface{}{
-			"status": "error",
-			"error":  err.Error(),
-		})
+		return ctrl.handleError(c, err)
 	}
+
+	// PresenterでHTTPレスポンス用に変換
+	httpContent := ctrl.contentPresenter.ToHTTPContentResponse(contentDTO)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "success",
 		"data": map[string]interface{}{
-			"content": content,
+			"content": httpContent,
 		},
 	})
 }
@@ -58,18 +65,19 @@ func (ctrl *ContentController) GetContents(c echo.Context) error {
 	// クエリパラメータの取得
 	query := ctrl.parseContentQuery(c)
 
-	contents, totalCount, err := ctrl.contentService.GetContents(c.Request().Context(), query)
+	// UseCaseからコンテンツ一覧を取得
+	contentDTOs, totalCount, err := ctrl.contentService.GetContents(c.Request().Context(), query)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"status": "error",
-			"error":  "コンテンツの取得に失敗しました: " + err.Error(),
-		})
+		return ctrl.handleError(c, err)
 	}
+
+	// PresenterでHTTPレスポンス用に変換
+	httpContents := ctrl.contentPresenter.ToHTTPContentResponseList(contentDTOs)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "success",
 		"data": map[string]interface{}{
-			"contents": contents,
+			"contents": httpContents,
 			"pagination": map[string]interface{}{
 				"total":  totalCount,
 				"limit":  query.Limit,
@@ -84,18 +92,19 @@ func (ctrl *ContentController) GetPublishedContents(c echo.Context) error {
 	// ページネーションパラメータの取得
 	limit, offset := ctrl.getPaginationParams(c)
 
-	contents, err := ctrl.contentService.GetPublishedContents(c.Request().Context(), limit, offset)
+	// UseCaseから公開済みコンテンツを取得
+	contentDTOs, err := ctrl.contentService.GetPublishedContents(c.Request().Context(), limit, offset)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"status": "error",
-			"error":  "コンテンツの取得に失敗しました: " + err.Error(),
-		})
+		return ctrl.handleError(c, err)
 	}
+
+	// PresenterでHTTPレスポンス用に変換
+	httpContents := ctrl.contentPresenter.ToHTTPContentResponseList(contentDTOs)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "success",
 		"data": map[string]interface{}{
-			"contents": contents,
+			"contents": httpContents,
 			"pagination": map[string]interface{}{
 				"limit":  limit,
 				"offset": offset,
@@ -119,23 +128,19 @@ func (ctrl *ContentController) GetContentsByAuthor(c echo.Context) error {
 	// ページネーションパラメータの取得
 	limit, offset := ctrl.getPaginationParams(c)
 
-	contents, err := ctrl.contentService.GetContentsByAuthor(c.Request().Context(), authorID, limit, offset)
+	// UseCaseから著者のコンテンツを取得
+	contentDTOs, err := ctrl.contentService.GetContentsByAuthor(c.Request().Context(), authorID, limit, offset)
 	if err != nil {
-		statusCode := http.StatusInternalServerError
-		if err.Error() == "指定された著者が存在しません" {
-			statusCode = http.StatusNotFound
-		}
-
-		return c.JSON(statusCode, map[string]interface{}{
-			"status": "error",
-			"error":  err.Error(),
-		})
+		return ctrl.handleError(c, err)
 	}
+
+	// PresenterでHTTPレスポンス用に変換
+	httpContents := ctrl.contentPresenter.ToHTTPContentResponseList(contentDTOs)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "success",
 		"data": map[string]interface{}{
-			"contents": contents,
+			"contents": httpContents,
 			"pagination": map[string]interface{}{
 				"limit":  limit,
 				"offset": offset,
@@ -160,23 +165,19 @@ func (ctrl *ContentController) GetContentsByCategory(c echo.Context) error {
 	// ページネーションパラメータの取得
 	limit, offset := ctrl.getPaginationParams(c)
 
-	contents, err := ctrl.contentService.GetContentsByCategory(c.Request().Context(), categoryID, limit, offset)
+	// UseCaseからカテゴリのコンテンツを取得
+	contentDTOs, err := ctrl.contentService.GetContentsByCategory(c.Request().Context(), categoryID, limit, offset)
 	if err != nil {
-		statusCode := http.StatusInternalServerError
-		if err.Error() == "指定されたカテゴリが存在しません" {
-			statusCode = http.StatusNotFound
-		}
-
-		return c.JSON(statusCode, map[string]interface{}{
-			"status": "error",
-			"error":  err.Error(),
-		})
+		return ctrl.handleError(c, err)
 	}
+
+	// PresenterでHTTPレスポンス用に変換
+	httpContents := ctrl.contentPresenter.ToHTTPContentResponseList(contentDTOs)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "success",
 		"data": map[string]interface{}{
-			"contents": contents,
+			"contents": httpContents,
 			"pagination": map[string]interface{}{
 				"limit":  limit,
 				"offset": offset,
@@ -199,18 +200,19 @@ func (ctrl *ContentController) GetTrendingContents(c echo.Context) error {
 		limit = 10
 	}
 
-	contents, err := ctrl.contentService.GetTrendingContents(c.Request().Context(), limit)
+	// UseCaseから人気コンテンツを取得
+	contentDTOs, err := ctrl.contentService.GetTrendingContents(c.Request().Context(), limit)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"status": "error",
-			"error":  "コンテンツの取得に失敗しました: " + err.Error(),
-		})
+		return ctrl.handleError(c, err)
 	}
+
+	// PresenterでHTTPレスポンス用に変換
+	httpContents := ctrl.contentPresenter.ToHTTPContentResponseList(contentDTOs)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "success",
 		"data": map[string]interface{}{
-			"contents": contents,
+			"contents": httpContents,
 			"limit":    limit,
 		},
 	})
@@ -243,7 +245,7 @@ func (ctrl *ContentController) SearchContents(c echo.Context) error {
 	log.Printf("📝 検索パラメータ: keyword=%s, sort_by=%s, category_id=%s, author_id=%s, limit=%d, offset=%d",
 		keyword, sortBy, categoryIDStr, authorIDStr, limit, offset)
 
-	// 🔍 拡張検索パラメータがある場合は高度な検索を使用
+	// 拡張検索パラメータがある場合は高度な検索を使用
 	hasAdvancedParams := categoryIDStr != "" || authorIDStr != "" || sortBy != "date"
 
 	if hasAdvancedParams {
@@ -251,23 +253,23 @@ func (ctrl *ContentController) SearchContents(c echo.Context) error {
 		return ctrl.handleAdvancedSearch(c, keyword, sortBy, categoryIDStr, authorIDStr, limit, offset)
 	}
 
-	// 🔍 基本検索：既存のSearchContentsメソッドを使用
+	// 基本検索：既存のSearchContentsメソッドを使用
 	log.Println("🔍 基本検索を実行")
-	contents, err := ctrl.contentService.SearchContents(c.Request().Context(), keyword, limit, offset)
+	contentDTOs, err := ctrl.contentService.SearchContents(c.Request().Context(), keyword, limit, offset)
 	if err != nil {
 		log.Printf("❌ 基本検索エラー: %v", err)
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"status": "error",
-			"error":  "コンテンツの検索に失敗しました: " + err.Error(),
-		})
+		return ctrl.handleError(c, err)
 	}
 
-	log.Printf("✅ 基本検索完了: %d件", len(contents))
+	log.Printf("✅ 基本検索完了: %d件", len(contentDTOs))
+
+	// PresenterでHTTPレスポンス用に変換
+	httpContents := ctrl.contentPresenter.ToHTTPContentResponseList(contentDTOs)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "success",
 		"data": map[string]interface{}{
-			"contents": contents,
+			"contents": httpContents,
 			"pagination": map[string]interface{}{
 				"limit":  limit,
 				"offset": offset,
@@ -296,8 +298,6 @@ func (ctrl *ContentController) handleAdvancedSearch(c echo.Context, keyword, sor
 		if categoryID, err := strconv.ParseInt(categoryIDStr, 10, 64); err == nil {
 			query.CategoryID = &categoryID
 			log.Printf("🔍 カテゴリフィルター追加: %d", categoryID)
-		} else {
-			log.Printf("⚠️ 無効なカテゴリID: %s", categoryIDStr)
 		}
 	}
 
@@ -306,36 +306,34 @@ func (ctrl *ContentController) handleAdvancedSearch(c echo.Context, keyword, sor
 		if authorID, err := strconv.ParseInt(authorIDStr, 10, 64); err == nil {
 			query.AuthorID = &authorID
 			log.Printf("🔍 著者フィルター追加: %d", authorID)
-		} else {
-			log.Printf("⚠️ 無効な著者ID: %s", authorIDStr)
 		}
 	}
 
 	log.Printf("🔍 ContentQuery構築完了: %+v", query)
 
-	// 🔍 ServiceのGetContentsメソッドを使用
-	contents, totalCount, err := ctrl.contentService.GetContents(c.Request().Context(), query)
+	// ServiceのGetContentsメソッドを使用
+	contentDTOs, totalCount, err := ctrl.contentService.GetContents(c.Request().Context(), query)
 	if err != nil {
 		log.Printf("❌ 高度な検索エラー: %v", err)
 
 		// エラー時は基本検索にフォールバック
 		log.Println("🔄 基本検索にフォールバック")
-		fallbackContents, fallbackErr := ctrl.contentService.SearchContents(c.Request().Context(), keyword, limit, offset)
+		fallbackDTOs, fallbackErr := ctrl.contentService.SearchContents(c.Request().Context(), keyword, limit, offset)
 		if fallbackErr != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-				"status": "error",
-				"error":  "コンテンツの検索に失敗しました: " + fallbackErr.Error(),
-			})
+			return ctrl.handleError(c, fallbackErr)
 		}
 
-		log.Printf("✅ フォールバック検索完了: %d件", len(fallbackContents))
+		log.Printf("✅ フォールバック検索完了: %d件", len(fallbackDTOs))
+
+		// PresenterでHTTPレスポンス用に変換
+		httpContents := ctrl.contentPresenter.ToHTTPContentResponseList(fallbackDTOs)
 
 		return c.JSON(http.StatusOK, map[string]interface{}{
 			"status": "success",
 			"data": map[string]interface{}{
-				"contents": fallbackContents,
+				"contents": httpContents,
 				"pagination": map[string]interface{}{
-					"total":  len(fallbackContents), // 正確な件数は不明
+					"total":  len(fallbackDTOs),
 					"limit":  limit,
 					"offset": offset,
 				},
@@ -346,12 +344,15 @@ func (ctrl *ContentController) handleAdvancedSearch(c echo.Context, keyword, sor
 		})
 	}
 
-	log.Printf("✅ 高度な検索完了: %d件（全%d件中）", len(contents), totalCount)
+	log.Printf("✅ 高度な検索完了: %d件（全%d件中）", len(contentDTOs), totalCount)
+
+	// PresenterでHTTPレスポンス用に変換
+	httpContents := ctrl.contentPresenter.ToHTTPContentResponseList(contentDTOs)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "success",
 		"data": map[string]interface{}{
-			"contents": contents,
+			"contents": httpContents,
 			"pagination": map[string]interface{}{
 				"total":  totalCount,
 				"limit":  limit,
@@ -376,7 +377,6 @@ func (ctrl *ContentController) CreateContent(c echo.Context) error {
 		})
 	}
 
-	// ユーザーIDを取得
 	userID, err := ctrl.getUserIDFromClaims(claims)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]interface{}{
@@ -393,33 +393,25 @@ func (ctrl *ContentController) CreateContent(c echo.Context) error {
 		})
 	}
 
-	content, err := ctrl.contentService.CreateContent(c.Request().Context(), userID, &req)
+	// UseCaseでコンテンツを作成
+	contentDTO, err := ctrl.contentService.CreateContent(c.Request().Context(), userID, &req)
 	if err != nil {
-		// ValidationError か判断
-		if _, ok := err.(*domainErrors.ValidationError); ok {
-			return c.JSON(http.StatusBadRequest, map[string]interface{}{
-				"status": "error",
-				"error":  err.Error(),
-			})
-		}
-
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"status": "error",
-			"error":  "コンテンツの作成に失敗しました: " + err.Error(),
-		})
+		return ctrl.handleError(c, err)
 	}
+
+	// PresenterでHTTPレスポンス用に変換
+	httpContent := ctrl.contentPresenter.ToHTTPContentResponse(contentDTO)
 
 	return c.JSON(http.StatusCreated, map[string]interface{}{
 		"status": "success",
 		"data": map[string]interface{}{
-			"content": content,
+			"content": httpContent,
 		},
 	})
 }
 
 // UpdateContent はコンテンツを更新するハンドラです
 func (ctrl *ContentController) UpdateContent(c echo.Context) error {
-	// コンテンツIDの取得
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -429,7 +421,6 @@ func (ctrl *ContentController) UpdateContent(c echo.Context) error {
 		})
 	}
 
-	// ユーザー認証情報を取得
 	claims, err := ctrl.getUserClaimsFromContext(c)
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
@@ -438,7 +429,6 @@ func (ctrl *ContentController) UpdateContent(c echo.Context) error {
 		})
 	}
 
-	// ユーザーIDとロールを取得
 	userID, err := ctrl.getUserIDFromClaims(claims)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]interface{}{
@@ -463,40 +453,25 @@ func (ctrl *ContentController) UpdateContent(c echo.Context) error {
 		})
 	}
 
-	content, err := ctrl.contentService.UpdateContent(c.Request().Context(), id, userID, userRole, &req)
+	// UseCaseでコンテンツを更新
+	contentDTO, err := ctrl.contentService.UpdateContent(c.Request().Context(), id, userID, userRole, &req)
 	if err != nil {
-		// ValidationError か判断
-		if _, ok := err.(*domainErrors.ValidationError); ok {
-			return c.JSON(http.StatusBadRequest, map[string]interface{}{
-				"status": "error",
-				"error":  err.Error(),
-			})
-		}
-
-		statusCode := http.StatusInternalServerError
-		if err.Error() == "コンテンツが見つかりません" {
-			statusCode = http.StatusNotFound
-		} else if err.Error() == "このコンテンツを編集する権限がありません" {
-			statusCode = http.StatusForbidden
-		}
-
-		return c.JSON(statusCode, map[string]interface{}{
-			"status": "error",
-			"error":  err.Error(),
-		})
+		return ctrl.handleError(c, err)
 	}
+
+	// PresenterでHTTPレスポンス用に変換
+	httpContent := ctrl.contentPresenter.ToHTTPContentResponse(contentDTO)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "success",
 		"data": map[string]interface{}{
-			"content": content,
+			"content": httpContent,
 		},
 	})
 }
 
 // UpdateContentStatus はコンテンツのステータスを更新するハンドラです
 func (ctrl *ContentController) UpdateContentStatus(c echo.Context) error {
-	// コンテンツIDの取得
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -506,7 +481,6 @@ func (ctrl *ContentController) UpdateContentStatus(c echo.Context) error {
 		})
 	}
 
-	// ユーザー認証情報を取得
 	claims, err := ctrl.getUserClaimsFromContext(c)
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
@@ -515,7 +489,6 @@ func (ctrl *ContentController) UpdateContentStatus(c echo.Context) error {
 		})
 	}
 
-	// ユーザーIDとロールを取得
 	userID, err := ctrl.getUserIDFromClaims(claims)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]interface{}{
@@ -540,40 +513,25 @@ func (ctrl *ContentController) UpdateContentStatus(c echo.Context) error {
 		})
 	}
 
-	content, err := ctrl.contentService.UpdateContentStatus(c.Request().Context(), id, userID, userRole, &req)
+	// UseCaseでステータスを更新
+	contentDTO, err := ctrl.contentService.UpdateContentStatus(c.Request().Context(), id, userID, userRole, &req)
 	if err != nil {
-		// ValidationError か判断
-		if _, ok := err.(*domainErrors.ValidationError); ok {
-			return c.JSON(http.StatusBadRequest, map[string]interface{}{
-				"status": "error",
-				"error":  err.Error(),
-			})
-		}
-
-		statusCode := http.StatusInternalServerError
-		if err.Error() == "コンテンツが見つかりません" {
-			statusCode = http.StatusNotFound
-		} else if err.Error() == "このコンテンツを編集する権限がありません" {
-			statusCode = http.StatusForbidden
-		}
-
-		return c.JSON(statusCode, map[string]interface{}{
-			"status": "error",
-			"error":  err.Error(),
-		})
+		return ctrl.handleError(c, err)
 	}
+
+	// PresenterでHTTPレスポンス用に変換
+	httpContent := ctrl.contentPresenter.ToHTTPContentResponse(contentDTO)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "success",
 		"data": map[string]interface{}{
-			"content": content,
+			"content": httpContent,
 		},
 	})
 }
 
 // DeleteContent はコンテンツを削除するハンドラです
 func (ctrl *ContentController) DeleteContent(c echo.Context) error {
-	// コンテンツIDの取得
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -583,7 +541,6 @@ func (ctrl *ContentController) DeleteContent(c echo.Context) error {
 		})
 	}
 
-	// ユーザー認証情報を取得
 	claims, err := ctrl.getUserClaimsFromContext(c)
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
@@ -592,7 +549,6 @@ func (ctrl *ContentController) DeleteContent(c echo.Context) error {
 		})
 	}
 
-	// ユーザーIDとロールを取得
 	userID, err := ctrl.getUserIDFromClaims(claims)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]interface{}{
@@ -609,29 +565,22 @@ func (ctrl *ContentController) DeleteContent(c echo.Context) error {
 		})
 	}
 
+	// UseCaseでコンテンツを削除
 	err = ctrl.contentService.DeleteContent(c.Request().Context(), id, userID, userRole)
 	if err != nil {
-		statusCode := http.StatusInternalServerError
-		if err.Error() == "コンテンツが見つかりません" {
-			statusCode = http.StatusNotFound
-		} else if err.Error() == "このコンテンツを削除する権限がありません" {
-			statusCode = http.StatusForbidden
-		}
-
-		return c.JSON(statusCode, map[string]interface{}{
-			"status": "error",
-			"error":  err.Error(),
-		})
+		return ctrl.handleError(c, err)
 	}
 
 	return c.NoContent(http.StatusNoContent)
 }
 
+// ========== ヘルパーメソッド ==========
+
 // parseContentQuery はリクエストからContentQueryを作成します
 func (ctrl *ContentController) parseContentQuery(c echo.Context) *dto.ContentQuery {
 	query := &dto.ContentQuery{}
 
-	// ページネーションパラメータの取得
+	// ページネーション
 	limitStr := c.QueryParam("limit")
 	if limitStr == "" {
 		limitStr = "10"
@@ -652,36 +601,31 @@ func (ctrl *ContentController) parseContentQuery(c echo.Context) *dto.ContentQue
 		query.Offset = 0
 	}
 
-	// 著者IDフィルタの取得
+	// フィルター
 	if authorIDStr := c.QueryParam("author_id"); authorIDStr != "" {
 		if authorID, err := strconv.ParseInt(authorIDStr, 10, 64); err == nil {
 			query.AuthorID = &authorID
 		}
 	}
 
-	// カテゴリIDフィルタの取得
 	if categoryIDStr := c.QueryParam("category_id"); categoryIDStr != "" {
 		if categoryID, err := strconv.ParseInt(categoryIDStr, 10, 64); err == nil {
 			query.CategoryID = &categoryID
 		}
 	}
 
-	// ステータスフィルタの取得
 	if status := c.QueryParam("status"); status != "" {
 		query.Status = &status
 	}
 
-	// 検索クエリの取得
 	if searchQuery := c.QueryParam("q"); searchQuery != "" {
 		query.SearchQuery = &searchQuery
 	}
 
-	// ソート条件の取得
 	if sortBy := c.QueryParam("sort_by"); sortBy != "" {
 		query.SortBy = &sortBy
 	}
 
-	// ソート順の取得
 	if sortOrder := c.QueryParam("sort_order"); sortOrder != "" {
 		query.SortOrder = &sortOrder
 	}
@@ -691,57 +635,25 @@ func (ctrl *ContentController) parseContentQuery(c echo.Context) *dto.ContentQue
 
 // getPaginationParams はリクエストからページネーションパラメータを取得します
 func (ctrl *ContentController) getPaginationParams(c echo.Context) (int, int) {
-	// デフォルト値
 	limit := 10
 	offset := 0
 
-	// リミットの解析
-	limitStr := c.QueryParam("limit")
-	if limitStr == "" {
-		limitStr = "10"
-	}
-	if val, err := strconv.Atoi(limitStr); err == nil && val > 0 {
-		limit = val
+	if limitStr := c.QueryParam("limit"); limitStr != "" {
+		if val, err := strconv.Atoi(limitStr); err == nil && val > 0 {
+			limit = val
+		}
 	}
 
-	// オフセットの解析
-	offsetStr := c.QueryParam("offset")
-	if offsetStr == "" {
-		offsetStr = "0"
-	}
-	if val, err := strconv.Atoi(offsetStr); err == nil && val >= 0 {
-		offset = val
+	if offsetStr := c.QueryParam("offset"); offsetStr != "" {
+		if val, err := strconv.Atoi(offsetStr); err == nil && val >= 0 {
+			offset = val
+		}
 	}
 
 	return limit, offset
 }
 
-// isPostgreSQLTextSearchError はPostgreSQLの全文検索エラーかどうかを判定します
-func isPostgreSQLTextSearchError(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	errMsg := err.Error()
-	// PostgreSQLの日本語全文検索関連エラーを検出
-	textSearchErrors := []string{
-		"text search configuration \"japanese\" does not exist",
-		"to_tsvector",
-		"to_tsquery",
-		"ts_rank",
-	}
-
-	for _, searchErr := range textSearchErrors {
-		if strings.Contains(errMsg, searchErr) {
-			log.Printf("🔍 PostgreSQL全文検索エラー検出: %s", searchErr)
-			return true
-		}
-	}
-
-	return false
-}
-
-// ヘルパーメソッド：ユーザー認証情報をコンテキストから取得
+// getUserClaimsFromContext はユーザー認証情報をコンテキストから取得します
 func (ctrl *ContentController) getUserClaimsFromContext(c echo.Context) (jwt.MapClaims, error) {
 	userClaims := c.Get("user")
 	if userClaims == nil {
@@ -756,7 +668,7 @@ func (ctrl *ContentController) getUserClaimsFromContext(c echo.Context) (jwt.Map
 	return claims, nil
 }
 
-// ヘルパーメソッド：クレームからユーザーIDを取得
+// getUserIDFromClaims はクレームからユーザーIDを取得します
 func (ctrl *ContentController) getUserIDFromClaims(claims jwt.MapClaims) (int64, error) {
 	userIDInterface, exists := claims["user_id"]
 	if !exists {
@@ -771,7 +683,7 @@ func (ctrl *ContentController) getUserIDFromClaims(claims jwt.MapClaims) (int64,
 	return int64(userIDFloat), nil
 }
 
-// ヘルパーメソッド：クレームからユーザーロールを取得
+// getUserRoleFromClaims はクレームからユーザーロールを取得します
 func (ctrl *ContentController) getUserRoleFromClaims(claims jwt.MapClaims) (string, error) {
 	userRoleInterface, exists := claims["role"]
 	if !exists {
@@ -784,4 +696,40 @@ func (ctrl *ContentController) getUserRoleFromClaims(claims jwt.MapClaims) (stri
 	}
 
 	return userRole, nil
+}
+
+// handleError はエラーを適切なHTTPステータスコードでレスポンスします
+func (ctrl *ContentController) handleError(c echo.Context, err error) error {
+	if domainErrors.IsValidationError(err) {
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"status": "error",
+			"error":  err.Error(),
+		})
+	}
+
+	if domainErrors.IsNotFoundError(err) {
+		return c.JSON(http.StatusNotFound, map[string]interface{}{
+			"status": "error",
+			"error":  err.Error(),
+		})
+	}
+
+	if domainErrors.IsConflictError(err) {
+		return c.JSON(http.StatusConflict, map[string]interface{}{
+			"status": "error",
+			"error":  err.Error(),
+		})
+	}
+
+	if domainErrors.IsPermissionError(err) {
+		return c.JSON(http.StatusForbidden, map[string]interface{}{
+			"status": "error",
+			"error":  err.Error(),
+		})
+	}
+
+	return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+		"status": "error",
+		"error":  "内部サーバーエラーが発生しました",
+	})
 }
