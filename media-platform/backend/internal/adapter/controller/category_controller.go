@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"media-platform/internal/adapter/presenter"
+	domainErrors "media-platform/internal/domain/errors"
 	"media-platform/internal/usecase/dto"
 	"media-platform/internal/usecase/service"
 
@@ -12,30 +14,36 @@ import (
 
 // CategoryController はカテゴリに関するHTTPハンドラを提供します
 type CategoryController struct {
-	categoryService service.CategoryService
+	categoryService   *service.CategoryService
+	categoryPresenter *presenter.CategoryPresenter
 }
 
 // NewCategoryController は新しいCategoryControllerのインスタンスを生成します
-func NewCategoryController(categoryService service.CategoryService) *CategoryController {
+func NewCategoryController(
+	categoryService *service.CategoryService,
+	categoryPresenter *presenter.CategoryPresenter,
+) *CategoryController {
 	return &CategoryController{
-		categoryService: categoryService,
+		categoryService:   categoryService,
+		categoryPresenter: categoryPresenter,
 	}
 }
 
 // GetCategories は全てのカテゴリを取得するハンドラです
 func (ctrl *CategoryController) GetCategories(c echo.Context) error {
-	categories, err := ctrl.categoryService.GetAllCategories(c.Request().Context())
+	// UseCaseから全カテゴリを取得
+	categoryDTOs, err := ctrl.categoryService.GetAllCategories(c.Request().Context())
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"status": "error",
-			"error":  err.Error(),
-		})
+		return ctrl.handleError(c, err)
 	}
+
+	// PresenterでHTTPレスポンス用に変換
+	httpCategories := ctrl.categoryPresenter.ToHTTPCategoryResponseList(categoryDTOs)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "success",
 		"data": map[string]interface{}{
-			"categories": categories,
+			"categories": httpCategories,
 		},
 	})
 }
@@ -51,18 +59,19 @@ func (ctrl *CategoryController) GetCategory(c echo.Context) error {
 		})
 	}
 
-	category, err := ctrl.categoryService.GetCategoryByID(c.Request().Context(), id)
+	// UseCaseからカテゴリを取得
+	categoryDTO, err := ctrl.categoryService.GetCategoryByID(c.Request().Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]interface{}{
-			"status": "error",
-			"error":  err.Error(),
-		})
+		return ctrl.handleError(c, err)
 	}
+
+	// PresenterでHTTPレスポンス用に変換
+	httpCategory := ctrl.categoryPresenter.ToHTTPCategoryResponse(categoryDTO)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "success",
 		"data": map[string]interface{}{
-			"category": category,
+			"category": httpCategory,
 		},
 	})
 }
@@ -77,18 +86,19 @@ func (ctrl *CategoryController) CreateCategory(c echo.Context) error {
 		})
 	}
 
-	category, err := ctrl.categoryService.CreateCategory(c.Request().Context(), &req)
+	// UseCaseでカテゴリを作成
+	categoryDTO, err := ctrl.categoryService.CreateCategory(c.Request().Context(), &req)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"status": "error",
-			"error":  err.Error(),
-		})
+		return ctrl.handleError(c, err)
 	}
+
+	// PresenterでHTTPレスポンス用に変換
+	httpCategory := ctrl.categoryPresenter.ToHTTPCategoryResponse(categoryDTO)
 
 	return c.JSON(http.StatusCreated, map[string]interface{}{
 		"status": "success",
 		"data": map[string]interface{}{
-			"category": category,
+			"category": httpCategory,
 		},
 	})
 }
@@ -112,22 +122,19 @@ func (ctrl *CategoryController) UpdateCategory(c echo.Context) error {
 		})
 	}
 
-	category, err := ctrl.categoryService.UpdateCategory(c.Request().Context(), id, &req)
+	// UseCaseでカテゴリを更新
+	categoryDTO, err := ctrl.categoryService.UpdateCategory(c.Request().Context(), id, &req)
 	if err != nil {
-		statusCode := http.StatusBadRequest
-		if err.Error() == "カテゴリが見つかりません" {
-			statusCode = http.StatusNotFound
-		}
-		return c.JSON(statusCode, map[string]interface{}{
-			"status": "error",
-			"error":  err.Error(),
-		})
+		return ctrl.handleError(c, err)
 	}
+
+	// PresenterでHTTPレスポンス用に変換
+	httpCategory := ctrl.categoryPresenter.ToHTTPCategoryResponse(categoryDTO)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "success",
 		"data": map[string]interface{}{
-			"category": category,
+			"category": httpCategory,
 		},
 	})
 }
@@ -143,17 +150,49 @@ func (ctrl *CategoryController) DeleteCategory(c echo.Context) error {
 		})
 	}
 
+	// UseCaseでカテゴリを削除
 	err = ctrl.categoryService.DeleteCategory(c.Request().Context(), id)
 	if err != nil {
-		statusCode := http.StatusBadRequest
-		if err.Error() == "カテゴリが見つかりません" {
-			statusCode = http.StatusNotFound
-		}
-		return c.JSON(statusCode, map[string]interface{}{
+		return ctrl.handleError(c, err)
+	}
+
+	return c.NoContent(http.StatusNoContent)
+}
+
+// ========== ヘルパーメソッド ==========
+
+// handleError はエラーを適切なHTTPステータスコードでレスポンスします
+func (ctrl *CategoryController) handleError(c echo.Context, err error) error {
+	if domainErrors.IsValidationError(err) {
+		return c.JSON(http.StatusBadRequest, map[string]interface{}{
 			"status": "error",
 			"error":  err.Error(),
 		})
 	}
 
-	return c.NoContent(http.StatusNoContent)
+	if domainErrors.IsNotFoundError(err) {
+		return c.JSON(http.StatusNotFound, map[string]interface{}{
+			"status": "error",
+			"error":  err.Error(),
+		})
+	}
+
+	if domainErrors.IsConflictError(err) {
+		return c.JSON(http.StatusConflict, map[string]interface{}{
+			"status": "error",
+			"error":  err.Error(),
+		})
+	}
+
+	if domainErrors.IsPermissionError(err) {
+		return c.JSON(http.StatusForbidden, map[string]interface{}{
+			"status": "error",
+			"error":  err.Error(),
+		})
+	}
+
+	return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+		"status": "error",
+		"error":  "内部サーバーエラーが発生しました",
+	})
 }
