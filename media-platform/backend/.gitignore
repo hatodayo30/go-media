@@ -1,0 +1,36 @@
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# Keep example
+!.env.example
+
+# Build
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# Vendor
+vendor/
+
+# Uploads
+uploads/
+tmp/
+*.tmp
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store

@@ -3,7 +3,10 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
+	"strconv"
+	"time"
 
 	_ "github.com/lib/pq" // PostgreSQLドライバー
 )
@@ -14,25 +17,55 @@ type DBConn interface {
 	Close() error
 }
 
-// PostgresConn はPostgreSQLデータベース接続の構造体です
-type PostgresConn struct {
+// postgresConn はPostgreSQLデータベース接続の構造体です
+type postgresConn struct {
 	db *sql.DB
+}
+
+// Config はデータベース接続設定を保持します
+type Config struct {
+	Host            string
+	Port            string
+	User            string
+	Password        string
+	DBName          string
+	SSLMode         string
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime time.Duration
+}
+
+// LoadConfigFromEnv は環境変数から設定を読み込みます
+func LoadConfigFromEnv() *Config {
+	maxOpenConns, _ := strconv.Atoi(getEnv("DB_MAX_OPEN_CONNS", "25"))
+	maxIdleConns, _ := strconv.Atoi(getEnv("DB_MAX_IDLE_CONNS", "5"))
+	connMaxLifetime, _ := time.ParseDuration(getEnv("DB_CONN_MAX_LIFETIME", "5m"))
+
+	return &Config{
+		Host:            getEnv("DB_HOST", "localhost"),
+		Port:            getEnv("DB_PORT", "5432"),
+		User:            getEnv("DB_USER", "postgres"),
+		Password:        getEnv("DB_PASSWORD", "password"),
+		DBName:          getEnv("DB_NAME", "media_platform"),
+		SSLMode:         getEnv("DB_SSLMODE", "disable"),
+		MaxOpenConns:    maxOpenConns,
+		MaxIdleConns:    maxIdleConns,
+		ConnMaxLifetime: connMaxLifetime,
+	}
 }
 
 // NewConnection はデータベース接続を作成します
 func NewConnection() (DBConn, error) {
-	// 環境変数から接続情報を取得
-	dbUser := getEnv("DB_USER", "postgres")
-	dbPassword := getEnv("DB_PASSWORD", "password")
-	dbHost := getEnv("DB_HOST", "localhost")
-	dbPort := getEnv("DB_PORT", "5432")
-	dbName := getEnv("DB_NAME", "media_platform")
-	sslMode := getEnv("DB_SSLMODE", "disable")
+	config := LoadConfigFromEnv()
+	return NewConnectionWithConfig(config)
+}
 
+// NewConnectionWithConfig は設定を指定してデータベース接続を作成します
+func NewConnectionWithConfig(config *Config) (DBConn, error) {
 	// 接続文字列の作成
 	connStr := fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-		dbHost, dbPort, dbUser, dbPassword, dbName, sslMode,
+		config.Host, config.Port, config.User, config.Password, config.DBName, config.SSLMode,
 	)
 
 	// データベースに接続
@@ -48,20 +81,29 @@ func NewConnection() (DBConn, error) {
 	}
 
 	// 接続プールの設定
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(5)
+	db.SetMaxOpenConns(config.MaxOpenConns)
+	db.SetMaxIdleConns(config.MaxIdleConns)
+	db.SetConnMaxLifetime(config.ConnMaxLifetime)
 
-	return &PostgresConn{db: db}, nil
+	log.Printf("✅ Database connected successfully: %s:%s/%s", config.Host, config.Port, config.DBName)
+	log.Printf("📊 Connection pool: MaxOpen=%d, MaxIdle=%d, MaxLifetime=%v",
+		config.MaxOpenConns, config.MaxIdleConns, config.ConnMaxLifetime)
+
+	return &postgresConn{db: db}, nil
 }
 
 // GetDB は*sql.DBインスタンスを返します
-func (p *PostgresConn) GetDB() *sql.DB {
+func (p *postgresConn) GetDB() *sql.DB {
 	return p.db
 }
 
 // Close はデータベース接続を閉じます
-func (p *PostgresConn) Close() error {
-	return p.db.Close()
+func (p *postgresConn) Close() error {
+	if p.db != nil {
+		log.Println("🔌 Closing database connection...")
+		return p.db.Close()
+	}
+	return nil
 }
 
 // getEnv は環境変数の値を取得し、設定されていない場合はデフォルト値を返します
