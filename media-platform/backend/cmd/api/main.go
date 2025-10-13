@@ -17,6 +17,7 @@ import (
 func main() {
 	// ログ設定
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	log.SetOutput(os.Stdout) // ← これを追加
 
 	// 環境変数のロード
 	if err := godotenv.Load(); err != nil {

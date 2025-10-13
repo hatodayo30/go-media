@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -31,22 +33,34 @@ func NewUserController(userService *service.UserService, userPresenter *presente
 func (ctrl *UserController) Register(c echo.Context) error {
 	var req dto.CreateUserRequest
 
-	// リクエストボディの取得とバインド
+	// ステップ1: Bind
 	if err := c.Bind(&req); err != nil {
+		log.Printf("❌ [STEP 1] Bind error: %v", err)
 		return c.JSON(http.StatusBadRequest, map[string]interface{}{
 			"status": "error",
-			"error":  "無効なリクエストです: " + err.Error(),
+			"error":  "Bind failed: " + err.Error(),
 		})
 	}
+	log.Printf("✅ [STEP 1] Bind success: %+v", req)
 
-	// ユーザー登録の実行
-	serviceResp, err := ctrl.userService.RegisterUser(c.Request().Context(), &req)
+	// ステップ2: RegisterUser呼び出し
+	log.Printf("🔄 [STEP 2] Calling RegisterUser...")
+	loginResp, err := ctrl.userService.RegisterUser(c.Request().Context(), &req)
 	if err != nil {
-		return ctrl.handleError(c, err)
+		log.Printf("❌ [STEP 2] RegisterUser error: %v", err)
+		log.Printf("❌ [STEP 2] Error type: %T", err)
+		// 詳細エラーを返す
+		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+			"status": "error",
+			"error":  fmt.Sprintf("RegisterUser failed: %v", err),
+		})
 	}
+	log.Printf("✅ [STEP 2] RegisterUser success: user_id=%d", loginResp.User.ID)
 
-	// Service DTOをPresentation DTOに変換
-	response := ctrl.userPresenter.ToHTTPLoginResponse(serviceResp)
+	// ステップ3: Presenter変換
+	log.Printf("🔄 [STEP 3] Converting to HTTPLoginResponse...")
+	response := ctrl.userPresenter.ToHTTPLoginResponse(loginResp)
+	log.Printf("✅ [STEP 3] Conversion success")
 
 	return c.JSON(http.StatusCreated, map[string]interface{}{
 		"status": "success",

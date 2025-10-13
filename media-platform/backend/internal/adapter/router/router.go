@@ -69,9 +69,12 @@ func setupDependencies(e *echo.Echo, dbConn database.DBConn, jwtConfig *middlewa
 	commentPresenter := presenter.NewCommentPresenter()
 	ratingPresenter := presenter.NewRatingPresenter()
 
+	// ✅ SecretKeyに修正
+	jwtGenerator := middleware.NewJWTGenerator(jwtConfig.SecretKey)
+
 	// Service層の初期化（Use Case Layer - Clean Architecture対応）
 	// ✅ Presenterへの依存を除去し、純粋なビジネスロジック層として実装
-	userService := service.NewUserService(userRepo, nil) // tokenGeneratorは後で実装
+	userService := service.NewUserService(userRepo, jwtGenerator)
 	categoryService := service.NewCategoryService(categoryRepo)
 	contentService := service.NewContentService(contentRepo, categoryRepo, userRepo)
 	commentService := service.NewCommentService(commentRepo, contentRepo, userRepo)
@@ -96,7 +99,13 @@ func setupDependencies(e *echo.Echo, dbConn database.DBConn, jwtConfig *middlewa
 	userRoutes := api.Group("/users")
 	{
 		// 認証不要エンドポイント
-		userRoutes.POST("/register", userController.Register)
+		userRoutes.POST("/register", func(c echo.Context) error {
+			log.Println("========================================")
+			log.Println("🔥🔥🔥 /register ENDPOINT CALLED 🔥🔥🔥")
+			log.Println("========================================")
+			return userController.Register(c)
+		})
+
 		userRoutes.POST("/login", userController.Login)
 		userRoutes.GET("/public", userController.GetPublicUsers)
 

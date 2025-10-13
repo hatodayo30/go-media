@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -58,27 +59,45 @@ func (s *UserService) VerifyPassword(password, hashedPassword string) bool {
 // IsEmailExists はメールアドレスが既に存在するかチェックします（旧UserDomainService）
 func (s *UserService) IsEmailExists(ctx context.Context, email string) (bool, error) {
 	user, err := s.userRepo.FindByEmail(ctx, email)
+
+	// ✅ NotFoundErrorの型チェック
 	if err != nil {
+		if domainErrors.IsNotFoundError(err) {
+			return false, nil
+		}
 		return false, err
 	}
+
 	return user != nil, nil
 }
 
-// IsUsernameExists はユーザー名が既に存在するかチェックします（旧UserDomainService）
+// IsUsernameExists はユーザー名が既に存在するかチェックします
 func (s *UserService) IsUsernameExists(ctx context.Context, username string) (bool, error) {
 	user, err := s.userRepo.FindByUsername(ctx, username)
+
+	// ✅ NotFoundErrorの型チェック
 	if err != nil {
+		if domainErrors.IsNotFoundError(err) {
+			return false, nil
+		}
 		return false, err
 	}
+
 	return user != nil, nil
 }
 
-// IsEmailExistsExcluding は指定したユーザーID以外でメールアドレスが存在するかチェックします（旧UserDomainService）
+// IsEmailExistsExcluding は指定したユーザーID以外でメールアドレスが存在するかチェックします
 func (s *UserService) IsEmailExistsExcluding(ctx context.Context, email string, excludeUserID int64) (bool, error) {
 	user, err := s.userRepo.FindByEmail(ctx, email)
+
+	// ✅ NotFoundErrorの型チェック
 	if err != nil {
+		if domainErrors.IsNotFoundError(err) {
+			return false, nil
+		}
 		return false, err
 	}
+
 	return user != nil && user.ID != excludeUserID, nil
 }
 
@@ -111,26 +130,38 @@ func (s *UserService) toUserResponseList(users []*entity.User) []*dto.UserRespon
 
 // RegisterUser はユーザー登録のUse Caseです
 func (s *UserService) RegisterUser(ctx context.Context, req *dto.CreateUserRequest) (*dto.LoginResponse, error) {
+	log.Printf("🔄 [SERVICE 1] Starting RegisterUser for email: %s", req.Email)
+
 	// 重複チェック
 	if exists, err := s.IsEmailExists(ctx, req.Email); err != nil {
+		log.Printf("❌ [SERVICE 1.1] Email check failed: %v", err)
 		return nil, fmt.Errorf("email existence check failed: %w", err)
 	} else if exists {
+		log.Printf("❌ [SERVICE 1.1] Email already exists")
 		return nil, domainErrors.NewConflictError("User", "email already exists")
 	}
+	log.Printf("✅ [SERVICE 1.1] Email check passed")
 
 	if exists, err := s.IsUsernameExists(ctx, req.Username); err != nil {
+		log.Printf("❌ [SERVICE 1.2] Username check failed: %v", err)
 		return nil, fmt.Errorf("username existence check failed: %w", err)
 	} else if exists {
+		log.Printf("❌ [SERVICE 1.2] Username already exists")
 		return nil, domainErrors.NewConflictError("User", "username already exists")
 	}
+	log.Printf("✅ [SERVICE 1.2] Username check passed")
 
 	// パスワードのハッシュ化
+	log.Printf("🔄 [SERVICE 2] Hashing password...")
 	hashedPassword, err := s.HashPassword(req.Password)
 	if err != nil {
+		log.Printf("❌ [SERVICE 2] Password hashing failed: %v", err)
 		return nil, fmt.Errorf("password hashing failed: %w", err)
 	}
+	log.Printf("✅ [SERVICE 2] Password hashed")
 
 	// ユーザーエンティティの作成
+	log.Printf("🔄 [SERVICE 3] Creating user entity...")
 	user, err := entity.NewUser(
 		req.Username,
 		req.Email,
@@ -139,21 +170,35 @@ func (s *UserService) RegisterUser(ctx context.Context, req *dto.CreateUserReque
 		req.Avatar,
 	)
 	if err != nil {
+		log.Printf("❌ [SERVICE 3] Entity creation failed: %v", err)
 		return nil, err
 	}
+	log.Printf("✅ [SERVICE 3] Entity created")
 
 	// ユーザーの保存
+	log.Printf("🔄 [SERVICE 4] Saving user to database...")
 	if err := s.userRepo.Create(ctx, user); err != nil {
+		log.Printf("❌ [SERVICE 4] Database save failed: %v", err)
 		return nil, fmt.Errorf("user creation failed: %w", err)
 	}
+	log.Printf("✅ [SERVICE 4] User saved with ID: %d", user.ID)
 
 	// トークン生成
-	token, err := s.tokenGenerator.GenerateToken(user)
-	if err != nil {
-		return nil, fmt.Errorf("token generation failed: %w", err)
+	log.Printf("🔄 [SERVICE 5] Generating token...")
+	if s.tokenGenerator == nil {
+		log.Printf("❌ [SERVICE 5] tokenGenerator is nil!")
+		return nil, fmt.Errorf("tokenGenerator is not initialized")
 	}
 
+	token, err := s.tokenGenerator.GenerateToken(user)
+	if err != nil {
+		log.Printf("❌ [SERVICE 5] Token generation failed: %v", err)
+		return nil, fmt.Errorf("token generation failed: %w", err)
+	}
+	log.Printf("✅ [SERVICE 5] Token generated")
+
 	// レスポンス作成
+	log.Printf("✅ [SERVICE 6] RegisterUser completed successfully")
 	return &dto.LoginResponse{
 		Token: token,
 		User:  *s.toUserResponse(user),
