@@ -81,22 +81,49 @@ export interface Content {
   published_at?: string;
   created_at: string;
   updated_at: string;
+  work_title?: string; // 作品名
+  rating?: number; // 評価（1-5）
+  recommendation_level?: string; // おすすめ度
+  tags?: string[]; // タグ
+  image_url?: string; // 画像URL
+  external_url?: string; // 外部リンク
+  release_year?: number; // リリース年
+  artist_name?: string; // アーティスト名
+  genre?: string; // ジャンル
 }
 
 export interface CreateContentRequest {
   title: string;
   body: string;
-  type: string;
+  type: "音楽" | "アニメ" | "漫画" | "映画" | "ゲーム";
   category_id: number;
   status?: "draft" | "published";
+  work_title?: string;
+  rating?: number;
+  recommendation_level?: "必見" | "おすすめ" | "普通" | "イマイチ" | "";
+  tags?: string[];
+  image_url?: string;
+  external_url?: string;
+  release_year?: number;
+  artist_name?: string;
+  genre?: string;
 }
 
 export interface UpdateContentRequest {
   title?: string;
   body?: string;
-  type?: string;
+  type?: "音楽" | "アニメ" | "漫画" | "映画" | "ゲーム";
   category_id?: number;
   status?: "draft" | "published" | "archived";
+  work_title?: string;
+  rating?: number;
+  recommendation_level?: string;
+  tags?: string[];
+  image_url?: string;
+  external_url?: string;
+  release_year?: number;
+  artist_name?: string;
+  genre?: string;
 }
 
 export interface ContentFilters {
