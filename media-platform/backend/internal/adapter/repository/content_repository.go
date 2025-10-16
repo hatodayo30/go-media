@@ -9,6 +9,8 @@ import (
 	"media-platform/internal/domain/entity"
 	domainErrors "media-platform/internal/domain/errors"
 	"media-platform/internal/domain/repository"
+
+	"github.com/lib/pq"
 )
 
 type ContentRepositoryImpl struct {
@@ -23,13 +25,18 @@ func NewContentRepository(db *sql.DB) repository.ContentRepository {
 
 func (r *ContentRepositoryImpl) Find(ctx context.Context, id int64) (*entity.Content, error) {
 	query := `
-		SELECT id, title, body, type, author_id, category_id, status, view_count, published_at, created_at, updated_at
+		SELECT 
+			id, title, body, type, author_id, category_id, status, view_count, published_at, created_at, updated_at,
+			work_title, rating, recommendation_level, tags, image_url, external_url, release_year, artist_name, genre
 		FROM contents
 		WHERE id = $1
 	`
 
 	var content entity.Content
 	var publishedAt sql.NullTime
+	var rating sql.NullFloat64
+	var releaseYear sql.NullInt64
+	var tags pq.StringArray
 
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&content.ID,
@@ -43,6 +50,15 @@ func (r *ContentRepositoryImpl) Find(ctx context.Context, id int64) (*entity.Con
 		&publishedAt,
 		&content.CreatedAt,
 		&content.UpdatedAt,
+		&content.WorkTitle,
+		&rating,
+		&content.RecommendationLevel,
+		&tags,
+		&content.ImageURL,
+		&content.ExternalURL,
+		&releaseYear,
+		&content.ArtistName,
+		&content.Genre,
 	)
 
 	if err != nil {
@@ -55,13 +71,27 @@ func (r *ContentRepositoryImpl) Find(ctx context.Context, id int64) (*entity.Con
 	if publishedAt.Valid {
 		content.PublishedAt = &publishedAt.Time
 	}
+	if rating.Valid {
+		content.Rating = &rating.Float64
+	}
+	if releaseYear.Valid {
+		year := int(releaseYear.Int64)
+		content.ReleaseYear = &year
+	}
+	if len(tags) > 0 {
+		content.Tags = []string(tags)
+	} else {
+		content.Tags = []string{}
+	}
 
 	return &content, nil
 }
 
 func (r *ContentRepositoryImpl) FindByAuthor(ctx context.Context, authorID int64, limit, offset int) ([]*entity.Content, error) {
 	query := `
-		SELECT id, title, body, type, author_id, category_id, status, view_count, published_at, created_at, updated_at
+		SELECT 
+			id, title, body, type, author_id, category_id, status, view_count, published_at, created_at, updated_at,
+			work_title, rating, recommendation_level, tags, image_url, external_url, release_year, artist_name, genre
 		FROM contents
 		WHERE author_id = $1
 		ORDER BY created_at DESC
@@ -79,7 +109,9 @@ func (r *ContentRepositoryImpl) FindByAuthor(ctx context.Context, authorID int64
 
 func (r *ContentRepositoryImpl) FindByCategory(ctx context.Context, categoryID int64, limit, offset int) ([]*entity.Content, error) {
 	query := `
-		SELECT id, title, body, type, author_id, category_id, status, view_count, published_at, created_at, updated_at
+		SELECT 
+			id, title, body, type, author_id, category_id, status, view_count, published_at, created_at, updated_at,
+			work_title, rating, recommendation_level, tags, image_url, external_url, release_year, artist_name, genre
 		FROM contents
 		WHERE category_id = $1 AND status = 'published' AND published_at <= NOW()
 		ORDER BY published_at DESC
@@ -97,7 +129,9 @@ func (r *ContentRepositoryImpl) FindByCategory(ctx context.Context, categoryID i
 
 func (r *ContentRepositoryImpl) FindPublished(ctx context.Context, limit, offset int) ([]*entity.Content, error) {
 	query := `
-		SELECT id, title, body, type, author_id, category_id, status, view_count, published_at, created_at, updated_at
+		SELECT 
+			id, title, body, type, author_id, category_id, status, view_count, published_at, created_at, updated_at,
+			work_title, rating, recommendation_level, tags, image_url, external_url, release_year, artist_name, genre
 		FROM contents
 		WHERE status = 'published' AND published_at <= NOW()
 		ORDER BY published_at DESC
@@ -115,7 +149,9 @@ func (r *ContentRepositoryImpl) FindPublished(ctx context.Context, limit, offset
 
 func (r *ContentRepositoryImpl) FindTrending(ctx context.Context, limit int) ([]*entity.Content, error) {
 	query := `
-		SELECT id, title, body, type, author_id, category_id, status, view_count, published_at, created_at, updated_at
+		SELECT 
+			id, title, body, type, author_id, category_id, status, view_count, published_at, created_at, updated_at,
+			work_title, rating, recommendation_level, tags, image_url, external_url, release_year, artist_name, genre
 		FROM contents
 		WHERE status = 'published' AND published_at <= NOW()
 		ORDER BY view_count DESC, published_at DESC
@@ -142,8 +178,8 @@ func (r *ContentRepositoryImpl) Search(ctx context.Context, keyword string, limi
 	// まず全文検索関数を試行
 	query := `
 		SELECT 
-			id, title, body, type, author_id, category_id, 
-			status, view_count, published_at, created_at, updated_at
+			id, title, body, type, author_id, category_id, status, view_count, published_at, created_at, updated_at,
+			work_title, rating, recommendation_level, tags, image_url, external_url, release_year, artist_name, genre
 		FROM search_contents($1, $2, $3)
 	`
 
@@ -174,6 +210,7 @@ func (r *ContentRepositoryImpl) searchFallback(ctx context.Context, keyword stri
 		SELECT 
 			id, title, body, type, author_id, category_id, 
 			status, view_count, published_at, created_at, updated_at,
+			work_title, rating, recommendation_level, tags, image_url, external_url, release_year, artist_name, genre,
 			-- 関連性スコア計算
 			(
 				-- タイトル完全一致（最高点）
@@ -184,6 +221,10 @@ func (r *ContentRepositoryImpl) searchFallback(ctx context.Context, keyword stri
 				END +
 				-- 本文部分一致（中程度）
 				CASE WHEN body ILIKE $4 THEN 20
+				     ELSE 0 
+				END +
+				-- 作品名一致
+				CASE WHEN work_title ILIKE $4 THEN 30
 				     ELSE 0 
 				END +
 				-- 人気度ボーナス
@@ -199,7 +240,7 @@ func (r *ContentRepositoryImpl) searchFallback(ctx context.Context, keyword stri
 				END
 			) as relevance_score
 		FROM contents
-		WHERE (title ILIKE $4 OR body ILIKE $4)
+		WHERE (title ILIKE $4 OR body ILIKE $4 OR work_title ILIKE $4)
 		    AND status = 'published' 
 		    AND published_at <= NOW()
 		ORDER BY relevance_score DESC, view_count DESC, published_at DESC
@@ -218,14 +259,32 @@ func (r *ContentRepositoryImpl) searchFallback(ctx context.Context, keyword stri
 
 func (r *ContentRepositoryImpl) Create(ctx context.Context, content *entity.Content) error {
 	query := `
-		INSERT INTO contents (title, body, type, author_id, category_id, status, view_count, published_at, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO contents (
+			title, body, type, author_id, category_id, status, view_count, published_at, created_at, updated_at,
+			work_title, rating, recommendation_level, tags, image_url, external_url, release_year, artist_name, genre
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 		RETURNING id
 	`
 
 	var publishedAt sql.NullTime
 	if content.PublishedAt != nil {
 		publishedAt = sql.NullTime{Time: *content.PublishedAt, Valid: true}
+	}
+
+	var rating sql.NullFloat64
+	if content.Rating != nil {
+		rating = sql.NullFloat64{Float64: *content.Rating, Valid: true}
+	}
+
+	var releaseYear sql.NullInt64
+	if content.ReleaseYear != nil {
+		releaseYear = sql.NullInt64{Int64: int64(*content.ReleaseYear), Valid: true}
+	}
+
+	tags := pq.StringArray(content.Tags)
+	if len(content.Tags) == 0 {
+		tags = pq.StringArray{}
 	}
 
 	err := r.db.QueryRowContext(ctx, query,
@@ -239,6 +298,15 @@ func (r *ContentRepositoryImpl) Create(ctx context.Context, content *entity.Cont
 		publishedAt,
 		content.CreatedAt,
 		content.UpdatedAt,
+		content.WorkTitle,
+		rating,
+		content.RecommendationLevel,
+		tags,
+		content.ImageURL,
+		content.ExternalURL,
+		releaseYear,
+		content.ArtistName,
+		content.Genre,
 	).Scan(&content.ID)
 
 	if err != nil {
@@ -251,13 +319,30 @@ func (r *ContentRepositoryImpl) Create(ctx context.Context, content *entity.Cont
 func (r *ContentRepositoryImpl) Update(ctx context.Context, content *entity.Content) error {
 	query := `
 		UPDATE contents
-		SET title = $1, body = $2, type = $3, category_id = $4, status = $5, published_at = $6, updated_at = $7
-		WHERE id = $8
+		SET title = $1, body = $2, type = $3, category_id = $4, status = $5, published_at = $6, updated_at = $7,
+		    work_title = $8, rating = $9, recommendation_level = $10, tags = $11, 
+		    image_url = $12, external_url = $13, release_year = $14, artist_name = $15, genre = $16
+		WHERE id = $17
 	`
 
 	var publishedAt sql.NullTime
 	if content.PublishedAt != nil {
 		publishedAt = sql.NullTime{Time: *content.PublishedAt, Valid: true}
+	}
+
+	var rating sql.NullFloat64
+	if content.Rating != nil {
+		rating = sql.NullFloat64{Float64: *content.Rating, Valid: true}
+	}
+
+	var releaseYear sql.NullInt64
+	if content.ReleaseYear != nil {
+		releaseYear = sql.NullInt64{Int64: int64(*content.ReleaseYear), Valid: true}
+	}
+
+	tags := pq.StringArray(content.Tags)
+	if len(content.Tags) == 0 {
+		tags = pq.StringArray{}
 	}
 
 	result, err := r.db.ExecContext(ctx, query,
@@ -268,6 +353,15 @@ func (r *ContentRepositoryImpl) Update(ctx context.Context, content *entity.Cont
 		content.Status,
 		publishedAt,
 		content.UpdatedAt,
+		content.WorkTitle,
+		rating,
+		content.RecommendationLevel,
+		tags,
+		content.ImageURL,
+		content.ExternalURL,
+		releaseYear,
+		content.ArtistName,
+		content.Genre,
 		content.ID,
 	)
 	if err != nil {
@@ -336,6 +430,9 @@ func (r *ContentRepositoryImpl) scanContentRows(rows *sql.Rows) ([]*entity.Conte
 	for rows.Next() {
 		var content entity.Content
 		var publishedAt sql.NullTime
+		var rating sql.NullFloat64
+		var releaseYear sql.NullInt64
+		var tags pq.StringArray
 
 		err := rows.Scan(
 			&content.ID,
@@ -349,6 +446,15 @@ func (r *ContentRepositoryImpl) scanContentRows(rows *sql.Rows) ([]*entity.Conte
 			&publishedAt,
 			&content.CreatedAt,
 			&content.UpdatedAt,
+			&content.WorkTitle,
+			&rating,
+			&content.RecommendationLevel,
+			&tags,
+			&content.ImageURL,
+			&content.ExternalURL,
+			&releaseYear,
+			&content.ArtistName,
+			&content.Genre,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan content: %w", err)
@@ -356,6 +462,18 @@ func (r *ContentRepositoryImpl) scanContentRows(rows *sql.Rows) ([]*entity.Conte
 
 		if publishedAt.Valid {
 			content.PublishedAt = &publishedAt.Time
+		}
+		if rating.Valid {
+			content.Rating = &rating.Float64
+		}
+		if releaseYear.Valid {
+			year := int(releaseYear.Int64)
+			content.ReleaseYear = &year
+		}
+		if len(tags) > 0 {
+			content.Tags = []string(tags)
+		} else {
+			content.Tags = []string{}
 		}
 
 		contents = append(contents, &content)
@@ -374,6 +492,9 @@ func (r *ContentRepositoryImpl) scanContentRowsWithScore(rows *sql.Rows) ([]*ent
 	for rows.Next() {
 		var content entity.Content
 		var publishedAt sql.NullTime
+		var rating sql.NullFloat64
+		var releaseYear sql.NullInt64
+		var tags pq.StringArray
 		var relevanceScore int // スコアは読み取るが Entity には含めない
 
 		err := rows.Scan(
@@ -388,6 +509,15 @@ func (r *ContentRepositoryImpl) scanContentRowsWithScore(rows *sql.Rows) ([]*ent
 			&publishedAt,
 			&content.CreatedAt,
 			&content.UpdatedAt,
+			&content.WorkTitle,
+			&rating,
+			&content.RecommendationLevel,
+			&tags,
+			&content.ImageURL,
+			&content.ExternalURL,
+			&releaseYear,
+			&content.ArtistName,
+			&content.Genre,
 			&relevanceScore, // スコアカラムを読み取る
 		)
 		if err != nil {
@@ -396,6 +526,18 @@ func (r *ContentRepositoryImpl) scanContentRowsWithScore(rows *sql.Rows) ([]*ent
 
 		if publishedAt.Valid {
 			content.PublishedAt = &publishedAt.Time
+		}
+		if rating.Valid {
+			content.Rating = &rating.Float64
+		}
+		if releaseYear.Valid {
+			year := int(releaseYear.Int64)
+			content.ReleaseYear = &year
+		}
+		if len(tags) > 0 {
+			content.Tags = []string(tags)
+		} else {
+			content.Tags = []string{}
 		}
 
 		contents = append(contents, &content)

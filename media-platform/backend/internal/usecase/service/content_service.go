@@ -43,6 +43,17 @@ func (s *ContentService) toContentResponse(content *entity.Content) *dto.Content
 		CreatedAt:   content.CreatedAt,
 		UpdatedAt:   content.UpdatedAt,
 		PublishedAt: content.PublishedAt,
+
+		// 趣味投稿専用フィールド
+		WorkTitle:           content.WorkTitle,
+		Rating:              content.Rating,
+		RecommendationLevel: string(content.RecommendationLevel),
+		Tags:                content.Tags,
+		ImageURL:            content.ImageURL,
+		ExternalURL:         content.ExternalURL,
+		ReleaseYear:         content.ReleaseYear,
+		ArtistName:          content.ArtistName,
+		Genre:               content.Genre,
 	}
 }
 
@@ -259,6 +270,17 @@ func (s *ContentService) CreateContent(ctx context.Context, authorID int64, req 
 		AuthorID:   authorID,
 		CategoryID: req.CategoryID,
 		ViewCount:  0,
+
+		// 趣味投稿専用フィールド
+		WorkTitle:           req.WorkTitle,
+		Rating:              req.Rating,
+		RecommendationLevel: entity.RecommendationLevel(req.RecommendationLevel),
+		Tags:                req.Tags,
+		ImageURL:            req.ImageURL,
+		ExternalURL:         req.ExternalURL,
+		ReleaseYear:         req.ReleaseYear,
+		ArtistName:          req.ArtistName,
+		Genre:               req.Genre,
 	}
 
 	// ドメインルールのバリデーション
@@ -318,6 +340,39 @@ func (s *ContentService) UpdateContent(ctx context.Context, id int64, userID int
 		if err := content.SetCategoryID(req.CategoryID); err != nil {
 			return nil, domainErrors.NewValidationError(err.Error())
 		}
+	}
+
+	// 趣味投稿専用フィールドの更新
+	if req.WorkTitle != "" {
+		content.WorkTitle = req.WorkTitle
+	}
+	if req.Rating != nil {
+		if err := content.SetRating(*req.Rating); err != nil {
+			return nil, domainErrors.NewValidationError(err.Error())
+		}
+	}
+	if req.RecommendationLevel != "" {
+		if err := content.SetRecommendationLevel(entity.RecommendationLevel(req.RecommendationLevel)); err != nil {
+			return nil, domainErrors.NewValidationError(err.Error())
+		}
+	}
+	if len(req.Tags) > 0 {
+		content.SetTags(req.Tags)
+	}
+	if req.ImageURL != "" {
+		content.ImageURL = req.ImageURL
+	}
+	if req.ExternalURL != "" {
+		content.ExternalURL = req.ExternalURL
+	}
+	if req.ReleaseYear != nil {
+		content.ReleaseYear = req.ReleaseYear
+	}
+	if req.ArtistName != "" {
+		content.ArtistName = req.ArtistName
+	}
+	if req.Genre != "" {
+		content.Genre = req.Genre
 	}
 
 	// ドメインルールのバリデーション
