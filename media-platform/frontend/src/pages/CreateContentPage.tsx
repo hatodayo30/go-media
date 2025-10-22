@@ -8,191 +8,125 @@ const CreateContentPage: React.FC = () => {
   const [formData, setFormData] = useState<CreateContentRequest>({
     title: "",
     body: "",
-    type: "article",
+    type: "音楽",
     category_id: 0,
     status: "draft",
+
+    // 趣味投稿専用フィールド
+    work_title: "",
+    rating: undefined,
+    recommendation_level: "",
+    tags: [],
+    image_url: "",
+    external_url: "",
+    release_year: undefined,
+    artist_name: "",
+    genre: "",
   });
+
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [pageLoading, setPageLoading] = useState(true);
+  const [tagInput, setTagInput] = useState("");
 
-  // useCallbackで認証チェックをメモ化
+  // 認証チェック
   const checkAuthentication = useCallback(() => {
     const token = localStorage.getItem("token");
-    console.log("🔑 Token存在チェック:", !!token);
-
     if (!token) {
-      console.log("❌ 認証なし、ログインページへリダイレクト");
       navigate("/login");
       return false;
     }
     return true;
   }, [navigate]);
 
-  // useCallbackでfetchCategoriesをメモ化
+  // カテゴリ取得
   const fetchCategories = useCallback(async () => {
     try {
-      console.log("📂 カテゴリ取得開始...");
       const response: ApiResponse<Category[]> = await api.getCategories();
-
       if (response.success && response.data) {
         setCategories(response.data);
-        console.log(`✅ カテゴリ取得成功: ${response.data.length}件`);
-      } else {
-        console.error("❌ カテゴリ取得失敗:", response.message);
-        setError(response.message || "カテゴリの取得に失敗しました");
-        setCategories([]);
       }
     } catch (error: any) {
       console.error("❌ カテゴリ取得エラー:", error);
       setError("カテゴリの取得に失敗しました");
-      setCategories([]);
     }
   }, []);
 
-  // useCallbackで初期化処理をメモ化
+  // 初期化
   const fetchInitialData = useCallback(async () => {
     try {
       setPageLoading(true);
-      setError("");
-
-      // 認証チェック
-      if (!checkAuthentication()) {
-        return;
-      }
-
-      // カテゴリ取得
+      if (!checkAuthentication()) return;
       await fetchCategories();
-
-      console.log("✅ 初期化完了");
     } catch (error: any) {
-      console.error("❌ 初期化エラー:", error);
       setError("初期化に失敗しました");
     } finally {
       setPageLoading(false);
     }
   }, [checkAuthentication, fetchCategories]);
 
-  // useCallbackでバリデーションをメモ化
+  // バリデーション
   const validateForm = useCallback(() => {
     if (!formData.title.trim()) {
-      console.log("❌ バリデーションエラー: タイトル未入力");
       setError("タイトルを入力してください");
       return false;
     }
-
     if (!formData.body.trim()) {
-      console.log("❌ バリデーションエラー: 本文未入力");
       setError("本文を入力してください");
       return false;
     }
-
     if (!formData.category_id || formData.category_id === 0) {
-      console.log("❌ バリデーションエラー: カテゴリ未選択");
       setError("カテゴリを選択してください");
       return false;
     }
-
-    console.log("✅ バリデーション通過");
+    if (formData.rating && (formData.rating < 0 || formData.rating > 5)) {
+      setError("評価は0〜5の範囲で入力してください");
+      return false;
+    }
     return true;
-  }, [formData.title, formData.body, formData.category_id]);
+  }, [formData]);
 
-  // useCallbackでhandleSubmitをメモ化
+  // フォーム送信
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
-      console.log("🚀 フォーム送信開始");
-      console.log("📝 フォームデータ:", formData);
-
       setError("");
       setSuccess("");
       setLoading(true);
 
       try {
-        // バリデーション
         if (!validateForm()) {
           setLoading(false);
           return;
         }
-
-        console.log("🌐 API リクエスト送信開始");
-        console.log("📤 送信データ:", JSON.stringify(formData, null, 2));
 
         const response: ApiResponse<Content> = await api.createContent(
           formData
         );
 
         if (response.success && response.data) {
-          console.log("✅ API レスポンス受信:", response);
-
           const successMessage =
             formData.status === "published"
-              ? "コンテンツが正常に公開されました！"
-              : "コンテンツが下書きとして保存されました！";
+              ? "投稿が正常に公開されました！"
+              : "投稿が下書きとして保存されました！";
 
           setSuccess(successMessage);
-
-          console.log("🎉 作成成功、リダイレクト実行中...");
-          // 2秒後にダッシュボードにリダイレクト
-          setTimeout(() => {
-            navigate("/dashboard");
-          }, 2000);
+          setTimeout(() => navigate("/dashboard"), 2000);
         } else {
-          throw new Error(response.message || "コンテンツの作成に失敗しました");
+          throw new Error(response.message || "投稿の作成に失敗しました");
         }
       } catch (err: any) {
-        console.error("❌ コンテンツ作成エラー:", err);
-
-        let errorMessage = "コンテンツの作成に失敗しました";
-
-        if (err.response) {
-          const statusCode = err.response.status;
-          const errorData = err.response.data;
-
-          console.log(`❌ HTTPエラー ${statusCode}:`, errorData);
-
-          switch (statusCode) {
-            case 401:
-              errorMessage = "認証が切れています。再度ログインしてください。";
-              setTimeout(() => navigate("/login"), 2000);
-              break;
-            case 400:
-              errorMessage =
-                errorData?.message ||
-                errorData?.error ||
-                "リクエストデータが無効です";
-              break;
-            case 500:
-              errorMessage =
-                "サーバーエラーが発生しました。しばらく待ってから再度お試しください。";
-              break;
-            default:
-              errorMessage =
-                errorData?.message ||
-                errorData?.error ||
-                `エラーが発生しました (${statusCode})`;
-          }
-        } else if (err.request) {
-          console.log("❌ ネットワークエラー:", err.request);
-          errorMessage =
-            "サーバーに接続できません。ネットワーク接続を確認してください。";
-        } else {
-          console.log("❌ その他のエラー:", err.message);
-          errorMessage = err.message || errorMessage;
-        }
-
-        setError(errorMessage);
+        setError(err.response?.data?.error || "投稿の作成に失敗しました");
       } finally {
         setLoading(false);
-        console.log("🏁 処理完了");
       }
     },
     [formData, validateForm, navigate]
   );
 
-  // useCallbackでhandleChangeをメモ化
+  // フィールド変更
   const handleChange = useCallback(
     (
       e: React.ChangeEvent<
@@ -200,80 +134,55 @@ const CreateContentPage: React.FC = () => {
       >
     ) => {
       const { name, value } = e.target;
-      console.log(`📝 フィールド変更: ${name} = ${value}`);
-
       setFormData((prev) => ({
         ...prev,
-        [name]: name === "category_id" ? parseInt(value) || 0 : value,
+        [name]:
+          name === "category_id" || name === "release_year" || name === "rating"
+            ? value
+              ? parseInt(value)
+              : undefined
+            : value,
       }));
     },
     []
   );
 
-  // useCallbackでhandleStatusChangeをメモ化
+  // ステータス変更
   const handleStatusChange = useCallback((status: "draft" | "published") => {
-    console.log("🔄 ステータス変更:", status);
-    setFormData((prev) => ({
-      ...prev,
-      status,
-    }));
+    setFormData((prev) => ({ ...prev, status }));
   }, []);
 
-  // useCallbackでhandleCancelをメモ化
+  // キャンセル
   const handleCancel = useCallback(() => {
     if (formData.title || formData.body) {
-      const confirmLeave = window.confirm(
-        "入力内容が失われますが、よろしいですか？"
-      );
-      if (!confirmLeave) return;
+      if (!window.confirm("入力内容が失われますが、よろしいですか？")) return;
     }
     navigate("/dashboard");
-  }, [formData.title, formData.body, navigate]);
+  }, [formData, navigate]);
 
-  // useMemoで計算値をメモ化
-  const currentStatusText = useMemo(() => {
-    return formData.status === "published" ? "今すぐ公開" : "下書き保存";
-  }, [formData.status]);
+  // 星評価の設定
+  const handleRatingChange = useCallback((rating: number) => {
+    setFormData((prev) => ({ ...prev, rating }));
+  }, []);
 
-  const submitButtonText = useMemo(() => {
-    if (loading) return "作成中...";
-    return formData.status === "published" ? "✨ 公開する" : "📝 下書き保存";
-  }, [loading, formData.status]);
+  // タグ追加
+  const handleAddTag = useCallback(() => {
+    if (tagInput.trim() && formData.tags && formData.tags.length < 10) {
+      setFormData((prev) => ({
+        ...prev,
+        tags: [...(prev.tags || []), tagInput.trim()],
+      }));
+      setTagInput("");
+    }
+  }, [tagInput, formData.tags]);
 
-  const characterCount = useMemo(() => {
-    return formData.body.length;
-  }, [formData.body.length]);
-
-  // useMemoでスタイルをメモ化
-  const statusButtonStyle = useCallback(
-    (isSelected: boolean, colorScheme: "blue" | "green") => {
-      const colors = {
-        blue: {
-          border: isSelected ? "2px solid #3b82f6" : "1px solid #d1d5db",
-          background: isSelected ? "#dbeafe" : "white",
-          color: isSelected ? "#1d4ed8" : "#374151",
-        },
-        green: {
-          border: isSelected ? "2px solid #059669" : "1px solid #d1d5db",
-          background: isSelected ? "#dcfce7" : "white",
-          color: isSelected ? "#166534" : "#374151",
-        },
-      };
-
-      return {
-        padding: "0.75rem 1.5rem",
-        border: colors[colorScheme].border,
-        borderRadius: "6px",
-        backgroundColor: colors[colorScheme].background,
-        color: colors[colorScheme].color,
-        cursor: "pointer",
-        fontSize: "0.875rem",
-        fontWeight: isSelected ? "600" : "400",
-        transition: "all 0.2s ease-in-out",
-      };
-    },
-    []
-  );
+  // タグ削除
+  const handleRemoveTag = useCallback((indexToRemove: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      tags: prev.tags?.filter((_, index) => index !== indexToRemove) || [],
+    }));
+  }, []);
 
   useEffect(() => {
     fetchInitialData();
@@ -298,6 +207,17 @@ const CreateContentPage: React.FC = () => {
     );
   }
 
+  const getCategoryIcon = (type: string) => {
+    const icons: Record<string, string> = {
+      音楽: "🎵",
+      アニメ: "📺",
+      漫画: "📚",
+      映画: "🎬",
+      ゲーム: "🎮",
+    };
+    return icons[type] || "📝";
+  };
+
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#f9fafb" }}>
       {/* ヘッダー */}
@@ -318,47 +238,35 @@ const CreateContentPage: React.FC = () => {
             alignItems: "center",
           }}
         >
-          <div>
-            <Link
-              to="/dashboard"
-              style={{
-                fontSize: "1.5rem",
-                fontWeight: "bold",
-                textDecoration: "none",
-                color: "#1f2937",
-              }}
-            >
-              📝 メディアプラットフォーム
-            </Link>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-            <span style={{ fontSize: "0.875rem", color: "#6b7280" }}>
-              新規作成
-            </span>
-            <button
-              onClick={handleCancel}
-              style={{
-                backgroundColor: "#6b7280",
-                color: "white",
-                padding: "0.5rem 1rem",
-                borderRadius: "6px",
-                border: "none",
-                fontSize: "0.875rem",
-                cursor: "pointer",
-              }}
-            >
-              ← ダッシュボードに戻る
-            </button>
-          </div>
+          <Link
+            to="/dashboard"
+            style={{
+              fontSize: "1.5rem",
+              fontWeight: "bold",
+              textDecoration: "none",
+              color: "#1f2937",
+            }}
+          >
+            {getCategoryIcon(formData.type)} 趣味投稿プラットフォーム
+          </Link>
+          <button
+            onClick={handleCancel}
+            style={{
+              backgroundColor: "#6b7280",
+              color: "white",
+              padding: "0.5rem 1rem",
+              borderRadius: "6px",
+              border: "none",
+              cursor: "pointer",
+            }}
+          >
+            ← 戻る
+          </button>
         </div>
       </header>
 
       <div
-        style={{
-          maxWidth: "800px",
-          margin: "0 auto",
-          padding: "2rem 1rem",
-        }}
+        style={{ maxWidth: "800px", margin: "0 auto", padding: "2rem 1rem" }}
       >
         <div
           style={{
@@ -368,46 +276,18 @@ const CreateContentPage: React.FC = () => {
             boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
           }}
         >
-          <div style={{ marginBottom: "2rem" }}>
-            <h1
-              style={{
-                margin: "0 0 0.5rem 0",
-                fontSize: "2rem",
-                fontWeight: "bold",
-                color: "#1f2937",
-              }}
-            >
-              ✍️ 新規コンテンツ作成
-            </h1>
-            <p style={{ margin: 0, color: "#6b7280" }}>
-              新しい記事を作成してください
-            </p>
-          </div>
-
-          {/* デバッグ情報表示（開発環境のみ） */}
-          {process.env.NODE_ENV === "development" && (
-            <div
-              style={{
-                backgroundColor: "#f3f4f6",
-                padding: "1rem",
-                borderRadius: "6px",
-                marginBottom: "1.5rem",
-                fontSize: "0.875rem",
-              }}
-            >
-              <strong>🔍 デバッグ情報:</strong>
-              <br />
-              カテゴリ数: {categories.length}
-              <br />
-              現在のステータス: {formData.status}
-              <br />
-              タイトル: {formData.title || "(空)"}
-              <br />
-              カテゴリID: {formData.category_id || "(未選択)"}
-              <br />
-              本文文字数: {characterCount}
-            </div>
-          )}
+          <h1
+            style={{
+              margin: "0 0 0.5rem 0",
+              fontSize: "2rem",
+              fontWeight: "bold",
+            }}
+          >
+            ✨ おすすめを投稿
+          </h1>
+          <p style={{ margin: "0 0 2rem 0", color: "#6b7280" }}>
+            あなたのお気に入りの作品を共有しましょう！
+          </p>
 
           <form onSubmit={handleSubmit}>
             {/* エラー・成功メッセージ */}
@@ -441,6 +321,67 @@ const CreateContentPage: React.FC = () => {
               </div>
             )}
 
+            {/* カテゴリ選択 */}
+            <div style={{ marginBottom: "1.5rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "0.5rem",
+                  fontWeight: "500",
+                  color: "#374151",
+                }}
+              >
+                カテゴリ <span style={{ color: "#ef4444" }}>*</span>
+              </label>
+              <select
+                name="type"
+                required
+                value={formData.type}
+                onChange={handleChange}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "6px",
+                  fontSize: "1rem",
+                }}
+              >
+                <option value="音楽">🎵 音楽</option>
+                <option value="アニメ">📺 アニメ</option>
+                <option value="漫画">📚 漫画</option>
+                <option value="映画">🎬 映画</option>
+                <option value="ゲーム">🎮 ゲーム</option>
+              </select>
+            </div>
+
+            {/* 作品名 */}
+            <div style={{ marginBottom: "1.5rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "0.5rem",
+                  fontWeight: "500",
+                  color: "#374151",
+                }}
+              >
+                作品名
+              </label>
+              <input
+                type="text"
+                name="work_title"
+                value={formData.work_title}
+                onChange={handleChange}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "6px",
+                  fontSize: "1rem",
+                }}
+                placeholder="例：鬼滅の刃、ONE PIECE、呪術廻戦 など"
+              />
+            </div>
+
             {/* タイトル */}
             <div style={{ marginBottom: "1.5rem" }}>
               <label
@@ -451,7 +392,7 @@ const CreateContentPage: React.FC = () => {
                   color: "#374151",
                 }}
               >
-                タイトル <span style={{ color: "#ef4444" }}>*</span>
+                投稿タイトル <span style={{ color: "#ef4444" }}>*</span>
               </label>
               <input
                 type="text"
@@ -466,81 +407,90 @@ const CreateContentPage: React.FC = () => {
                   borderRadius: "6px",
                   fontSize: "1rem",
                 }}
-                placeholder="魅力的なタイトルを入力してください"
+                placeholder="例：感動で涙が止まらない！超おすすめ作品"
               />
             </div>
 
-            {/* カテゴリとタイプ */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "1rem",
-                marginBottom: "1.5rem",
-              }}
-            >
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "0.5rem",
-                    fontWeight: "500",
-                    color: "#374151",
-                  }}
-                >
-                  カテゴリ <span style={{ color: "#ef4444" }}>*</span>
-                </label>
-                <select
-                  name="category_id"
-                  required
-                  value={formData.category_id}
-                  onChange={handleChange}
-                  style={{
-                    width: "100%",
-                    padding: "0.75rem",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "6px",
-                    fontSize: "1rem",
-                  }}
-                >
-                  <option value={0}>カテゴリを選択してください</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
+            {/* 評価（星） */}
+            <div style={{ marginBottom: "1.5rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "0.5rem",
+                  fontWeight: "500",
+                  color: "#374151",
+                }}
+              >
+                あなたの評価
+              </label>
+              <div style={{ display: "flex", gap: "0.5rem", fontSize: "2rem" }}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => handleRatingChange(star)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      padding: 0,
+                      transition: "transform 0.2s",
+                    }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.transform = "scale(1.2)")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.transform = "scale(1)")
+                    }
+                  >
+                    {formData.rating && formData.rating >= star ? "⭐" : "☆"}
+                  </button>
+                ))}
+                {formData.rating && (
+                  <span
+                    style={{
+                      fontSize: "1rem",
+                      lineHeight: "2rem",
+                      marginLeft: "0.5rem",
+                      color: "#6b7280",
+                    }}
+                  >
+                    {formData.rating}.0
+                  </span>
+                )}
               </div>
+            </div>
 
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "0.5rem",
-                    fontWeight: "500",
-                    color: "#374151",
-                  }}
-                >
-                  コンテンツタイプ
-                </label>
-                <select
-                  name="type"
-                  value={formData.type}
-                  onChange={handleChange}
-                  style={{
-                    width: "100%",
-                    padding: "0.75rem",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "6px",
-                    fontSize: "1rem",
-                  }}
-                >
-                  <option value="article">📄 記事</option>
-                  <option value="tutorial">📚 チュートリアル</option>
-                  <option value="news">📰 ニュース</option>
-                  <option value="review">⭐ レビュー</option>
-                </select>
-              </div>
+            {/* おすすめ度 */}
+            <div style={{ marginBottom: "1.5rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "0.5rem",
+                  fontWeight: "500",
+                  color: "#374151",
+                }}
+              >
+                おすすめ度
+              </label>
+              <select
+                name="recommendation_level"
+                value={formData.recommendation_level}
+                onChange={handleChange}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "6px",
+                  fontSize: "1rem",
+                }}
+              >
+                <option value="">選択しない</option>
+                <option value="必見">🔥 必見！絶対見て！</option>
+                <option value="おすすめ">👍 おすすめ</option>
+                <option value="普通">😐 普通</option>
+                <option value="イマイチ">👎 イマイチ</option>
+              </select>
             </div>
 
             {/* 本文 */}
@@ -553,12 +503,12 @@ const CreateContentPage: React.FC = () => {
                   color: "#374151",
                 }}
               >
-                本文 <span style={{ color: "#ef4444" }}>*</span>
+                感想・レビュー <span style={{ color: "#ef4444" }}>*</span>
               </label>
               <textarea
                 name="body"
                 required
-                rows={15}
+                rows={10}
                 value={formData.body}
                 onChange={handleChange}
                 style={{
@@ -570,7 +520,7 @@ const CreateContentPage: React.FC = () => {
                   resize: "vertical",
                   fontFamily: "inherit",
                 }}
-                placeholder="ここに記事の内容を書いてください..."
+                placeholder="どんなところが良かったか、どんな人におすすめか、など自由に書いてください..."
               />
               <div
                 style={{
@@ -579,8 +529,193 @@ const CreateContentPage: React.FC = () => {
                   marginTop: "0.5rem",
                 }}
               >
-                📊 文字数: {characterCount}
+                📊 {formData.body.length}文字
               </div>
+            </div>
+
+            {/* タグ */}
+            <div style={{ marginBottom: "1.5rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "0.5rem",
+                  fontWeight: "500",
+                  color: "#374151",
+                }}
+              >
+                タグ（最大10個）
+              </label>
+              <div
+                style={{
+                  display: "flex",
+                  gap: "0.5rem",
+                  marginBottom: "0.5rem",
+                }}
+              >
+                <input
+                  type="text"
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddTag();
+                    }
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: "0.5rem",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "6px",
+                  }}
+                  placeholder="例：感動、泣ける、バトル、恋愛"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddTag}
+                  disabled={
+                    !tagInput.trim() || (formData.tags?.length || 0) >= 10
+                  }
+                  style={{
+                    padding: "0.5rem 1rem",
+                    backgroundColor: "#3b82f6",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor:
+                      tagInput.trim() && (formData.tags?.length || 0) < 10
+                        ? "pointer"
+                        : "not-allowed",
+                    opacity:
+                      tagInput.trim() && (formData.tags?.length || 0) < 10
+                        ? 1
+                        : 0.5,
+                  }}
+                >
+                  追加
+                </button>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                {formData.tags?.map((tag, index) => (
+                  <span
+                    key={index}
+                    style={{
+                      backgroundColor: "#e5e7eb",
+                      padding: "0.25rem 0.75rem",
+                      borderRadius: "9999px",
+                      fontSize: "0.875rem",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                    }}
+                  >
+                    #{tag}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveTag(index)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        color: "#6b7280",
+                        padding: 0,
+                      }}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* カテゴリID（サブカテゴリ） */}
+            <div style={{ marginBottom: "1.5rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "0.5rem",
+                  fontWeight: "500",
+                  color: "#374151",
+                }}
+              >
+                ジャンル <span style={{ color: "#ef4444" }}>*</span>
+              </label>
+              <select
+                name="category_id"
+                required
+                value={formData.category_id}
+                onChange={handleChange}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "6px",
+                  fontSize: "1rem",
+                }}
+              >
+                <option value={0}>ジャンルを選択してください</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 画像URL */}
+            <div style={{ marginBottom: "1.5rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "0.5rem",
+                  fontWeight: "500",
+                  color: "#374151",
+                }}
+              >
+                画像URL（オプション）
+              </label>
+              <input
+                type="url"
+                name="image_url"
+                value={formData.image_url}
+                onChange={handleChange}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "6px",
+                  fontSize: "1rem",
+                }}
+                placeholder="https://example.com/image.jpg"
+              />
+            </div>
+
+            {/* 外部リンク */}
+            <div style={{ marginBottom: "1.5rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "0.5rem",
+                  fontWeight: "500",
+                  color: "#374151",
+                }}
+              >
+                関連リンク（オプション）
+              </label>
+              <input
+                type="url"
+                name="external_url"
+                value={formData.external_url}
+                onChange={handleChange}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "6px",
+                  fontSize: "1rem",
+                }}
+                placeholder="公式サイト、Amazonリンクなど"
+              />
             </div>
 
             {/* 公開状態 */}
@@ -593,35 +728,48 @@ const CreateContentPage: React.FC = () => {
                   color: "#374151",
                 }}
               >
-                公開状態
+                公開設定
               </label>
               <div style={{ display: "flex", gap: "1rem" }}>
                 <button
                   type="button"
                   onClick={() => handleStatusChange("draft")}
-                  style={statusButtonStyle(formData.status === "draft", "blue")}
+                  style={{
+                    padding: "0.75rem 1.5rem",
+                    border:
+                      formData.status === "draft"
+                        ? "2px solid #3b82f6"
+                        : "1px solid #d1d5db",
+                    borderRadius: "6px",
+                    backgroundColor:
+                      formData.status === "draft" ? "#dbeafe" : "white",
+                    color: formData.status === "draft" ? "#1d4ed8" : "#374151",
+                    cursor: "pointer",
+                    fontWeight: formData.status === "draft" ? "600" : "400",
+                  }}
                 >
                   📝 下書き保存
                 </button>
                 <button
                   type="button"
                   onClick={() => handleStatusChange("published")}
-                  style={statusButtonStyle(
-                    formData.status === "published",
-                    "green"
-                  )}
+                  style={{
+                    padding: "0.75rem 1.5rem",
+                    border:
+                      formData.status === "published"
+                        ? "2px solid #059669"
+                        : "1px solid #d1d5db",
+                    borderRadius: "6px",
+                    backgroundColor:
+                      formData.status === "published" ? "#dcfce7" : "white",
+                    color:
+                      formData.status === "published" ? "#166534" : "#374151",
+                    cursor: "pointer",
+                    fontWeight: formData.status === "published" ? "600" : "400",
+                  }}
                 >
                   🌟 今すぐ公開
                 </button>
-              </div>
-              <div
-                style={{
-                  fontSize: "0.75rem",
-                  color: "#6b7280",
-                  marginTop: "0.5rem",
-                }}
-              >
-                現在選択中: {currentStatusText}
               </div>
             </div>
 
@@ -643,7 +791,6 @@ const CreateContentPage: React.FC = () => {
                   backgroundColor: "white",
                   color: "#374151",
                   cursor: "pointer",
-                  fontSize: "1rem",
                 }}
               >
                 ❌ キャンセル
@@ -658,14 +805,16 @@ const CreateContentPage: React.FC = () => {
                   color: "white",
                   border: "none",
                   borderRadius: "6px",
-                  fontSize: "1rem",
                   fontWeight: "500",
                   cursor: loading ? "not-allowed" : "pointer",
                   opacity: loading ? 0.6 : 1,
-                  transition: "all 0.2s ease-in-out",
                 }}
               >
-                {submitButtonText}
+                {loading
+                  ? "投稿中..."
+                  : formData.status === "published"
+                  ? "✨ 公開する"
+                  : "📝 下書き保存"}
               </button>
             </div>
           </form>
