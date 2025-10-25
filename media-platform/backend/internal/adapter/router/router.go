@@ -55,44 +55,46 @@ func SetupRouter(e *echo.Echo, dbConn database.DBConn, jwtConfig *middleware.JWT
 
 // setupDependencies は依存関係を初期化し、ルートを設定します
 func setupDependencies(e *echo.Echo, dbConn database.DBConn, jwtConfig *middleware.JWTConfig) {
-	// Repository層の初期化（Infrastructure Layer）
+	// ========== Repository層の初期化（Infrastructure Layer） ==========
 	userRepo := repository.NewUserRepository(dbConn.GetDB())
 	categoryRepo := repository.NewCategoryRepository(dbConn.GetDB())
 	contentRepo := repository.NewContentRepository(dbConn.GetDB())
 	commentRepo := repository.NewCommentRepository(dbConn.GetDB())
 	ratingRepo := repository.NewRatingRepository(dbConn.GetDB())
+	followRepo := repository.NewFollowRepository(dbConn.GetDB()) // 🆕 フォロー機能
 
-	// Presenter層の初期化（Adapter Layer）
+	// ========== Presenter層の初期化（Adapter Layer） ==========
 	userPresenter := presenter.NewUserPresenter()
 	categoryPresenter := presenter.NewCategoryPresenter()
 	contentPresenter := presenter.NewContentPresenter()
 	commentPresenter := presenter.NewCommentPresenter()
 	ratingPresenter := presenter.NewRatingPresenter()
+	followPresenter := presenter.NewFollowPresenter() // 🆕 フォロー機能
 
-	// ✅ SecretKeyに修正
+	// JWT Generator
 	jwtGenerator := middleware.NewJWTGenerator(jwtConfig.SecretKey)
 
-	// Service層の初期化（Use Case Layer - Clean Architecture対応）
-	// ✅ Presenterへの依存を除去し、純粋なビジネスロジック層として実装
+	// ========== Service層の初期化（Use Case Layer） ==========
 	userService := service.NewUserService(userRepo, jwtGenerator)
 	categoryService := service.NewCategoryService(categoryRepo)
 	contentService := service.NewContentService(contentRepo, categoryRepo, userRepo)
 	commentService := service.NewCommentService(commentRepo, contentRepo, userRepo)
 	ratingService := service.NewRatingService(ratingRepo, contentRepo, userRepo)
+	followService := service.NewFollowService(followRepo, userRepo) // 🆕 フォロー機能
 
-	// Controller層の初期化（Adapter Layer）
-	// ✅ ControllerはServiceとPresenterの両方を受け取り、適切に依存関係を管理
+	// ========== Controller層の初期化（Adapter Layer） ==========
 	userController := controller.NewUserController(userService, userPresenter)
 	categoryController := controller.NewCategoryController(categoryService, categoryPresenter)
 	contentController := controller.NewContentController(contentService, contentPresenter)
 	commentController := controller.NewCommentController(commentService, commentPresenter)
 	ratingController := controller.NewRatingController(ratingService, ratingPresenter)
+	followController := controller.NewFollowController(followService, followPresenter) // 🆕 フォロー機能
 
-	// ミドルウェアの設定
+	// ========== ミドルウェアの設定 ==========
 	authMiddleware := jwtConfig.AuthMiddleware()
 	adminMiddleware := middleware.AdminMiddleware()
 
-	// APIグループ設定
+	// ========== APIグループ設定 ==========
 	api := e.Group("/api")
 
 	// ========== ユーザーAPI ==========
@@ -109,9 +111,19 @@ func setupDependencies(e *echo.Echo, dbConn database.DBConn, jwtConfig *middlewa
 		userRoutes.POST("/login", userController.Login)
 		userRoutes.GET("/public", userController.GetPublicUsers)
 
-		// 認証必要エンドポイント
+		// 認証必要エンドポイント - 現在のユーザー情報
 		userRoutes.GET("/me", userController.GetCurrentUser, authMiddleware)
 		userRoutes.PUT("/me", userController.UpdateCurrentUser, authMiddleware)
+
+		// 🆕 フォロー機能 - フィード（認証必要）
+		userRoutes.GET("/following-feed", followController.GetFollowingFeed, authMiddleware)
+
+		// 🆕 フォロー機能 - 特定ユーザーに対する操作
+		userRoutes.POST("/:id/follow", followController.FollowUser, authMiddleware)
+		userRoutes.DELETE("/:id/follow", followController.UnfollowUser, authMiddleware)
+		userRoutes.GET("/:id/followers", followController.GetFollowers)
+		userRoutes.GET("/:id/following", followController.GetFollowing)
+		userRoutes.GET("/:id/follow-stats", followController.GetFollowStats)
 
 		// 管理者限定エンドポイント
 		userRoutes.GET("", userController.GetAllUsers, authMiddleware, adminMiddleware)
@@ -213,5 +225,6 @@ func setupDependencies(e *echo.Echo, dbConn database.DBConn, jwtConfig *middlewa
 	log.Println("  📁 Comments: /api/comments")
 	log.Println("  📁 Ratings: /api/ratings")
 	log.Println("  📁 Admin: /api/admin")
+	log.Println("  🆕 Follow: /api/users/:id/follow, /api/users/:id/followers, etc.")
 	log.Println("  🏥 Health: /health")
 }
