@@ -16,6 +16,8 @@ import ProfilePage from "./pages/ProfilePage";
 import CategoryPage from "./pages/CategoryPage";
 import ContentDetailPage from "./pages/ContentDetailPage";
 import NotFoundPage from "./pages/NotFoundPage";
+import FollowingPage from "./pages/FollowingPage";
+import LikesPage from "./pages/LikesPage";
 import "./App.css";
 
 // 認証が必要なルートのためのコンポーネント
@@ -119,6 +121,24 @@ const App: React.FC = () => {
               element={
                 <PrivateRoute>
                   <ProfilePage />
+                </PrivateRoute>
+              }
+            />
+            {/* フォロー関連 */}
+            <Route
+              path="/following"
+              element={
+                <PrivateRoute>
+                  <FollowingPage />
+                </PrivateRoute>
+              }
+            />
+
+            <Route
+              path="/likes"
+              element={
+                <PrivateRoute>
+                  <LikesPage />
                 </PrivateRoute>
               }
             />
