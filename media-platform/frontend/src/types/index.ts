@@ -90,6 +90,7 @@ export interface Content {
   release_year?: number; // リリース年
   artist_name?: string; // アーティスト名
   genre?: string; // ジャンル
+  description?: string;
 }
 
 export interface CreateContentRequest {

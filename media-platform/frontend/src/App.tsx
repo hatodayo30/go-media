@@ -13,7 +13,7 @@ import CreateContentPage from "./pages/CreateContentPage";
 import EditContentPage from "./pages/EditContentPage";
 import DraftsPage from "./pages/DraftsPage";
 import ProfilePage from "./pages/ProfilePage";
-import SearchPage from "./pages/SearchPage";
+import CategoryPage from "./pages/CategoryPage";
 import ContentDetailPage from "./pages/ContentDetailPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import "./App.css";
@@ -69,6 +69,16 @@ const App: React.FC = () => {
               }
             />
 
+            {/* カテゴリページ */}
+            <Route
+              path="/category/:categoryName"
+              element={
+                <PrivateRoute>
+                  <CategoryPage />
+                </PrivateRoute>
+              }
+            />
+
             {/* コンテンツ関連 */}
             <Route
               path="/create"
@@ -109,16 +119,6 @@ const App: React.FC = () => {
               element={
                 <PrivateRoute>
                   <ProfilePage />
-                </PrivateRoute>
-              }
-            />
-
-            {/* その他 */}
-            <Route
-              path="/search"
-              element={
-                <PrivateRoute>
-                  <SearchPage />
                 </PrivateRoute>
               }
             />
