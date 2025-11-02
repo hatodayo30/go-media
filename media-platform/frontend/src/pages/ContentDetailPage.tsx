@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { Content, Comment } from "../types";
 import { useAuth } from "../contexts/AuthContext";
+import Sidebar from "../components/Sidebar";
 
 const ContentDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { user: currentUser } = useAuth();
+  const navigate = useNavigate();
 
   const [content, setContent] = useState<Content | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -16,7 +18,31 @@ const ContentDetailPage: React.FC = () => {
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [userRating, setUserRating] = useState<number | null>(null);
 
-  // useCallbackを使用してfetchContentをメモ化
+  // カテゴリアイコン
+  const getCategoryIcon = useCallback((categoryName: string) => {
+    const icons: Record<string, string> = {
+      音楽: "🎵",
+      アニメ: "📺",
+      漫画: "📚",
+      映画: "🎬",
+      ゲーム: "🎮",
+    };
+    return icons[categoryName] || "📁";
+  }, []);
+
+  // おすすめ度のスタイル
+  const getRecommendationStyle = useCallback((level: string) => {
+    const styles: Record<string, { bg: string; color: string; icon: string }> =
+      {
+        必見: { bg: "#ffe4e6", color: "#be123c", icon: "🔥" },
+        おすすめ: { bg: "#e8f4fd", color: "#1e40af", icon: "👍" },
+        普通: { bg: "#f5f6fa", color: "#7f8c8d", icon: "😐" },
+        イマイチ: { bg: "#ecf0f1", color: "#5a6c7d", icon: "👎" },
+      };
+    return styles[level] || styles["普通"];
+  }, []);
+
+  // コンテンツ取得
   const fetchContent = useCallback(async () => {
     if (!id) {
       setError("コンテンツIDが指定されていません");
@@ -25,124 +51,91 @@ const ContentDetailPage: React.FC = () => {
     }
 
     try {
-      console.log(`📄 コンテンツ ${id} を取得中...`);
-      // 修正: 型注釈を削除
       const response = await api.getContentById(id);
-
       if (response.success && response.data) {
         setContent(response.data);
-        console.log("✅ コンテンツ取得成功:", response.data);
       } else {
         setError(response.message || "コンテンツの取得に失敗しました");
-        console.error("❌ コンテンツ取得失敗:", response.message);
       }
     } catch (err: any) {
       console.error("❌ コンテンツ取得エラー:", err);
       setError("コンテンツの取得中にエラーが発生しました");
     }
-  }, [id]); // idに依存
+  }, [id]);
 
-  // useCallbackを使用してfetchCommentsをメモ化 - 修正版
+  // コメント取得
   const fetchComments = useCallback(async () => {
     if (!id) return;
 
     try {
-      console.log(`💬 コンテンツ ${id} のコメントを取得中...`);
-      // 修正: 型注釈を削除
       const response = await api.getCommentsByContentId(id);
-
       if (response.success && response.data) {
         setComments(response.data);
-        console.log(`✅ コメント取得成功: ${response.data.length}件`);
       } else {
-        console.error("❌ コメント取得失敗:", response.message);
-        // エラーの場合も空配列を設定
         setComments([]);
       }
     } catch (err: any) {
       console.error("❌ コメント取得エラー:", err);
       setComments([]);
     }
-  }, [id]); // idに依存
+  }, [id]);
 
-  // useCallbackを使用してfetchUserRatingをメモ化 - 修正版
+  // ユーザー評価取得
   const fetchUserRating = useCallback(async () => {
     if (!id || !currentUser) return;
 
     try {
-      console.log(`⭐ ユーザー ${currentUser.id} の評価を取得中...`);
-      // 修正: 型注釈を削除
       const response = await api.getRatingsByUser(currentUser.id.toString());
-
       if (response.success && response.data) {
         const contentRating = response.data.find(
           (rating) => rating.content_id === parseInt(id)
         );
-        if (contentRating) {
-          setUserRating(contentRating.value);
-          console.log(`✅ ユーザー評価取得: ${contentRating.value}`);
-        } else {
-          console.log("📭 このコンテンツの評価なし");
-          setUserRating(null);
-        }
-      } else {
-        console.error("❌ 評価取得失敗:", response.message);
-        setUserRating(null);
+        setUserRating(contentRating ? contentRating.value : null);
       }
     } catch (err: any) {
       console.error("❌ 評価取得エラー:", err);
       setUserRating(null);
     }
-  }, [id, currentUser]); // idとcurrentUserに依存
+  }, [id, currentUser]);
 
-  // useCallbackを使用してloadDataをメモ化
+  // データ読み込み
   const loadData = useCallback(async () => {
-    console.log("🔄 データ読み込み開始");
     setLoading(true);
     setError("");
 
     try {
       await Promise.all([fetchContent(), fetchComments(), fetchUserRating()]);
-      console.log("✅ 全データ読み込み完了");
     } catch (error) {
       console.error("❌ データ読み込みエラー:", error);
     } finally {
       setLoading(false);
     }
-  }, [fetchContent, fetchComments, fetchUserRating]); // 関数に依存
+  }, [fetchContent, fetchComments, fetchUserRating]);
 
   useEffect(() => {
     loadData();
-  }, [loadData]); // loadDataを依存配列に含める
+  }, [loadData]);
 
-  // useCallbackを使用してhandleCommentSubmitをメモ化 - 修正版
+  // コメント投稿
   const handleCommentSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
 
-      if (!commentText.trim() || !id || !currentUser) {
-        console.warn("⚠️ コメント投稿: 必要な情報が不足");
-        return;
-      }
+      if (!commentText.trim() || !id || !currentUser) return;
 
       setIsSubmittingComment(true);
 
       try {
-        console.log("💬 コメント投稿中...");
-        // 修正: 型注釈を削除
         const response = await api.createComment({
           body: commentText.trim(),
           content_id: parseInt(id),
         });
 
         if (response.success && response.data) {
-          // 修正: non-null assertionを使用
           setComments((prev) => [...prev, response.data!]);
           setCommentText("");
-          console.log("✅ コメント投稿成功");
         } else {
           alert(response.message || "コメントの投稿に失敗しました");
-          console.error("❌ コメント投稿失敗:", response.message);
         }
       } catch (err: any) {
         console.error("❌ コメント投稿エラー:", err);
@@ -152,27 +145,19 @@ const ContentDetailPage: React.FC = () => {
       }
     },
     [commentText, id, currentUser]
-  ); // 状態と依存関係に依存
+  );
 
-  // useCallbackを使用してhandleRatingをメモ化 - 修正版
+  // 評価更新
   const handleRating = useCallback(
     async (rating: number) => {
-      if (!id || !currentUser) {
-        console.warn("⚠️ 評価更新: 必要な情報が不足");
-        return;
-      }
+      if (!id || !currentUser) return;
 
       try {
-        console.log(`⭐ 評価更新中: ${rating}`);
-        // 修正: 型注釈を削除
         const response = await api.createOrUpdateRating(parseInt(id), rating);
-
         if (response.success) {
           setUserRating(rating);
-          console.log("✅ 評価更新成功");
         } else {
           alert(response.message || "評価の更新に失敗しました");
-          console.error("❌ 評価更新失敗:", response.message);
         }
       } catch (err: any) {
         console.error("❌ 評価更新エラー:", err);
@@ -180,96 +165,17 @@ const ContentDetailPage: React.FC = () => {
       }
     },
     [id, currentUser]
-  ); // idとcurrentUserに依存
+  );
 
-  // useCallbackを使用してformatDateをメモ化
+  // 日付フォーマット
   const formatDate = useCallback((dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("ja-JP", {
       year: "numeric",
       month: "long",
       day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
     });
-  }, []); // 純粋関数なので依存関係なし
-
-  // useCallbackを使用してhandleCommentChangeをメモ化
-  const handleCommentChange = useCallback(
-    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      setCommentText(e.target.value);
-    },
-    []
-  ); // setCommentTextは安定しているので依存関係なし
-
-  // useCallbackを使用してhandleGoodRatingをメモ化
-  const handleGoodRating = useCallback(() => {
-    handleRating(1);
-  }, [handleRating]);
-
-  // useCallbackを使用してhandleBadRatingをメモ化
-  const handleBadRating = useCallback(() => {
-    handleRating(0);
-  }, [handleRating]);
-
-  // useCallbackを使用してrenderCommentをメモ化
-  const renderComment = useCallback(
-    (comment: Comment) => (
-      <div
-        key={comment.id}
-        style={{
-          padding: "1rem",
-          border: "1px solid #e5e7eb",
-          borderRadius: "4px",
-          backgroundColor: "#f9fafb",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "0.5rem",
-          }}
-        >
-          <span style={{ fontWeight: "500", color: "#374151" }}>
-            {comment.user?.username || "ユーザー"}
-          </span>
-          <span style={{ fontSize: "0.75rem", color: "#6b7280" }}>
-            {formatDate(comment.created_at)}
-          </span>
-        </div>
-        <p
-          style={{
-            margin: 0,
-            color: "#374151",
-            lineHeight: "1.5",
-            whiteSpace: "pre-wrap",
-          }}
-        >
-          {comment.body}
-        </p>
-      </div>
-    ),
-    [formatDate]
-  ); // formatDateに依存
-
-  // useCallbackを使用してrenderCommentsListをメモ化
-  const renderCommentsList = useCallback(() => {
-    if (comments.length === 0) {
-      return (
-        <p style={{ color: "#6b7280", textAlign: "center", padding: "2rem" }}>
-          まだコメントがありません
-        </p>
-      );
-    }
-
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-        {comments.map(renderComment)}
-      </div>
-    );
-  }, [comments, renderComment]); // commentsとrenderCommentに依存
+  }, []);
 
   if (loading) {
     return (
@@ -278,10 +184,16 @@ const ContentDetailPage: React.FC = () => {
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
-          minHeight: "50vh",
+          minHeight: "100vh",
+          backgroundColor: "#f5f6fa",
         }}
       >
-        <div>読み込み中...</div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>⏳</div>
+          <div style={{ fontSize: "1.25rem", color: "#7f8c8d" }}>
+            読み込み中...
+          </div>
+        </div>
       </div>
     );
   }
@@ -294,224 +206,626 @@ const ContentDetailPage: React.FC = () => {
           margin: "2rem auto",
           padding: "2rem",
           textAlign: "center",
+          backgroundColor: "white",
+          borderRadius: "12px",
+          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
         }}
       >
-        <h2>エラー</h2>
-        <p>{error || "コンテンツが見つかりません"}</p>
+        <div style={{ fontSize: "4rem", marginBottom: "1rem" }}>😢</div>
+        <h2 style={{ marginBottom: "1rem", color: "#2c3e50" }}>
+          投稿が見つかりません
+        </h2>
+        <p style={{ color: "#7f8c8d", marginBottom: "2rem" }}>
+          {error || "この投稿は削除されたか、存在しません"}
+        </p>
         <Link
           to="/dashboard"
           style={{
             display: "inline-block",
-            marginTop: "1rem",
-            padding: "0.5rem 1rem",
-            backgroundColor: "#3b82f6",
+            padding: "0.75rem 1.5rem",
+            backgroundColor: "#3498db",
             color: "white",
             textDecoration: "none",
-            borderRadius: "4px",
+            borderRadius: "8px",
+            fontWeight: "500",
           }}
         >
-          ダッシュボードに戻る
+          ← ホームに戻る
         </Link>
       </div>
     );
   }
 
+  const recommendationStyle = content.recommendation_level
+    ? getRecommendationStyle(content.recommendation_level)
+    : null;
+
   return (
-    <div style={{ maxWidth: "800px", margin: "0 auto", padding: "2rem" }}>
-      {/* ヘッダー */}
-      <div style={{ marginBottom: "2rem" }}>
-        <Link
-          to="/dashboard"
-          style={{
-            color: "#6b7280",
-            textDecoration: "none",
-            fontSize: "0.875rem",
-          }}
-        >
-          ← ダッシュボードに戻る
-        </Link>
-      </div>
-
-      {/* コンテンツ */}
-      <article
-        style={{
-          backgroundColor: "white",
-          padding: "2rem",
-          borderRadius: "8px",
-          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
-          marginBottom: "2rem",
-        }}
-      >
-        <header style={{ marginBottom: "1.5rem" }}>
-          <h1
-            style={{
-              fontSize: "2rem",
-              fontWeight: "bold",
-              margin: "0 0 1rem 0",
-              color: "#111827",
-            }}
-          >
-            {content.title}
-          </h1>
-
-          <div
-            style={{
-              color: "#6b7280",
-              fontSize: "0.875rem",
-              display: "flex",
-              gap: "1rem",
-              flexWrap: "wrap",
-            }}
-          >
-            {content.author && <span>✍️ {content.author.username}</span>}
-            <span>📅 {formatDate(content.created_at)}</span>
-            {content.updated_at !== content.created_at && (
-              <span>🔄 更新: {formatDate(content.updated_at)}</span>
-            )}
-            <span>👁️ {content.view_count} 回閲覧</span>
-            {content.category && <span>🏷️ {content.category.name}</span>}
-          </div>
-        </header>
-
-        <div
-          style={{
-            lineHeight: "1.7",
-            color: "#374151",
-            whiteSpace: "pre-wrap",
-          }}
-        >
-          {content.body}
-        </div>
-      </article>
-
-      {/* 評価セクション */}
-      {currentUser && (
-        <div
+    <div style={{ display: "flex", minHeight: "100vh" }}>
+      <Sidebar />
+      <div style={{ flex: 1, backgroundColor: "#f5f6fa", overflow: "auto" }}>
+        {/* ヘッダー */}
+        <header
           style={{
             backgroundColor: "white",
-            padding: "1.5rem",
-            borderRadius: "8px",
-            boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
+            borderBottom: "1px solid #e8eaed",
+            padding: "1rem 0",
             marginBottom: "2rem",
           }}
         >
-          <h3 style={{ marginBottom: "1rem", color: "#374151" }}>
-            この記事を評価
-          </h3>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button
-              onClick={handleGoodRating}
-              style={{
-                padding: "0.5rem 1rem",
-                backgroundColor: userRating === 1 ? "#10b981" : "#f3f4f6",
-                color: userRating === 1 ? "white" : "#374151",
-                border: "1px solid #d1d5db",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              👍 グッド
-            </button>
-            <button
-              onClick={handleBadRating}
-              style={{
-                padding: "0.5rem 1rem",
-                backgroundColor: userRating === 0 ? "#ef4444" : "#f3f4f6",
-                color: userRating === 0 ? "white" : "#374151",
-                border: "1px solid #d1d5db",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              👎 バッド
-            </button>
-          </div>
-          {userRating !== null && (
-            <div
-              style={{
-                marginTop: "0.5rem",
-                fontSize: "0.875rem",
-                color: "#6b7280",
-              }}
-            >
-              現在の評価: {userRating === 1 ? "👍 グッド" : "👎 バッド"}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* コメントセクション */}
-      <div
-        style={{
-          backgroundColor: "white",
-          padding: "1.5rem",
-          borderRadius: "8px",
-          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
-        }}
-      >
-        <h3 style={{ marginBottom: "1.5rem", color: "#374151" }}>
-          コメント ({comments.length})
-        </h3>
-
-        {/* コメント投稿フォーム */}
-        {currentUser && (
-          <form onSubmit={handleCommentSubmit} style={{ marginBottom: "2rem" }}>
-            <textarea
-              value={commentText}
-              onChange={handleCommentChange}
-              placeholder="コメントを入力してください..."
-              style={{
-                width: "100%",
-                minHeight: "100px",
-                padding: "0.75rem",
-                border: "1px solid #d1d5db",
-                borderRadius: "4px",
-                resize: "vertical",
-                fontSize: "0.875rem",
-              }}
-            />
-            <div style={{ marginTop: "1rem", textAlign: "right" }}>
-              <button
-                type="submit"
-                disabled={!commentText.trim() || isSubmittingComment}
-                style={{
-                  padding: "0.5rem 1rem",
-                  backgroundColor: "#3b82f6",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: isSubmittingComment ? "not-allowed" : "pointer",
-                  opacity: isSubmittingComment ? 0.7 : 1,
-                }}
-              >
-                {isSubmittingComment ? "投稿中..." : "コメント投稿"}
-              </button>
-            </div>
-          </form>
-        )}
-
-        {!currentUser && (
           <div
             style={{
-              marginBottom: "2rem",
-              padding: "1rem",
-              backgroundColor: "#f3f4f6",
-              borderRadius: "4px",
-              textAlign: "center",
+              maxWidth: "800px",
+              margin: "0 auto",
+              padding: "0 1rem",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
             }}
           >
-            <p style={{ margin: 0, color: "#6b7280" }}>
-              コメントを投稿するには
-              <Link to="/login" style={{ color: "#3b82f6" }}>
-                ログイン
+            <Link
+              to="/dashboard"
+              style={{
+                color: "#5a6c7d",
+                textDecoration: "none",
+                fontSize: "0.875rem",
+                fontWeight: "500",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+              }}
+            >
+              ← ホームに戻る
+            </Link>
+            {currentUser && content.author_id === currentUser.id && (
+              <Link
+                to={`/contents/${id}/edit`}
+                style={{
+                  padding: "0.5rem 1rem",
+                  backgroundColor: "#3498db",
+                  color: "white",
+                  textDecoration: "none",
+                  borderRadius: "8px",
+                  fontSize: "0.875rem",
+                  fontWeight: "500",
+                }}
+              >
+                ✏️ 編集
               </Link>
-              してください
-            </p>
+            )}
           </div>
-        )}
+        </header>
+        <div
+          style={{
+            maxWidth: "800px",
+            margin: "0 auto",
+            padding: "0 1rem 2rem",
+          }}
+        >
+          {/* 記事本体 */}
+          <article
+            style={{
+              backgroundColor: "white",
+              padding: "2.5rem",
+              borderRadius: "12px",
+              boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
+              marginBottom: "2rem",
+            }}
+          >
+            {/* カテゴリバッジ */}
+            <div style={{ marginBottom: "1rem" }}>
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  padding: "0.5rem 1rem",
+                  backgroundColor: "#e8f4fd",
+                  color: "#1e40af",
+                  borderRadius: "20px",
+                  fontSize: "0.875rem",
+                  fontWeight: "600",
+                }}
+              >
+                {getCategoryIcon(content.type || content.category?.name || "")}
+                {content.type || content.category?.name}
+              </span>
+            </div>
 
-        {/* コメント一覧 */}
-        {renderCommentsList()}
+            {/* タイトル */}
+            <h1
+              style={{
+                margin: "0 0 1rem 0",
+                fontSize: "2rem",
+                fontWeight: "700",
+                color: "#2c3e50",
+                lineHeight: "1.3",
+              }}
+            >
+              {content.title}
+            </h1>
+
+            {/* メタ情報 */}
+            <div
+              style={{
+                display: "flex",
+                gap: "1.5rem",
+                marginBottom: "1.5rem",
+                paddingBottom: "1.5rem",
+                borderBottom: "1px solid #e8eaed",
+                fontSize: "0.875rem",
+                color: "#7f8c8d",
+              }}
+            >
+              <span
+                style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+              >
+                👤 {content.author?.username || "匿名"}
+              </span>
+              <span
+                style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+              >
+                📅 {formatDate(content.created_at)}
+              </span>
+            </div>
+
+            {/* おすすめ度 & 評価 */}
+            {(content.recommendation_level || content.rating) && (
+              <div
+                style={{
+                  display: "flex",
+                  gap: "1.5rem",
+                  marginBottom: "2rem",
+                  padding: "1.25rem",
+                  backgroundColor: "#f5f6fa",
+                  borderRadius: "10px",
+                }}
+              >
+                {recommendationStyle && (
+                  <div>
+                    <div
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "#7f8c8d",
+                        marginBottom: "0.25rem",
+                        fontWeight: "500",
+                      }}
+                    >
+                      おすすめ度
+                    </div>
+                    <span
+                      style={{
+                        display: "inline-block",
+                        padding: "0.5rem 1rem",
+                        backgroundColor: recommendationStyle.bg,
+                        color: recommendationStyle.color,
+                        borderRadius: "20px",
+                        fontSize: "0.875rem",
+                        fontWeight: "600",
+                      }}
+                    >
+                      {recommendationStyle.icon} {content.recommendation_level}
+                    </span>
+                  </div>
+                )}
+                {content.rating && (
+                  <div>
+                    <div
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "#7f8c8d",
+                        marginBottom: "0.25rem",
+                        fontWeight: "500",
+                      }}
+                    >
+                      評価
+                    </div>
+                    <div style={{ fontSize: "1.5rem" }}>
+                      {"⭐".repeat(Math.round(content.rating))}
+                      <span
+                        style={{
+                          fontSize: "1rem",
+                          color: "#7f8c8d",
+                          marginLeft: "0.5rem",
+                        }}
+                      >
+                        {content.rating.toFixed(1)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 作品情報 */}
+            {(content.work_title ||
+              content.artist_name ||
+              content.genre ||
+              content.release_year) && (
+              <div
+                style={{
+                  marginBottom: "2rem",
+                  padding: "1.25rem",
+                  backgroundColor: "#f5f6fa",
+                  borderRadius: "10px",
+                  fontSize: "0.9375rem",
+                  color: "#5a6c7d",
+                }}
+              >
+                <div
+                  style={{
+                    marginBottom: "0.75rem",
+                    fontSize: "0.875rem",
+                    fontWeight: "600",
+                    color: "#2c3e50",
+                  }}
+                >
+                  📚 作品情報
+                </div>
+                {content.work_title && (
+                  <div style={{ marginBottom: "0.5rem" }}>
+                    🎬 作品名:{" "}
+                    <strong style={{ color: "#2c3e50" }}>
+                      {content.work_title}
+                    </strong>
+                  </div>
+                )}
+                {content.artist_name && (
+                  <div style={{ marginBottom: "0.5rem" }}>
+                    🎨 アーティスト:{" "}
+                    <strong style={{ color: "#2c3e50" }}>
+                      {content.artist_name}
+                    </strong>
+                  </div>
+                )}
+                {content.genre && (
+                  <div style={{ marginBottom: "0.5rem" }}>
+                    🎭 ジャンル:{" "}
+                    <strong style={{ color: "#2c3e50" }}>
+                      {content.genre}
+                    </strong>
+                  </div>
+                )}
+                {content.release_year && (
+                  <div>
+                    📆 リリース年:{" "}
+                    <strong style={{ color: "#2c3e50" }}>
+                      {content.release_year}年
+                    </strong>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 本文 */}
+            <div
+              style={{
+                lineHeight: "1.8",
+                color: "#2c3e50",
+                fontSize: "1.0625rem",
+                whiteSpace: "pre-wrap",
+              }}
+            >
+              {content.body}
+            </div>
+
+            {/* 画像 */}
+            {content.image_url && (
+              <div
+                style={{
+                  marginTop: "2rem",
+                  textAlign: "center",
+                }}
+              >
+                <img
+                  src={content.image_url}
+                  alt={content.work_title || content.title}
+                  style={{
+                    maxWidth: "100%",
+                    borderRadius: "8px",
+                    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+                  }}
+                />
+              </div>
+            )}
+
+            {/* 外部リンク */}
+            {content.external_url && (
+              <div
+                style={{
+                  marginTop: "2rem",
+                  padding: "1rem",
+                  backgroundColor: "#e8f4fd",
+                  borderRadius: "8px",
+                  textAlign: "center",
+                }}
+              >
+                <a
+                  href={content.external_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    color: "#1e40af",
+                    textDecoration: "none",
+                    fontWeight: "600",
+                    fontSize: "1rem",
+                  }}
+                >
+                  🔗 詳細情報・購入ページへ →
+                </a>
+              </div>
+            )}
+          </article>
+
+          {/* 評価セクション */}
+          {currentUser && (
+            <div
+              style={{
+                backgroundColor: "white",
+                padding: "1.5rem",
+                borderRadius: "12px",
+                boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
+                marginBottom: "2rem",
+              }}
+            >
+              <h3
+                style={{
+                  marginBottom: "1rem",
+                  color: "#2c3e50",
+                  fontSize: "1.125rem",
+                  fontWeight: "600",
+                }}
+              >
+                👍 この投稿を評価
+              </h3>
+              <div style={{ display: "flex", gap: "0.75rem" }}>
+                <button
+                  onClick={() => handleRating(1)}
+                  style={{
+                    flex: 1,
+                    padding: "0.75rem",
+                    backgroundColor: userRating === 1 ? "#27ae60" : "#ecf0f1",
+                    color: userRating === 1 ? "white" : "#2c3e50",
+                    border: "2px solid",
+                    borderColor: userRating === 1 ? "#27ae60" : "#bdc3c7",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    fontWeight: "600",
+                    fontSize: "1rem",
+                    transition: "all 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (userRating !== 1) {
+                      e.currentTarget.style.borderColor = "#27ae60";
+                      e.currentTarget.style.backgroundColor = "#d5f4e6";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (userRating !== 1) {
+                      e.currentTarget.style.borderColor = "#bdc3c7";
+                      e.currentTarget.style.backgroundColor = "#ecf0f1";
+                    }
+                  }}
+                >
+                  👍 いいね！
+                </button>
+                <button
+                  onClick={() => handleRating(0)}
+                  style={{
+                    flex: 1,
+                    padding: "0.75rem",
+                    backgroundColor: userRating === 0 ? "#e74c3c" : "#ecf0f1",
+                    color: userRating === 0 ? "white" : "#2c3e50",
+                    border: "2px solid",
+                    borderColor: userRating === 0 ? "#e74c3c" : "#bdc3c7",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    fontWeight: "600",
+                    fontSize: "1rem",
+                    transition: "all 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (userRating !== 0) {
+                      e.currentTarget.style.borderColor = "#e74c3c";
+                      e.currentTarget.style.backgroundColor = "#fadbd8";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (userRating !== 0) {
+                      e.currentTarget.style.borderColor = "#bdc3c7";
+                      e.currentTarget.style.backgroundColor = "#ecf0f1";
+                    }
+                  }}
+                >
+                  👎 うーん...
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* コメントセクション */}
+          <div
+            style={{
+              backgroundColor: "white",
+              padding: "2rem",
+              borderRadius: "12px",
+              boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
+            }}
+          >
+            <h3
+              style={{
+                marginBottom: "1.5rem",
+                color: "#2c3e50",
+                fontSize: "1.25rem",
+                fontWeight: "600",
+              }}
+            >
+              💬 コメント ({comments.length})
+            </h3>
+
+            {/* コメント投稿フォーム */}
+            {currentUser ? (
+              <form
+                onSubmit={handleCommentSubmit}
+                style={{ marginBottom: "2rem" }}
+              >
+                <textarea
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  placeholder="感想を共有しましょう..."
+                  style={{
+                    width: "100%",
+                    minHeight: "100px",
+                    padding: "0.75rem",
+                    border: "2px solid #e8eaed",
+                    borderRadius: "8px",
+                    resize: "vertical",
+                    fontSize: "0.9375rem",
+                    fontFamily: "inherit",
+                    outline: "none",
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = "#3498db";
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = "#e8eaed";
+                  }}
+                />
+                <div style={{ marginTop: "1rem", textAlign: "right" }}>
+                  <button
+                    type="submit"
+                    disabled={!commentText.trim() || isSubmittingComment}
+                    style={{
+                      padding: "0.75rem 1.5rem",
+                      backgroundColor:
+                        !commentText.trim() || isSubmittingComment
+                          ? "#95a5a6"
+                          : "#3498db",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "8px",
+                      cursor:
+                        !commentText.trim() || isSubmittingComment
+                          ? "not-allowed"
+                          : "pointer",
+                      fontWeight: "600",
+                      fontSize: "0.9375rem",
+                      transition: "background-color 0.2s",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (commentText.trim() && !isSubmittingComment) {
+                        e.currentTarget.style.backgroundColor = "#2980b9";
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (commentText.trim() && !isSubmittingComment) {
+                        e.currentTarget.style.backgroundColor = "#3498db";
+                      }
+                    }}
+                  >
+                    {isSubmittingComment ? "投稿中..." : "💬 コメント投稿"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div
+                style={{
+                  marginBottom: "2rem",
+                  padding: "1.5rem",
+                  backgroundColor: "#f5f6fa",
+                  borderRadius: "8px",
+                  textAlign: "center",
+                  border: "2px dashed #bdc3c7",
+                }}
+              >
+                <p style={{ margin: 0, color: "#7f8c8d" }}>
+                  コメントを投稿するには{" "}
+                  <Link
+                    to="/login"
+                    style={{ color: "#3498db", fontWeight: "600" }}
+                  >
+                    ログイン
+                  </Link>{" "}
+                  してください
+                </p>
+              </div>
+            )}
+
+            {/* コメント一覧 */}
+            {comments.length > 0 ? (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "1rem",
+                }}
+              >
+                {comments.map((comment) => (
+                  <div
+                    key={comment.id}
+                    style={{
+                      padding: "1.25rem",
+                      border: "1px solid #e8eaed",
+                      borderRadius: "8px",
+                      backgroundColor: "#f5f6fa",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: "0.75rem",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontWeight: "600",
+                          color: "#2c3e50",
+                          fontSize: "0.9375rem",
+                        }}
+                      >
+                        {comment.user?.username || "ユーザー"}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "0.8125rem",
+                          color: "#95a5a6",
+                        }}
+                      >
+                        {formatDate(comment.created_at)}
+                      </span>
+                    </div>
+                    <p
+                      style={{
+                        margin: 0,
+                        color: "#2c3e50",
+                        lineHeight: "1.6",
+                        whiteSpace: "pre-wrap",
+                      }}
+                    >
+                      {comment.body}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "3rem 2rem",
+                  color: "#95a5a6",
+                }}
+              >
+                <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>💭</div>
+                <p style={{ margin: 0 }}>まだコメントがありません</p>
+                <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.875rem" }}>
+                  最初のコメントを投稿しましょう！
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

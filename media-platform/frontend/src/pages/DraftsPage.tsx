@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { Content, ApiResponse } from "../types";
+import Sidebar from "../components/Sidebar";
 
 const DraftsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -381,224 +382,227 @@ const DraftsPage: React.FC = () => {
   }
 
   return (
-    <div
-      style={{
-        maxWidth: "1200px",
-        margin: "0 auto",
-        padding: "2rem",
-        backgroundColor: "#f9fafb",
-        minHeight: "100vh",
-      }}
-    >
-      {/* ヘッダー */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "2rem",
-          backgroundColor: "white",
-          padding: "1.5rem",
-          borderRadius: "8px",
-          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
-        }}
-      >
-        <div>
-          <h1
-            style={{
-              fontSize: "2rem",
-              fontWeight: "bold",
-              margin: "0 0 0.5rem 0",
-              color: "#374151",
-            }}
-          >
-            📝 下書き一覧
-          </h1>
-          <p
-            style={{
-              margin: 0,
-              color: "#6b7280",
-              fontSize: "0.875rem",
-            }}
-          >
-            {stats.totalDrafts}件の下書きがあります
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: "1rem" }}>
-          <button
-            onClick={handleBackToDashboard}
-            style={{
-              padding: "0.75rem 1.5rem",
-              backgroundColor: "#6b7280",
-              color: "white",
-              border: "none",
-              borderRadius: "6px",
-              fontSize: "0.875rem",
-              fontWeight: "500",
-              cursor: "pointer",
-            }}
-          >
-            ← ダッシュボードに戻る
-          </button>
-          <button
-            onClick={handleCreateNew}
-            style={{
-              padding: "0.75rem 1.5rem",
-              backgroundColor: "#3b82f6",
-              color: "white",
-              border: "none",
-              borderRadius: "6px",
-              fontSize: "0.875rem",
-              fontWeight: "500",
-              cursor: "pointer",
-            }}
-          >
-            ✏️ 新規投稿
-          </button>
-        </div>
-      </div>
-
-      {/* 統計情報 */}
-      {drafts.length > 0 && (
+    <div style={{ display: "flex", minHeight: "100vh" }}>
+      <Sidebar />
+      <div style={{ flex: 1, backgroundColor: "#f9fafb", overflow: "auto" }}>
         <div
           style={{
-            backgroundColor: "white",
-            padding: "1rem",
-            borderRadius: "8px",
-            marginBottom: "1.5rem",
-            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+            maxWidth: "1200px",
+            margin: "0 auto",
+            padding: "2rem",
           }}
         >
+          {/* ヘッダー */}
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-              gap: "1rem",
-              fontSize: "0.875rem",
-              color: "#6b7280",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "2rem",
+              backgroundColor: "white",
+              padding: "1.5rem",
+              borderRadius: "8px",
+              boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
             }}
           >
-            <div style={{ textAlign: "center" }}>
-              <div
+            <div>
+              <h1
                 style={{
-                  fontSize: "1.5rem",
+                  fontSize: "2rem",
                   fontWeight: "bold",
-                  color: "#3b82f6",
+                  margin: "0 0 0.5rem 0",
+                  color: "#374151",
                 }}
               >
-                {stats.totalDrafts}
-              </div>
-              <div>📝 下書き数</div>
+                📝 下書き一覧
+              </h1>
+              <p
+                style={{
+                  margin: 0,
+                  color: "#6b7280",
+                  fontSize: "0.875rem",
+                }}
+              >
+                {stats.totalDrafts}件の下書きがあります
+              </p>
             </div>
-            <div style={{ textAlign: "center" }}>
-              <div
+            <div style={{ display: "flex", gap: "1rem" }}>
+              <button
+                onClick={handleBackToDashboard}
                 style={{
-                  fontSize: "1.5rem",
-                  fontWeight: "bold",
-                  color: "#10b981",
+                  padding: "0.75rem 1.5rem",
+                  backgroundColor: "#6b7280",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  fontSize: "0.875rem",
+                  fontWeight: "500",
+                  cursor: "pointer",
                 }}
               >
-                {stats.totalCharacters.toLocaleString()}
-              </div>
-              <div>📊 総文字数</div>
-            </div>
-            <div style={{ textAlign: "center" }}>
-              <div
+                ← ダッシュボードに戻る
+              </button>
+              <button
+                onClick={handleCreateNew}
                 style={{
-                  fontSize: "1.5rem",
-                  fontWeight: "bold",
-                  color: "#f59e0b",
+                  padding: "0.75rem 1.5rem",
+                  backgroundColor: "#3b82f6",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  fontSize: "0.875rem",
+                  fontWeight: "500",
+                  cursor: "pointer",
                 }}
               >
-                {stats.averageCharacters.toLocaleString()}
-              </div>
-              <div>📈 平均文字数</div>
+                ✏️ 新規投稿
+              </button>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* エラー表示 */}
-      {error && (
-        <div
-          style={{
-            backgroundColor: "#fee2e2",
-            border: "1px solid #fca5a5",
-            color: "#dc2626",
-            padding: "1rem",
-            borderRadius: "6px",
-            marginBottom: "1rem",
-          }}
-        >
-          ⚠️ {error}
-        </div>
-      )}
+          {/* 統計情報 */}
+          {drafts.length > 0 && (
+            <div
+              style={{
+                backgroundColor: "white",
+                padding: "1rem",
+                borderRadius: "8px",
+                marginBottom: "1.5rem",
+                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+              }}
+            >
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+                  gap: "1rem",
+                  fontSize: "0.875rem",
+                  color: "#6b7280",
+                }}
+              >
+                <div style={{ textAlign: "center" }}>
+                  <div
+                    style={{
+                      fontSize: "1.5rem",
+                      fontWeight: "bold",
+                      color: "#3b82f6",
+                    }}
+                  >
+                    {stats.totalDrafts}
+                  </div>
+                  <div>📝 下書き数</div>
+                </div>
+                <div style={{ textAlign: "center" }}>
+                  <div
+                    style={{
+                      fontSize: "1.5rem",
+                      fontWeight: "bold",
+                      color: "#10b981",
+                    }}
+                  >
+                    {stats.totalCharacters.toLocaleString()}
+                  </div>
+                  <div>📊 総文字数</div>
+                </div>
+                <div style={{ textAlign: "center" }}>
+                  <div
+                    style={{
+                      fontSize: "1.5rem",
+                      fontWeight: "bold",
+                      color: "#f59e0b",
+                    }}
+                  >
+                    {stats.averageCharacters.toLocaleString()}
+                  </div>
+                  <div>📈 平均文字数</div>
+                </div>
+              </div>
+            </div>
+          )}
 
-      {/* 下書き一覧 */}
-      {drafts.length === 0 ? (
-        <div
-          style={{
-            backgroundColor: "white",
-            padding: "3rem",
-            borderRadius: "8px",
-            textAlign: "center",
-            boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
-          }}
-        >
-          <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>📄</div>
-          <h3
-            style={{
-              fontSize: "1.25rem",
-              marginBottom: "0.5rem",
-              color: "#374151",
-            }}
-          >
-            下書きはありません
-          </h3>
-          <p style={{ color: "#6b7280", marginBottom: "1.5rem" }}>
-            まだ下書きされた記事がありません。新しい記事を作成してみましょう。
-          </p>
-          <button
-            onClick={handleCreateNew}
-            style={{
-              display: "inline-block",
-              padding: "0.75rem 1.5rem",
-              backgroundColor: "#3b82f6",
-              color: "white",
-              border: "none",
-              borderRadius: "6px",
-              fontSize: "0.875rem",
-              fontWeight: "500",
-              cursor: "pointer",
-            }}
-          >
-            ✏️ 新規投稿を作成
-          </button>
-        </div>
-      ) : (
-        <div style={{ display: "grid", gap: "1rem" }}>
-          {drafts.map(renderDraftCard)}
-        </div>
-      )}
+          {/* エラー表示 */}
+          {error && (
+            <div
+              style={{
+                backgroundColor: "#fee2e2",
+                border: "1px solid #fca5a5",
+                color: "#dc2626",
+                padding: "1rem",
+                borderRadius: "6px",
+                marginBottom: "1rem",
+              }}
+            >
+              ⚠️ {error}
+            </div>
+          )}
 
-      {/* アクション中の場合の表示 */}
-      {Object.keys(actionLoading).length > 0 && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: "2rem",
-            right: "2rem",
-            backgroundColor: "#1f2937",
-            color: "white",
-            padding: "1rem",
-            borderRadius: "8px",
-            fontSize: "0.875rem",
-            zIndex: 1000,
-          }}
-        >
-          🔄 処理中... ({Object.keys(actionLoading).length}件)
+          {/* 下書き一覧 */}
+          {drafts.length === 0 ? (
+            <div
+              style={{
+                backgroundColor: "white",
+                padding: "3rem",
+                borderRadius: "8px",
+                textAlign: "center",
+                boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
+              }}
+            >
+              <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>📄</div>
+              <h3
+                style={{
+                  fontSize: "1.25rem",
+                  marginBottom: "0.5rem",
+                  color: "#374151",
+                }}
+              >
+                下書きはありません
+              </h3>
+              <p style={{ color: "#6b7280", marginBottom: "1.5rem" }}>
+                まだ下書きされた記事がありません。新しい記事を作成してみましょう。
+              </p>
+              <button
+                onClick={handleCreateNew}
+                style={{
+                  display: "inline-block",
+                  padding: "0.75rem 1.5rem",
+                  backgroundColor: "#3b82f6",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  fontSize: "0.875rem",
+                  fontWeight: "500",
+                  cursor: "pointer",
+                }}
+              >
+                ✏️ 新規投稿を作成
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: "grid", gap: "1rem" }}>
+              {drafts.map(renderDraftCard)}
+            </div>
+          )}
+
+          {/* アクション中の場合の表示 */}
+          {Object.keys(actionLoading).length > 0 && (
+            <div
+              style={{
+                position: "fixed",
+                bottom: "2rem",
+                right: "2rem",
+                backgroundColor: "#1f2937",
+                color: "white",
+                padding: "1rem",
+                borderRadius: "8px",
+                fontSize: "0.875rem",
+                zIndex: 1000,
+              }}
+            >
+              🔄 処理中... ({Object.keys(actionLoading).length}件)
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 };

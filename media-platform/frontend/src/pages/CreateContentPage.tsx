@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { api } from "../services/api";
 import { Category, CreateContentRequest, Content, ApiResponse } from "../types";
+import Sidebar from "../components/Sidebar";
 
 const CreateContentPage: React.FC = () => {
   const navigate = useNavigate();
@@ -196,12 +197,12 @@ const CreateContentPage: React.FC = () => {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: "#f9fafb",
+          backgroundColor: "#f5f6fa",
         }}
       >
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: "2rem", marginBottom: "1rem" }}>⏳</div>
-          <div>初期化中...</div>
+          <div style={{ color: "#7f8c8d" }}>初期化中...</div>
         </div>
       </div>
     );
@@ -219,605 +220,748 @@ const CreateContentPage: React.FC = () => {
   };
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#f9fafb" }}>
-      {/* ヘッダー */}
-      <header
-        style={{
-          backgroundColor: "white",
-          borderBottom: "1px solid #e5e7eb",
-          padding: "1rem 0",
-        }}
-      >
+    <div style={{ display: "flex", minHeight: "100vh" }}>
+      <Sidebar />
+      <div style={{ flex: 1, backgroundColor: "#f9fafb", overflow: "auto" }}>
         <div
           style={{
-            maxWidth: "1200px",
+            maxWidth: "800px",
             margin: "0 auto",
-            padding: "0 1rem",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <Link
-            to="/dashboard"
-            style={{
-              fontSize: "1.5rem",
-              fontWeight: "bold",
-              textDecoration: "none",
-              color: "#1f2937",
-            }}
-          >
-            {getCategoryIcon(formData.type)} 趣味投稿プラットフォーム
-          </Link>
-          <button
-            onClick={handleCancel}
-            style={{
-              backgroundColor: "#6b7280",
-              color: "white",
-              padding: "0.5rem 1rem",
-              borderRadius: "6px",
-              border: "none",
-              cursor: "pointer",
-            }}
-          >
-            ← 戻る
-          </button>
-        </div>
-      </header>
-
-      <div
-        style={{ maxWidth: "800px", margin: "0 auto", padding: "2rem 1rem" }}
-      >
-        <div
-          style={{
-            backgroundColor: "white",
-            borderRadius: "8px",
             padding: "2rem",
-            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
           }}
         >
-          <h1
+          {/* メインコンテンツエリア */}
+          <div
             style={{
-              margin: "0 0 0.5rem 0",
-              fontSize: "2rem",
-              fontWeight: "bold",
+              marginLeft: "240px",
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
             }}
           >
-            ✨ おすすめを投稿
-          </h1>
-          <p style={{ margin: "0 0 2rem 0", color: "#6b7280" }}>
-            あなたのお気に入りの作品を共有しましょう！
-          </p>
-
-          <form onSubmit={handleSubmit}>
-            {/* エラー・成功メッセージ */}
-            {error && (
-              <div
-                style={{
-                  backgroundColor: "#fee2e2",
-                  border: "1px solid #fca5a5",
-                  color: "#dc2626",
-                  padding: "0.75rem",
-                  borderRadius: "6px",
-                  marginBottom: "1.5rem",
-                }}
-              >
-                ⚠️ {error}
-              </div>
-            )}
-
-            {success && (
-              <div
-                style={{
-                  backgroundColor: "#d1fae5",
-                  border: "1px solid #a7f3d0",
-                  color: "#065f46",
-                  padding: "0.75rem",
-                  borderRadius: "6px",
-                  marginBottom: "1.5rem",
-                }}
-              >
-                ✅ {success}
-              </div>
-            )}
-
-            {/* カテゴリ選択 */}
-            <div style={{ marginBottom: "1.5rem" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "0.5rem",
-                  fontWeight: "500",
-                  color: "#374151",
-                }}
-              >
-                カテゴリ <span style={{ color: "#ef4444" }}>*</span>
-              </label>
-              <select
-                name="type"
-                required
-                value={formData.type}
-                onChange={handleChange}
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "6px",
-                  fontSize: "1rem",
-                }}
-              >
-                <option value="音楽">🎵 音楽</option>
-                <option value="アニメ">📺 アニメ</option>
-                <option value="漫画">📚 漫画</option>
-                <option value="映画">🎬 映画</option>
-                <option value="ゲーム">🎮 ゲーム</option>
-              </select>
-            </div>
-
-            {/* 作品名 */}
-            <div style={{ marginBottom: "1.5rem" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "0.5rem",
-                  fontWeight: "500",
-                  color: "#374151",
-                }}
-              >
-                作品名
-              </label>
-              <input
-                type="text"
-                name="work_title"
-                value={formData.work_title}
-                onChange={handleChange}
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "6px",
-                  fontSize: "1rem",
-                }}
-                placeholder="例：鬼滅の刃、ONE PIECE、呪術廻戦 など"
-              />
-            </div>
-
-            {/* タイトル */}
-            <div style={{ marginBottom: "1.5rem" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "0.5rem",
-                  fontWeight: "500",
-                  color: "#374151",
-                }}
-              >
-                投稿タイトル <span style={{ color: "#ef4444" }}>*</span>
-              </label>
-              <input
-                type="text"
-                name="title"
-                required
-                value={formData.title}
-                onChange={handleChange}
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "6px",
-                  fontSize: "1rem",
-                }}
-                placeholder="例：感動で涙が止まらない！超おすすめ作品"
-              />
-            </div>
-
-            {/* 評価（星） */}
-            <div style={{ marginBottom: "1.5rem" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "0.5rem",
-                  fontWeight: "500",
-                  color: "#374151",
-                }}
-              >
-                あなたの評価
-              </label>
-              <div style={{ display: "flex", gap: "0.5rem", fontSize: "2rem" }}>
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <button
-                    key={star}
-                    type="button"
-                    onClick={() => handleRatingChange(star)}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      padding: 0,
-                      transition: "transform 0.2s",
-                    }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.transform = "scale(1.2)")
-                    }
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.transform = "scale(1)")
-                    }
-                  >
-                    {formData.rating && formData.rating >= star ? "⭐" : "☆"}
-                  </button>
-                ))}
-                {formData.rating && (
-                  <span
-                    style={{
-                      fontSize: "1rem",
-                      lineHeight: "2rem",
-                      marginLeft: "0.5rem",
-                      color: "#6b7280",
-                    }}
-                  >
-                    {formData.rating}.0
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* おすすめ度 */}
-            <div style={{ marginBottom: "1.5rem" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "0.5rem",
-                  fontWeight: "500",
-                  color: "#374151",
-                }}
-              >
-                おすすめ度
-              </label>
-              <select
-                name="recommendation_level"
-                value={formData.recommendation_level}
-                onChange={handleChange}
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "6px",
-                  fontSize: "1rem",
-                }}
-              >
-                <option value="">選択しない</option>
-                <option value="必見">🔥 必見！絶対見て！</option>
-                <option value="おすすめ">👍 おすすめ</option>
-                <option value="普通">😐 普通</option>
-                <option value="イマイチ">👎 イマイチ</option>
-              </select>
-            </div>
-
-            {/* 本文 */}
-            <div style={{ marginBottom: "1.5rem" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "0.5rem",
-                  fontWeight: "500",
-                  color: "#374151",
-                }}
-              >
-                感想・レビュー <span style={{ color: "#ef4444" }}>*</span>
-              </label>
-              <textarea
-                name="body"
-                required
-                rows={10}
-                value={formData.body}
-                onChange={handleChange}
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "6px",
-                  fontSize: "1rem",
-                  resize: "vertical",
-                  fontFamily: "inherit",
-                }}
-                placeholder="どんなところが良かったか、どんな人におすすめか、など自由に書いてください..."
-              />
-              <div
-                style={{
-                  fontSize: "0.875rem",
-                  color: "#6b7280",
-                  marginTop: "0.5rem",
-                }}
-              >
-                📊 {formData.body.length}文字
-              </div>
-            </div>
-
-            {/* タグ */}
-            <div style={{ marginBottom: "1.5rem" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "0.5rem",
-                  fontWeight: "500",
-                  color: "#374151",
-                }}
-              >
-                タグ（最大10個）
-              </label>
-              <div
-                style={{
-                  display: "flex",
-                  gap: "0.5rem",
-                  marginBottom: "0.5rem",
-                }}
-              >
-                <input
-                  type="text"
-                  value={tagInput}
-                  onChange={(e) => setTagInput(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleAddTag();
-                    }
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: "0.5rem",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "6px",
-                  }}
-                  placeholder="例：感動、泣ける、バトル、恋愛"
-                />
-                <button
-                  type="button"
-                  onClick={handleAddTag}
-                  disabled={
-                    !tagInput.trim() || (formData.tags?.length || 0) >= 10
-                  }
-                  style={{
-                    padding: "0.5rem 1rem",
-                    backgroundColor: "#3b82f6",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    cursor:
-                      tagInput.trim() && (formData.tags?.length || 0) < 10
-                        ? "pointer"
-                        : "not-allowed",
-                    opacity:
-                      tagInput.trim() && (formData.tags?.length || 0) < 10
-                        ? 1
-                        : 0.5,
-                  }}
-                >
-                  追加
-                </button>
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-                {formData.tags?.map((tag, index) => (
-                  <span
-                    key={index}
-                    style={{
-                      backgroundColor: "#e5e7eb",
-                      padding: "0.25rem 0.75rem",
-                      borderRadius: "9999px",
-                      fontSize: "0.875rem",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.5rem",
-                    }}
-                  >
-                    #{tag}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveTag(index)}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        color: "#6b7280",
-                        padding: 0,
-                      }}
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            {/* カテゴリID（サブカテゴリ） */}
-            <div style={{ marginBottom: "1.5rem" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "0.5rem",
-                  fontWeight: "500",
-                  color: "#374151",
-                }}
-              >
-                ジャンル <span style={{ color: "#ef4444" }}>*</span>
-              </label>
-              <select
-                name="category_id"
-                required
-                value={formData.category_id}
-                onChange={handleChange}
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "6px",
-                  fontSize: "1rem",
-                }}
-              >
-                <option value={0}>ジャンルを選択してください</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* 画像URL */}
-            <div style={{ marginBottom: "1.5rem" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "0.5rem",
-                  fontWeight: "500",
-                  color: "#374151",
-                }}
-              >
-                画像URL（オプション）
-              </label>
-              <input
-                type="url"
-                name="image_url"
-                value={formData.image_url}
-                onChange={handleChange}
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "6px",
-                  fontSize: "1rem",
-                }}
-                placeholder="https://example.com/image.jpg"
-              />
-            </div>
-
-            {/* 外部リンク */}
-            <div style={{ marginBottom: "1.5rem" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "0.5rem",
-                  fontWeight: "500",
-                  color: "#374151",
-                }}
-              >
-                関連リンク（オプション）
-              </label>
-              <input
-                type="url"
-                name="external_url"
-                value={formData.external_url}
-                onChange={handleChange}
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "6px",
-                  fontSize: "1rem",
-                }}
-                placeholder="公式サイト、Amazonリンクなど"
-              />
-            </div>
-
-            {/* 公開状態 */}
-            <div style={{ marginBottom: "2rem" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "0.75rem",
-                  fontWeight: "500",
-                  color: "#374151",
-                }}
-              >
-                公開設定
-              </label>
-              <div style={{ display: "flex", gap: "1rem" }}>
-                <button
-                  type="button"
-                  onClick={() => handleStatusChange("draft")}
-                  style={{
-                    padding: "0.75rem 1.5rem",
-                    border:
-                      formData.status === "draft"
-                        ? "2px solid #3b82f6"
-                        : "1px solid #d1d5db",
-                    borderRadius: "6px",
-                    backgroundColor:
-                      formData.status === "draft" ? "#dbeafe" : "white",
-                    color: formData.status === "draft" ? "#1d4ed8" : "#374151",
-                    cursor: "pointer",
-                    fontWeight: formData.status === "draft" ? "600" : "400",
-                  }}
-                >
-                  📝 下書き保存
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleStatusChange("published")}
-                  style={{
-                    padding: "0.75rem 1.5rem",
-                    border:
-                      formData.status === "published"
-                        ? "2px solid #059669"
-                        : "1px solid #d1d5db",
-                    borderRadius: "6px",
-                    backgroundColor:
-                      formData.status === "published" ? "#dcfce7" : "white",
-                    color:
-                      formData.status === "published" ? "#166534" : "#374151",
-                    cursor: "pointer",
-                    fontWeight: formData.status === "published" ? "600" : "400",
-                  }}
-                >
-                  🌟 今すぐ公開
-                </button>
-              </div>
-            </div>
-
-            {/* ボタン */}
-            <div
+            {/* ページコンテンツ */}
+            <main
               style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
+                padding: "2rem",
+                flex: 1,
+                overflowY: "auto",
+                backgroundColor: "#f5f5f5",
               }}
             >
-              <button
-                type="button"
-                onClick={handleCancel}
-                style={{
-                  padding: "0.75rem 1.5rem",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "6px",
-                  backgroundColor: "white",
-                  color: "#374151",
-                  cursor: "pointer",
-                }}
-              >
-                ❌ キャンセル
-              </button>
+              <div style={{ minHeight: "100vh", backgroundColor: "#f5f6fa" }}>
+                <div
+                  style={{
+                    maxWidth: "800px",
+                    margin: "0 auto",
+                    padding: "2rem 1rem",
+                  }}
+                >
+                  <div
+                    style={{
+                      backgroundColor: "white",
+                      padding: "2.5rem",
+                      borderRadius: "12px",
+                      boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
+                    }}
+                  >
+                    <h2
+                      style={{
+                        margin: "0 0 0.5rem 0",
+                        fontSize: "1.75rem",
+                        fontWeight: "700",
+                        color: "#2c3e50",
+                      }}
+                    >
+                      ✨ 新規投稿
+                    </h2>
+                    <p
+                      style={{
+                        marginTop: 0,
+                        marginBottom: "2rem",
+                        color: "#7f8c8d",
+                      }}
+                    >
+                      あなたのお気に入りを共有しましょう
+                    </p>
 
-              <button
-                type="submit"
-                disabled={loading}
-                style={{
-                  padding: "0.75rem 2rem",
-                  backgroundColor: loading ? "#9ca3af" : "#3b82f6",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  fontWeight: "500",
-                  cursor: loading ? "not-allowed" : "pointer",
-                  opacity: loading ? 0.6 : 1,
-                }}
-              >
-                {loading
-                  ? "投稿中..."
-                  : formData.status === "published"
-                  ? "✨ 公開する"
-                  : "📝 下書き保存"}
-              </button>
-            </div>
-          </form>
+                    {/* エラー表示 */}
+                    {error && (
+                      <div
+                        style={{
+                          padding: "1rem",
+                          backgroundColor: "#fadbd8",
+                          color: "#c0392b",
+                          borderRadius: "8px",
+                          marginBottom: "1.5rem",
+                          fontSize: "0.9375rem",
+                        }}
+                      >
+                        ⚠️ {error}
+                      </div>
+                    )}
+
+                    {/* 成功表示 */}
+                    {success && (
+                      <div
+                        style={{
+                          padding: "1rem",
+                          backgroundColor: "#d5f4e6",
+                          color: "#27ae60",
+                          borderRadius: "8px",
+                          marginBottom: "1.5rem",
+                          fontSize: "0.9375rem",
+                        }}
+                      >
+                        ✅ {success}
+                      </div>
+                    )}
+
+                    <form onSubmit={handleSubmit}>
+                      {/* カテゴリタイプ */}
+                      <div style={{ marginBottom: "1.5rem" }}>
+                        <label
+                          style={{
+                            display: "block",
+                            marginBottom: "0.5rem",
+                            fontWeight: "600",
+                            color: "#2c3e50",
+                          }}
+                        >
+                          カテゴリタイプ{" "}
+                          <span style={{ color: "#e74c3c" }}>*</span>
+                        </label>
+                        <select
+                          name="type"
+                          required
+                          value={formData.type}
+                          onChange={handleChange}
+                          style={{
+                            width: "100%",
+                            padding: "0.75rem",
+                            border: "1px solid #e8eaed",
+                            borderRadius: "6px",
+                            fontSize: "1rem",
+                            backgroundColor: "white",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <option value="音楽">🎵 音楽</option>
+                          <option value="アニメ">📺 アニメ</option>
+                          <option value="漫画">📚 漫画</option>
+                          <option value="映画">🎬 映画</option>
+                          <option value="ゲーム">🎮 ゲーム</option>
+                        </select>
+                      </div>
+
+                      {/* 作品名 */}
+                      <div style={{ marginBottom: "1.5rem" }}>
+                        <label
+                          style={{
+                            display: "block",
+                            marginBottom: "0.5rem",
+                            fontWeight: "600",
+                            color: "#2c3e50",
+                          }}
+                        >
+                          作品名
+                        </label>
+                        <input
+                          type="text"
+                          name="work_title"
+                          value={formData.work_title}
+                          onChange={handleChange}
+                          style={{
+                            width: "100%",
+                            padding: "0.75rem",
+                            border: "1px solid #e8eaed",
+                            borderRadius: "6px",
+                            fontSize: "1rem",
+                          }}
+                          placeholder="例：ワンピース、進撃の巨人、千と千尋の神隠し"
+                        />
+                      </div>
+
+                      {/* アーティスト名 */}
+                      <div style={{ marginBottom: "1.5rem" }}>
+                        <label
+                          style={{
+                            display: "block",
+                            marginBottom: "0.5rem",
+                            fontWeight: "600",
+                            color: "#2c3e50",
+                          }}
+                        >
+                          アーティスト名・作者名
+                        </label>
+                        <input
+                          type="text"
+                          name="artist_name"
+                          value={formData.artist_name}
+                          onChange={handleChange}
+                          style={{
+                            width: "100%",
+                            padding: "0.75rem",
+                            border: "1px solid #e8eaed",
+                            borderRadius: "6px",
+                            fontSize: "1rem",
+                          }}
+                          placeholder="例：米津玄師、尾田栄一郎、宮崎駿"
+                        />
+                      </div>
+
+                      {/* タイトル */}
+                      <div style={{ marginBottom: "1.5rem" }}>
+                        <label
+                          style={{
+                            display: "block",
+                            marginBottom: "0.5rem",
+                            fontWeight: "600",
+                            color: "#2c3e50",
+                          }}
+                        >
+                          投稿タイトル{" "}
+                          <span style={{ color: "#e74c3c" }}>*</span>
+                        </label>
+                        <input
+                          type="text"
+                          name="title"
+                          required
+                          value={formData.title}
+                          onChange={handleChange}
+                          style={{
+                            width: "100%",
+                            padding: "0.75rem",
+                            border: "1px solid #e8eaed",
+                            borderRadius: "6px",
+                            fontSize: "1rem",
+                          }}
+                          placeholder="例：感動の名作！何度見ても泣ける"
+                        />
+                      </div>
+
+                      {/* 本文 */}
+                      <div style={{ marginBottom: "1.5rem" }}>
+                        <label
+                          style={{
+                            display: "block",
+                            marginBottom: "0.5rem",
+                            fontWeight: "600",
+                            color: "#2c3e50",
+                          }}
+                        >
+                          感想・レビュー{" "}
+                          <span style={{ color: "#e74c3c" }}>*</span>
+                        </label>
+                        <textarea
+                          name="body"
+                          required
+                          value={formData.body}
+                          onChange={handleChange}
+                          style={{
+                            width: "100%",
+                            minHeight: "200px",
+                            padding: "0.75rem",
+                            border: "1px solid #e8eaed",
+                            borderRadius: "6px",
+                            fontSize: "1rem",
+                            resize: "vertical",
+                            fontFamily: "inherit",
+                          }}
+                          placeholder="作品の魅力、おすすめポイント、感想などを詳しく書いてください"
+                        />
+                      </div>
+
+                      {/* 評価（星） */}
+                      <div style={{ marginBottom: "1.5rem" }}>
+                        <label
+                          style={{
+                            display: "block",
+                            marginBottom: "0.75rem",
+                            fontWeight: "600",
+                            color: "#2c3e50",
+                          }}
+                        >
+                          あなたの評価
+                        </label>
+                        <div style={{ display: "flex", gap: "0.5rem" }}>
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button
+                              key={star}
+                              type="button"
+                              onClick={() => handleRatingChange(star)}
+                              style={{
+                                fontSize: "2rem",
+                                background: "none",
+                                border: "none",
+                                cursor: "pointer",
+                                opacity:
+                                  formData.rating && formData.rating >= star
+                                    ? 1
+                                    : 0.3,
+                                transition: "opacity 0.2s",
+                              }}
+                            >
+                              ⭐
+                            </button>
+                          ))}
+                          {formData.rating && (
+                            <span
+                              style={{
+                                marginLeft: "0.5rem",
+                                display: "flex",
+                                alignItems: "center",
+                                color: "#7f8c8d",
+                              }}
+                            >
+                              {formData.rating}.0
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* おすすめ度 */}
+                      <div style={{ marginBottom: "1.5rem" }}>
+                        <label
+                          style={{
+                            display: "block",
+                            marginBottom: "0.75rem",
+                            fontWeight: "600",
+                            color: "#2c3e50",
+                          }}
+                        >
+                          おすすめ度
+                        </label>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "0.75rem",
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          {["必見", "おすすめ", "普通", "イマイチ"].map(
+                            (level) => (
+                              <button
+                                key={level}
+                                type="button"
+                                onClick={() =>
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    recommendation_level: level as
+                                      | ""
+                                      | "必見"
+                                      | "おすすめ"
+                                      | "普通"
+                                      | "イマイチ"
+                                      | undefined,
+                                  }))
+                                }
+                                style={{
+                                  padding: "0.5rem 1rem",
+                                  border:
+                                    formData.recommendation_level === level
+                                      ? "2px solid #3498db"
+                                      : "1px solid #e8eaed",
+                                  borderRadius: "20px",
+                                  backgroundColor:
+                                    formData.recommendation_level === level
+                                      ? "#e8f4fd"
+                                      : "white",
+                                  color:
+                                    formData.recommendation_level === level
+                                      ? "#1e40af"
+                                      : "#5a6c7d",
+                                  cursor: "pointer",
+                                  fontWeight:
+                                    formData.recommendation_level === level
+                                      ? "600"
+                                      : "400",
+                                  fontSize: "0.9375rem",
+                                }}
+                              >
+                                {level}
+                              </button>
+                            )
+                          )}
+                        </div>
+                      </div>
+
+                      {/* ジャンル */}
+                      <div style={{ marginBottom: "1.5rem" }}>
+                        <label
+                          style={{
+                            display: "block",
+                            marginBottom: "0.5rem",
+                            fontWeight: "600",
+                            color: "#2c3e50",
+                          }}
+                        >
+                          ジャンル
+                        </label>
+                        <input
+                          type="text"
+                          name="genre"
+                          value={formData.genre}
+                          onChange={handleChange}
+                          style={{
+                            width: "100%",
+                            padding: "0.75rem",
+                            border: "1px solid #e8eaed",
+                            borderRadius: "6px",
+                            fontSize: "1rem",
+                          }}
+                          placeholder="例：アクション、恋愛、コメディ、SF"
+                        />
+                      </div>
+
+                      {/* リリース年 */}
+                      <div style={{ marginBottom: "1.5rem" }}>
+                        <label
+                          style={{
+                            display: "block",
+                            marginBottom: "0.5rem",
+                            fontWeight: "600",
+                            color: "#2c3e50",
+                          }}
+                        >
+                          リリース年
+                        </label>
+                        <input
+                          type="number"
+                          name="release_year"
+                          value={formData.release_year || ""}
+                          onChange={handleChange}
+                          style={{
+                            width: "100%",
+                            padding: "0.75rem",
+                            border: "1px solid #e8eaed",
+                            borderRadius: "6px",
+                            fontSize: "1rem",
+                          }}
+                          placeholder="例：2024"
+                          min="1900"
+                          max="2100"
+                        />
+                      </div>
+
+                      {/* タグ */}
+                      <div style={{ marginBottom: "1.5rem" }}>
+                        <label
+                          style={{
+                            display: "block",
+                            marginBottom: "0.5rem",
+                            fontWeight: "600",
+                            color: "#2c3e50",
+                          }}
+                        >
+                          タグ（最大10個）
+                        </label>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "0.5rem",
+                            marginBottom: "0.75rem",
+                          }}
+                        >
+                          <input
+                            type="text"
+                            value={tagInput}
+                            onChange={(e) => setTagInput(e.target.value)}
+                            onKeyPress={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleAddTag();
+                              }
+                            }}
+                            style={{
+                              flex: 1,
+                              padding: "0.5rem",
+                              border: "1px solid #e8eaed",
+                              borderRadius: "6px",
+                            }}
+                            placeholder="例：感動、泣ける、バトル、恋愛"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleAddTag}
+                            disabled={
+                              !tagInput.trim() ||
+                              (formData.tags?.length || 0) >= 10
+                            }
+                            style={{
+                              padding: "0.5rem 1rem",
+                              backgroundColor: "#3498db",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "6px",
+                              cursor:
+                                tagInput.trim() &&
+                                (formData.tags?.length || 0) < 10
+                                  ? "pointer"
+                                  : "not-allowed",
+                              opacity:
+                                tagInput.trim() &&
+                                (formData.tags?.length || 0) < 10
+                                  ? 1
+                                  : 0.5,
+                            }}
+                          >
+                            追加
+                          </button>
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: "0.5rem",
+                          }}
+                        >
+                          {formData.tags?.map((tag, index) => (
+                            <span
+                              key={index}
+                              style={{
+                                backgroundColor: "#ecf0f1",
+                                padding: "0.25rem 0.75rem",
+                                borderRadius: "9999px",
+                                fontSize: "0.875rem",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
+                                color: "#2c3e50",
+                              }}
+                            >
+                              #{tag}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveTag(index)}
+                                style={{
+                                  background: "none",
+                                  border: "none",
+                                  cursor: "pointer",
+                                  color: "#7f8c8d",
+                                  padding: 0,
+                                  fontSize: "1.25rem",
+                                  lineHeight: 1,
+                                }}
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* カテゴリID（サブカテゴリ） */}
+                      <div style={{ marginBottom: "1.5rem" }}>
+                        <label
+                          style={{
+                            display: "block",
+                            marginBottom: "0.5rem",
+                            fontWeight: "600",
+                            color: "#2c3e50",
+                          }}
+                        >
+                          サブカテゴリ{" "}
+                          <span style={{ color: "#e74c3c" }}>*</span>
+                        </label>
+                        <select
+                          name="category_id"
+                          required
+                          value={formData.category_id}
+                          onChange={handleChange}
+                          style={{
+                            width: "100%",
+                            padding: "0.75rem",
+                            border: "1px solid #e8eaed",
+                            borderRadius: "6px",
+                            fontSize: "1rem",
+                            backgroundColor: "white",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <option value={0}>
+                            サブカテゴリを選択してください
+                          </option>
+                          {categories.map((category) => (
+                            <option key={category.id} value={category.id}>
+                              {category.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* 画像URL */}
+                      <div style={{ marginBottom: "1.5rem" }}>
+                        <label
+                          style={{
+                            display: "block",
+                            marginBottom: "0.5rem",
+                            fontWeight: "600",
+                            color: "#2c3e50",
+                          }}
+                        >
+                          画像URL（オプション）
+                        </label>
+                        <input
+                          type="url"
+                          name="image_url"
+                          value={formData.image_url}
+                          onChange={handleChange}
+                          style={{
+                            width: "100%",
+                            padding: "0.75rem",
+                            border: "1px solid #e8eaed",
+                            borderRadius: "6px",
+                            fontSize: "1rem",
+                          }}
+                          placeholder="https://example.com/image.jpg"
+                        />
+                      </div>
+
+                      {/* 外部リンク */}
+                      <div style={{ marginBottom: "1.5rem" }}>
+                        <label
+                          style={{
+                            display: "block",
+                            marginBottom: "0.5rem",
+                            fontWeight: "600",
+                            color: "#2c3e50",
+                          }}
+                        >
+                          関連リンク（オプション）
+                        </label>
+                        <input
+                          type="url"
+                          name="external_url"
+                          value={formData.external_url}
+                          onChange={handleChange}
+                          style={{
+                            width: "100%",
+                            padding: "0.75rem",
+                            border: "1px solid #e8eaed",
+                            borderRadius: "6px",
+                            fontSize: "1rem",
+                          }}
+                          placeholder="公式サイト、Amazonリンクなど"
+                        />
+                      </div>
+
+                      {/* 公開状態 */}
+                      <div style={{ marginBottom: "2rem" }}>
+                        <label
+                          style={{
+                            display: "block",
+                            marginBottom: "0.75rem",
+                            fontWeight: "600",
+                            color: "#2c3e50",
+                          }}
+                        >
+                          公開設定
+                        </label>
+                        <div style={{ display: "flex", gap: "1rem" }}>
+                          <button
+                            type="button"
+                            onClick={() => handleStatusChange("draft")}
+                            style={{
+                              padding: "0.75rem 1.5rem",
+                              border:
+                                formData.status === "draft"
+                                  ? "2px solid #3498db"
+                                  : "1px solid #e8eaed",
+                              borderRadius: "6px",
+                              backgroundColor:
+                                formData.status === "draft"
+                                  ? "#e8f4fd"
+                                  : "white",
+                              color:
+                                formData.status === "draft"
+                                  ? "#1e40af"
+                                  : "#5a6c7d",
+                              cursor: "pointer",
+                              fontWeight:
+                                formData.status === "draft" ? "600" : "400",
+                            }}
+                          >
+                            📝 下書き保存
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleStatusChange("published")}
+                            style={{
+                              padding: "0.75rem 1.5rem",
+                              border:
+                                formData.status === "published"
+                                  ? "2px solid #27ae60"
+                                  : "1px solid #e8eaed",
+                              borderRadius: "6px",
+                              backgroundColor:
+                                formData.status === "published"
+                                  ? "#d5f4e6"
+                                  : "white",
+                              color:
+                                formData.status === "published"
+                                  ? "#27ae60"
+                                  : "#5a6c7d",
+                              cursor: "pointer",
+                              fontWeight:
+                                formData.status === "published" ? "600" : "400",
+                            }}
+                          >
+                            🌟 今すぐ公開
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* ボタン */}
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={handleCancel}
+                          style={{
+                            padding: "0.75rem 1.5rem",
+                            border: "1px solid #e8eaed",
+                            borderRadius: "6px",
+                            backgroundColor: "white",
+                            color: "#5a6c7d",
+                            cursor: "pointer",
+                            fontWeight: "500",
+                          }}
+                        >
+                          ❌ キャンセル
+                        </button>
+
+                        <button
+                          type="submit"
+                          disabled={loading}
+                          style={{
+                            padding: "0.75rem 2rem",
+                            backgroundColor: loading ? "#95a5a6" : "#3498db",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "6px",
+                            fontWeight: "600",
+                            cursor: loading ? "not-allowed" : "pointer",
+                            opacity: loading ? 0.6 : 1,
+                          }}
+                        >
+                          {loading
+                            ? "投稿中..."
+                            : formData.status === "published"
+                            ? "✨ 公開する"
+                            : "📝 下書き保存"}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            </main>
+          </div>
         </div>
       </div>
     </div>

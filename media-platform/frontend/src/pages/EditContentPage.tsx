@@ -7,6 +7,7 @@ import type {
   ApiResponse,
   UpdateContentRequest,
 } from "../types";
+import Sidebar from "../components/Sidebar";
 
 const EditContentPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -334,379 +335,384 @@ const EditContentPage: React.FC = () => {
   }
 
   return (
-    <div
-      style={{
-        maxWidth: "800px",
-        margin: "0 auto",
-        padding: "2rem",
-        backgroundColor: "#f9fafb",
-        minHeight: "100vh",
-      }}
-    >
-      {/* ヘッダー */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "2rem",
-          backgroundColor: "white",
-          padding: "1.5rem",
-          borderRadius: "8px",
-          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
-        }}
-      >
-        <div>
-          <h1
-            style={{
-              fontSize: "2rem",
-              fontWeight: "bold",
-              margin: "0 0 0.5rem 0",
-              color: "#374151",
-            }}
-          >
-            ✏️ 記事編集
-          </h1>
-          {originalContent && (
-            <p
-              style={{
-                margin: 0,
-                color: "#6b7280",
-                fontSize: "0.875rem",
-              }}
-            >
-              {originalContent.title}
-            </p>
-          )}
-        </div>
-        <div style={{ display: "flex", gap: "1rem" }}>
-          <button
-            onClick={handleViewContent}
-            style={{
-              padding: "0.75rem 1.5rem",
-              backgroundColor: "#6b7280",
-              color: "white",
-              border: "none",
-              borderRadius: "6px",
-              fontSize: "0.875rem",
-              fontWeight: "500",
-              cursor: "pointer",
-            }}
-          >
-            📄 記事を表示
-          </button>
-          <button
-            onClick={handleBackToDashboard}
-            style={{
-              padding: "0.75rem 1.5rem",
-              backgroundColor: "#8b5cf6",
-              color: "white",
-              border: "none",
-              borderRadius: "6px",
-              fontSize: "0.875rem",
-              fontWeight: "500",
-              cursor: "pointer",
-            }}
-          >
-            ← ダッシュボード
-          </button>
-        </div>
-      </div>
-
-      {/* 統計情報 */}
-      {originalContent && (
+    <div style={{ display: "flex", minHeight: "100vh" }}>
+      <Sidebar />
+      <div style={{ flex: 1, backgroundColor: "#f9fafb", overflow: "auto" }}>
         <div
           style={{
-            backgroundColor: "white",
-            padding: "1rem",
-            borderRadius: "8px",
-            marginBottom: "1.5rem",
-            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+            maxWidth: "800px",
+            margin: "0 auto",
+            padding: "2rem",
           }}
         >
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
-              gap: "1rem",
-              fontSize: "0.875rem",
-              color: "#6b7280",
-            }}
-          >
-            <div style={{ textAlign: "center" }}>
-              <div
-                style={{
-                  fontSize: "1.25rem",
-                  fontWeight: "bold",
-                  color: "#3b82f6",
-                }}
-              >
-                {formStats.titleLength}
-              </div>
-              <div>📝 タイトル文字数</div>
-            </div>
-            <div style={{ textAlign: "center" }}>
-              <div
-                style={{
-                  fontSize: "1.25rem",
-                  fontWeight: "bold",
-                  color: "#10b981",
-                }}
-              >
-                {formStats.bodyLength.toLocaleString()}
-              </div>
-              <div>📊 本文文字数</div>
-            </div>
-            <div style={{ textAlign: "center" }}>
-              <div
-                style={{
-                  fontSize: "1.25rem",
-                  fontWeight: "bold",
-                  color:
-                    originalContent.status === "published"
-                      ? "#10b981"
-                      : "#f59e0b",
-                }}
-              >
-                {originalContent.status === "published" ? "🚀" : "📝"}
-              </div>
-              <div>
-                {originalContent.status === "published" ? "公開中" : "下書き"}
-              </div>
-            </div>
-            <div style={{ textAlign: "center" }}>
-              <div
-                style={{
-                  fontSize: "1.25rem",
-                  fontWeight: "bold",
-                  color: formStats.hasChanges ? "#f59e0b" : "#6b7280",
-                }}
-              >
-                {formStats.hasChanges ? "📝" : "✅"}
-              </div>
-              <div>{formStats.hasChanges ? "変更あり" : "保存済み"}</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* エラー表示 */}
-      {error && (
-        <div
-          style={{
-            backgroundColor: "#fee2e2",
-            border: "1px solid #fca5a5",
-            color: "#dc2626",
-            padding: "1rem",
-            borderRadius: "6px",
-            marginBottom: "1rem",
-          }}
-        >
-          ⚠️ {error}
-        </div>
-      )}
-
-      {/* フォーム */}
-      <div
-        style={{
-          backgroundColor: "white",
-          borderRadius: "8px",
-          padding: "2rem",
-          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
-        }}
-      >
-        <form onSubmit={handlePublish}>
-          <div style={{ marginBottom: "1.5rem" }}>
-            <label
-              style={{
-                display: "block",
-                marginBottom: "0.5rem",
-                fontWeight: "500",
-                color: "#374151",
-              }}
-            >
-              タイトル *
-            </label>
-            <input
-              type="text"
-              name="title"
-              required
-              value={formData.title}
-              onChange={handleChange}
-              style={{
-                width: "100%",
-                padding: "0.75rem",
-                border: "1px solid #d1d5db",
-                borderRadius: "6px",
-                fontSize: "1rem",
-                boxSizing: "border-box",
-              }}
-              placeholder="記事のタイトルを入力してください"
-            />
-            <div
-              style={{
-                fontSize: "0.75rem",
-                color: "#6b7280",
-                marginTop: "0.25rem",
-              }}
-            >
-              {formStats.titleLength}/100文字
-            </div>
-          </div>
-
-          <div style={{ marginBottom: "1.5rem" }}>
-            <label
-              style={{
-                display: "block",
-                marginBottom: "0.5rem",
-                fontWeight: "500",
-                color: "#374151",
-              }}
-            >
-              カテゴリ *
-            </label>
-            <select
-              name="category_id"
-              required
-              value={formData.category_id}
-              onChange={handleChange}
-              style={{
-                width: "100%",
-                padding: "0.75rem",
-                border: "1px solid #d1d5db",
-                borderRadius: "6px",
-                fontSize: "1rem",
-                backgroundColor: "white",
-                boxSizing: "border-box",
-              }}
-            >
-              <option value="">カテゴリを選択してください</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
-            {formStats.selectedCategory && (
-              <div
-                style={{
-                  fontSize: "0.75rem",
-                  color: "#6b7280",
-                  marginTop: "0.25rem",
-                }}
-              >
-                選択中: {formStats.selectedCategory.name}
-              </div>
-            )}
-          </div>
-
-          <div style={{ marginBottom: "2rem" }}>
-            <label
-              style={{
-                display: "block",
-                marginBottom: "0.5rem",
-                fontWeight: "500",
-                color: "#374151",
-              }}
-            >
-              本文 *
-            </label>
-            <textarea
-              name="body"
-              required
-              value={formData.body}
-              onChange={handleChange}
-              rows={15}
-              style={{
-                width: "100%",
-                padding: "0.75rem",
-                border: "1px solid #d1d5db",
-                borderRadius: "6px",
-                fontSize: "1rem",
-                resize: "vertical",
-                fontFamily: "inherit",
-                boxSizing: "border-box",
-              }}
-              placeholder="記事の本文を入力してください..."
-            />
-            <div
-              style={{
-                fontSize: "0.75rem",
-                color: "#6b7280",
-                marginTop: "0.25rem",
-              }}
-            >
-              {formStats.bodyLength.toLocaleString()}文字
-            </div>
-          </div>
-
-          {/* 保存ボタン */}
+          {/* ヘッダー */}
           <div
             style={{
               display: "flex",
-              gap: "1rem",
-              justifyContent: "center",
-              flexWrap: "wrap",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "2rem",
+              backgroundColor: "white",
+              padding: "1.5rem",
+              borderRadius: "8px",
+              boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
             }}
           >
-            <button
-              type="button"
-              onClick={handleDraftSave}
-              disabled={saving || !isFormValid}
-              style={{
-                padding: "0.75rem 2rem",
-                backgroundColor: saving ? "#6b7280" : "#f59e0b",
-                color: "white",
-                border: "none",
-                borderRadius: "6px",
-                fontSize: "1rem",
-                fontWeight: "500",
-                cursor: saving || !isFormValid ? "not-allowed" : "pointer",
-                opacity: saving || !isFormValid ? 0.6 : 1,
-              }}
-            >
-              {saving ? "保存中..." : "📝 下書き保存"}
-            </button>
-
-            <button
-              type="submit"
-              disabled={saving || !isFormValid}
-              style={{
-                padding: "0.75rem 2rem",
-                backgroundColor: saving ? "#6b7280" : "#10b981",
-                color: "white",
-                border: "none",
-                borderRadius: "6px",
-                fontSize: "1rem",
-                fontWeight: "500",
-                cursor: saving || !isFormValid ? "not-allowed" : "pointer",
-                opacity: saving || !isFormValid ? 0.6 : 1,
-              }}
-            >
-              {saving ? "公開中..." : "🚀 公開する"}
-            </button>
+            <div>
+              <h1
+                style={{
+                  fontSize: "2rem",
+                  fontWeight: "bold",
+                  margin: "0 0 0.5rem 0",
+                  color: "#374151",
+                }}
+              >
+                ✏️ 記事編集
+              </h1>
+              {originalContent && (
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#6b7280",
+                    fontSize: "0.875rem",
+                  }}
+                >
+                  {originalContent.title}
+                </p>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: "1rem" }}>
+              <button
+                onClick={handleViewContent}
+                style={{
+                  padding: "0.75rem 1.5rem",
+                  backgroundColor: "#6b7280",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  fontSize: "0.875rem",
+                  fontWeight: "500",
+                  cursor: "pointer",
+                }}
+              >
+                📄 記事を表示
+              </button>
+              <button
+                onClick={handleBackToDashboard}
+                style={{
+                  padding: "0.75rem 1.5rem",
+                  backgroundColor: "#8b5cf6",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  fontSize: "0.875rem",
+                  fontWeight: "500",
+                  cursor: "pointer",
+                }}
+              >
+                ← ダッシュボード
+              </button>
+            </div>
           </div>
-        </form>
-      </div>
 
-      {/* 保存状態表示 */}
-      {saving && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: "2rem",
-            right: "2rem",
-            backgroundColor: "#1f2937",
-            color: "white",
-            padding: "1rem",
-            borderRadius: "8px",
-            fontSize: "0.875rem",
-            zIndex: 1000,
-          }}
-        >
-          💾 保存中...
+          {/* 統計情報 */}
+          {originalContent && (
+            <div
+              style={{
+                backgroundColor: "white",
+                padding: "1rem",
+                borderRadius: "8px",
+                marginBottom: "1.5rem",
+                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+              }}
+            >
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+                  gap: "1rem",
+                  fontSize: "0.875rem",
+                  color: "#6b7280",
+                }}
+              >
+                <div style={{ textAlign: "center" }}>
+                  <div
+                    style={{
+                      fontSize: "1.25rem",
+                      fontWeight: "bold",
+                      color: "#3b82f6",
+                    }}
+                  >
+                    {formStats.titleLength}
+                  </div>
+                  <div>📝 タイトル文字数</div>
+                </div>
+                <div style={{ textAlign: "center" }}>
+                  <div
+                    style={{
+                      fontSize: "1.25rem",
+                      fontWeight: "bold",
+                      color: "#10b981",
+                    }}
+                  >
+                    {formStats.bodyLength.toLocaleString()}
+                  </div>
+                  <div>📊 本文文字数</div>
+                </div>
+                <div style={{ textAlign: "center" }}>
+                  <div
+                    style={{
+                      fontSize: "1.25rem",
+                      fontWeight: "bold",
+                      color:
+                        originalContent.status === "published"
+                          ? "#10b981"
+                          : "#f59e0b",
+                    }}
+                  >
+                    {originalContent.status === "published" ? "🚀" : "📝"}
+                  </div>
+                  <div>
+                    {originalContent.status === "published"
+                      ? "公開中"
+                      : "下書き"}
+                  </div>
+                </div>
+                <div style={{ textAlign: "center" }}>
+                  <div
+                    style={{
+                      fontSize: "1.25rem",
+                      fontWeight: "bold",
+                      color: formStats.hasChanges ? "#f59e0b" : "#6b7280",
+                    }}
+                  >
+                    {formStats.hasChanges ? "📝" : "✅"}
+                  </div>
+                  <div>{formStats.hasChanges ? "変更あり" : "保存済み"}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* エラー表示 */}
+          {error && (
+            <div
+              style={{
+                backgroundColor: "#fee2e2",
+                border: "1px solid #fca5a5",
+                color: "#dc2626",
+                padding: "1rem",
+                borderRadius: "6px",
+                marginBottom: "1rem",
+              }}
+            >
+              ⚠️ {error}
+            </div>
+          )}
+
+          {/* フォーム */}
+          <div
+            style={{
+              backgroundColor: "white",
+              borderRadius: "8px",
+              padding: "2rem",
+              boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
+            }}
+          >
+            <form onSubmit={handlePublish}>
+              <div style={{ marginBottom: "1.5rem" }}>
+                <label
+                  style={{
+                    display: "block",
+                    marginBottom: "0.5rem",
+                    fontWeight: "500",
+                    color: "#374151",
+                  }}
+                >
+                  タイトル *
+                </label>
+                <input
+                  type="text"
+                  name="title"
+                  required
+                  value={formData.title}
+                  onChange={handleChange}
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "6px",
+                    fontSize: "1rem",
+                    boxSizing: "border-box",
+                  }}
+                  placeholder="記事のタイトルを入力してください"
+                />
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    color: "#6b7280",
+                    marginTop: "0.25rem",
+                  }}
+                >
+                  {formStats.titleLength}/100文字
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "1.5rem" }}>
+                <label
+                  style={{
+                    display: "block",
+                    marginBottom: "0.5rem",
+                    fontWeight: "500",
+                    color: "#374151",
+                  }}
+                >
+                  カテゴリ *
+                </label>
+                <select
+                  name="category_id"
+                  required
+                  value={formData.category_id}
+                  onChange={handleChange}
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "6px",
+                    fontSize: "1rem",
+                    backgroundColor: "white",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <option value="">カテゴリを選択してください</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+                {formStats.selectedCategory && (
+                  <div
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "#6b7280",
+                      marginTop: "0.25rem",
+                    }}
+                  >
+                    選択中: {formStats.selectedCategory.name}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ marginBottom: "2rem" }}>
+                <label
+                  style={{
+                    display: "block",
+                    marginBottom: "0.5rem",
+                    fontWeight: "500",
+                    color: "#374151",
+                  }}
+                >
+                  本文 *
+                </label>
+                <textarea
+                  name="body"
+                  required
+                  value={formData.body}
+                  onChange={handleChange}
+                  rows={15}
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "6px",
+                    fontSize: "1rem",
+                    resize: "vertical",
+                    fontFamily: "inherit",
+                    boxSizing: "border-box",
+                  }}
+                  placeholder="記事の本文を入力してください..."
+                />
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    color: "#6b7280",
+                    marginTop: "0.25rem",
+                  }}
+                >
+                  {formStats.bodyLength.toLocaleString()}文字
+                </div>
+              </div>
+
+              {/* 保存ボタン */}
+              <div
+                style={{
+                  display: "flex",
+                  gap: "1rem",
+                  justifyContent: "center",
+                  flexWrap: "wrap",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={handleDraftSave}
+                  disabled={saving || !isFormValid}
+                  style={{
+                    padding: "0.75rem 2rem",
+                    backgroundColor: saving ? "#6b7280" : "#f59e0b",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    fontSize: "1rem",
+                    fontWeight: "500",
+                    cursor: saving || !isFormValid ? "not-allowed" : "pointer",
+                    opacity: saving || !isFormValid ? 0.6 : 1,
+                  }}
+                >
+                  {saving ? "保存中..." : "📝 下書き保存"}
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={saving || !isFormValid}
+                  style={{
+                    padding: "0.75rem 2rem",
+                    backgroundColor: saving ? "#6b7280" : "#10b981",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    fontSize: "1rem",
+                    fontWeight: "500",
+                    cursor: saving || !isFormValid ? "not-allowed" : "pointer",
+                    opacity: saving || !isFormValid ? 0.6 : 1,
+                  }}
+                >
+                  {saving ? "公開中..." : "🚀 公開する"}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* 保存状態表示 */}
+          {saving && (
+            <div
+              style={{
+                position: "fixed",
+                bottom: "2rem",
+                right: "2rem",
+                backgroundColor: "#1f2937",
+                color: "white",
+                padding: "1rem",
+                borderRadius: "8px",
+                fontSize: "0.875rem",
+                zIndex: 1000,
+              }}
+            >
+              💾 保存中...
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 };
