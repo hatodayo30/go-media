@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 
 	"media-platform/internal/domain/entity"
@@ -66,7 +65,7 @@ func (s *ContentService) toContentResponseList(contents []*entity.Content) []*dt
 	return responses
 }
 
-// ✅ 修正: GetContents - 条件に応じた検索
+// ✅ 追加：GetContents - 条件に応じた検索
 func (s *ContentService) GetContents(ctx context.Context, query *dto.ContentQuery) ([]*dto.ContentResponse, int, error) {
 	// デフォルト値の設定
 	if query.Limit <= 0 {
@@ -79,77 +78,44 @@ func (s *ContentService) GetContents(ctx context.Context, query *dto.ContentQuer
 		query.Offset = 0
 	}
 
-	// ✅ 詳細なログ追加
-	log.Printf("🔍 GetContents called with:")
-	log.Printf("  - Status: %v", query.Status)
-	log.Printf("  - AuthorID: %v", query.AuthorID)
-	log.Printf("  - CategoryID: %v", query.CategoryID)
-	log.Printf("  - SearchQuery: %v", query.SearchQuery)
-	log.Printf("  - Limit: %d, Offset: %d", query.Limit, query.Offset)
-
 	var contents []*entity.Content
 	var err error
 
-	// ✅ 修正: statusのみで published の場合
-	if query.Status != nil && *query.Status == "published" && query.AuthorID == nil {
-		log.Printf("🔍 公開コンテンツ一覧取得: FindPublished")
-		contents, err = s.contentRepo.FindPublished(ctx, query.Limit, query.Offset)
-		if err != nil {
-			log.Printf("❌ FindPublished error: %v", err)
-			return nil, 0, fmt.Errorf("published contents lookup failed: %w", err)
-		}
-		log.Printf("✅ FindPublished success: %d contents", len(contents))
-	} else if query.Status != nil && *query.Status != "" && query.AuthorID != nil {
-		// status + authorID の場合（下書き取得用）
-		log.Printf("🔍 ステータス検索: status=%s, authorID=%d", *query.Status, *query.AuthorID)
-		contents, err = s.contentRepo.FindByStatus(ctx, *query.Status, *query.AuthorID, query.Limit, query.Offset)
-		if err != nil {
-			log.Printf("❌ FindByStatus error: %v", err)
-			return nil, 0, fmt.Errorf("contents by status lookup failed: %w", err)
-		}
-		log.Printf("✅ FindByStatus success: %d contents", len(contents))
-	} else if query.SearchQuery != nil && *query.SearchQuery != "" {
+	// ビジネスロジック: 条件に応じて適切なRepositoryメソッドを選択
+	switch {
+	case query.SearchQuery != nil && *query.SearchQuery != "":
 		// 検索クエリがある場合
-		log.Printf("🔍 検索クエリ: %s", *query.SearchQuery)
 		if query.CategoryID != nil {
+			// カテゴリ + 検索
 			contents, err = s.searchByKeywordAndCategory(ctx, *query.SearchQuery, *query.CategoryID, query.Limit, query.Offset)
 		} else if query.AuthorID != nil {
+			// 著者 + 検索
 			contents, err = s.searchByKeywordAndAuthor(ctx, *query.SearchQuery, *query.AuthorID, query.Limit, query.Offset)
 		} else {
+			// 検索のみ
 			contents, err = s.contentRepo.Search(ctx, *query.SearchQuery, query.Limit, query.Offset)
 		}
-		if err != nil {
-			log.Printf("❌ Search error: %v", err)
-			return nil, 0, fmt.Errorf("search failed: %w", err)
-		}
-	} else if query.AuthorID != nil {
+
+	case query.AuthorID != nil:
 		// 著者別
-		log.Printf("🔍 著者別取得: authorID=%d", *query.AuthorID)
 		contents, err = s.contentRepo.FindByAuthor(ctx, *query.AuthorID, query.Limit, query.Offset)
-		if err != nil {
-			log.Printf("❌ FindByAuthor error: %v", err)
-			return nil, 0, fmt.Errorf("contents by author lookup failed: %w", err)
-		}
-	} else if query.CategoryID != nil {
+
+	case query.CategoryID != nil:
 		// カテゴリ別
-		log.Printf("🔍 カテゴリ別取得: categoryID=%d", *query.CategoryID)
 		contents, err = s.contentRepo.FindByCategory(ctx, *query.CategoryID, query.Limit, query.Offset)
-		if err != nil {
-			log.Printf("❌ FindByCategory error: %v", err)
-			return nil, 0, fmt.Errorf("contents by category lookup failed: %w", err)
-		}
-	} else {
-		// デフォルト: 公開済みコンテンツ
-		log.Printf("🔍 デフォルト: 公開コンテンツ取得")
+
+	default:
+		// デフォルトは公開済みコンテンツ
 		contents, err = s.contentRepo.FindPublished(ctx, query.Limit, query.Offset)
-		if err != nil {
-			log.Printf("❌ FindPublished (default) error: %v", err)
-			return nil, 0, fmt.Errorf("default published contents lookup failed: %w", err)
-		}
 	}
 
-	log.Printf("✅ GetContents completed: %d contents found", len(contents))
+	if err != nil {
+		return nil, 0, fmt.Errorf("contents lookup failed: %w", err)
+	}
+
+	// 総数の計算（簡易実装）
 	totalCount := len(contents)
+
 	return s.toContentResponseList(contents), totalCount, nil
 }
 
@@ -277,44 +243,31 @@ func (s *ContentService) SearchContents(ctx context.Context, keyword string, lim
 }
 
 func (s *ContentService) CreateContent(ctx context.Context, authorID int64, req *dto.CreateContentRequest) (*dto.ContentResponse, error) {
-	log.Printf("📝 CreateContent開始: authorID=%d", authorID)
-	log.Printf("📝 リクエスト内容: %+v", req)
-
 	// 著者の存在確認
-	log.Printf("🔍 著者確認中: authorID=%d", authorID)
 	author, err := s.userRepo.Find(ctx, authorID)
 	if err != nil {
-		log.Printf("❌ 著者検索エラー: %v", err)
 		return nil, fmt.Errorf("author lookup failed: %w", err)
 	}
 	if author == nil {
-		log.Printf("❌ 著者が見つかりません: authorID=%d", authorID)
 		return nil, domainErrors.NewNotFoundError("User", authorID)
 	}
-	log.Printf("✅ 著者確認完了: %s", author.Username)
 
 	// カテゴリの存在確認
-	log.Printf("🔍 カテゴリ確認中: categoryID=%d", req.CategoryID)
 	category, err := s.categoryRepo.FindByID(ctx, req.CategoryID)
 	if err != nil {
-		log.Printf("❌ カテゴリ検索エラー: %v", err)
 		return nil, fmt.Errorf("category lookup failed: %w", err)
 	}
 	if category == nil {
-		log.Printf("❌ カテゴリが見つかりません: categoryID=%d", req.CategoryID)
 		return nil, domainErrors.NewNotFoundError("Category", req.CategoryID)
 	}
-	log.Printf("✅ カテゴリ確認完了: %s", category.Name)
 
-	// Tagsの初期化
+	// ★ Tagsの初期化（この3行を追加）
 	tags := req.Tags
 	if tags == nil {
 		tags = []string{}
 	}
-	log.Printf("📝 Tags初期化完了: %v", tags)
 
 	// コンテンツエンティティの作成
-	log.Printf("🔨 エンティティ作成中...")
 	content := &entity.Content{
 		Title:      req.Title,
 		Body:       req.Body,
@@ -328,35 +281,27 @@ func (s *ContentService) CreateContent(ctx context.Context, authorID int64, req 
 		WorkTitle:           req.WorkTitle,
 		Rating:              req.Rating,
 		RecommendationLevel: entity.RecommendationLevel(req.RecommendationLevel),
-		Tags:                tags,
+		Tags:                req.Tags,
 		ImageURL:            req.ImageURL,
 		ExternalURL:         req.ExternalURL,
 		ReleaseYear:         req.ReleaseYear,
 		ArtistName:          req.ArtistName,
 		Genre:               req.Genre,
 	}
-	log.Printf("✅ エンティティ作成完了: %+v", content)
 
 	// ドメインルールのバリデーション
-	log.Printf("🔍 バリデーション開始...")
 	if err := content.Validate(); err != nil {
-		log.Printf("❌ バリデーションエラー: %v", err)
 		return nil, domainErrors.NewValidationError(err.Error())
 	}
-	log.Printf("✅ バリデーション完了")
 
 	// コンテンツの保存
-	log.Printf("💾 DB保存開始...")
 	if err := s.contentRepo.Create(ctx, content); err != nil {
-		log.Printf("❌ DB保存エラー: %v", err)
 		return nil, fmt.Errorf("content creation failed: %w", err)
 	}
-	log.Printf("✅ DB保存完了: contentID=%d", content.ID)
 
-	response := s.toContentResponse(content)
-	log.Printf("✅ CreateContent完了: %+v", response)
-	return response, nil
+	return s.toContentResponse(content), nil
 }
+
 func (s *ContentService) UpdateContent(ctx context.Context, id int64, userID int64, userRole string, req *dto.UpdateContentRequest) (*dto.ContentResponse, error) {
 	// コンテンツの取得
 	content, err := s.contentRepo.Find(ctx, id)

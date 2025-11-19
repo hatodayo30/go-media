@@ -36,4 +36,6 @@ type ContentRepository interface {
 
 	// IncrementViewCount は閲覧数をインクリメントします
 	IncrementViewCount(ctx context.Context, id int64) error
+
+	FindByStatus(ctx context.Context, status string, authorID int64, limit, offset int) ([]*entity.Content, error)
 }

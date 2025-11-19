@@ -368,12 +368,9 @@ func (ctrl *ContentController) handleAdvancedSearch(c echo.Context, keyword, sor
 
 // CreateContent は新しいコンテンツを作成するハンドラです
 func (ctrl *ContentController) CreateContent(c echo.Context) error {
-	log.Println("🚀 CreateContent Controller開始")
-
 	// ユーザー認証情報を取得
 	claims, err := ctrl.getUserClaimsFromContext(c)
 	if err != nil {
-		log.Printf("❌ 認証エラー: %v", err)
 		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
 			"status": "error",
 			"error":  err.Error(),
@@ -382,46 +379,29 @@ func (ctrl *ContentController) CreateContent(c echo.Context) error {
 
 	userID, err := ctrl.getUserIDFromClaims(claims)
 	if err != nil {
-		log.Printf("❌ ユーザーID取得エラー: %v", err)
 		return c.JSON(http.StatusBadRequest, map[string]interface{}{
 			"status": "error",
 			"error":  err.Error(),
 		})
 	}
-	log.Printf("✅ 認証成功: userID=%d", userID)
 
 	var req dto.CreateContentRequest
 	if err := c.Bind(&req); err != nil {
-		log.Printf("❌ リクエストバインドエラー: %v", err)
 		return c.JSON(http.StatusBadRequest, map[string]interface{}{
 			"status": "error",
 			"error":  "リクエストデータが無効です: " + err.Error(),
 		})
 	}
-	log.Printf("✅ リクエストバインド成功: %+v", req)
-
-	// DTOのバリデーション
-	log.Println("🔍 DTOバリデーション開始...")
-	if err := req.Validate(); err != nil {
-		log.Printf("❌ DTOバリデーションエラー: %v", err)
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"status": "error",
-			"error":  err.Error(),
-		})
-	}
-	log.Println("✅ DTOバリデーション完了")
 
 	// UseCaseでコンテンツを作成
 	contentDTO, err := ctrl.contentService.CreateContent(c.Request().Context(), userID, &req)
 	if err != nil {
-		log.Printf("❌ サービス層エラー: %v", err)
 		return ctrl.handleError(c, err)
 	}
 
 	// PresenterでHTTPレスポンス用に変換
 	httpContent := ctrl.contentPresenter.ToHTTPContentResponse(contentDTO)
 
-	log.Printf("✅ CreateContent Controller完了")
 	return c.JSON(http.StatusCreated, map[string]interface{}{
 		"status": "success",
 		"data": map[string]interface{}{
