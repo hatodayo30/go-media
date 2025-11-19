@@ -92,30 +92,6 @@ func (s *FollowService) toContentResponse(content *entity.Content) dto.ContentRe
 	}
 
 	// 趣味投稿専用フィールド
-	if content.WorkTitle != "" {
-		response.WorkTitle = content.WorkTitle
-	}
-	if content.Rating != nil {
-		response.Rating = content.Rating
-	}
-	if content.RecommendationLevel != "" {
-		response.RecommendationLevel = string(content.RecommendationLevel)
-	}
-	if len(content.Tags) > 0 {
-		response.Tags = content.Tags
-	}
-	if content.ImageURL != "" {
-		response.ImageURL = content.ImageURL
-	}
-	if content.ExternalURL != "" {
-		response.ExternalURL = content.ExternalURL
-	}
-	if content.ReleaseYear != nil {
-		response.ReleaseYear = content.ReleaseYear
-	}
-	if content.ArtistName != "" {
-		response.ArtistName = content.ArtistName
-	}
 	if content.Genre != "" {
 		response.Genre = content.Genre
 	}

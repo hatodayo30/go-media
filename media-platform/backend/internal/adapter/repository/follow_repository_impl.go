@@ -320,7 +320,6 @@ func (r *followRepository) GetFollowingFeed(ctx context.Context, userID int64, l
 	var contents []*entity.Content
 	for rows.Next() {
 		content := &entity.Content{}
-		var tags pq.StringArray
 
 		err := rows.Scan(
 			&content.ID,
@@ -334,21 +333,11 @@ func (r *followRepository) GetFollowingFeed(ctx context.Context, userID int64, l
 			&content.PublishedAt,
 			&content.CreatedAt,
 			&content.UpdatedAt,
-			&content.WorkTitle,
-			&content.Rating,
-			&content.RecommendationLevel,
-			&tags,
-			&content.ImageURL,
-			&content.ExternalURL,
-			&content.ReleaseYear,
-			&content.ArtistName,
 			&content.Genre,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan content: %w", err)
 		}
-
-		content.Tags = []string(tags)
 		contents = append(contents, content)
 	}
 

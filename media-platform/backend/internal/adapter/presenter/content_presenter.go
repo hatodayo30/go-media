@@ -1,7 +1,7 @@
 package presenter
 
 import (
-	"media-platform/internal/usecase/dto" // UseCase DTOのみに依存
+	"media-platform/internal/usecase/dto"
 )
 
 // ContentPresenter はコンテンツをHTTPレスポンスDTOに変換します
@@ -20,6 +20,7 @@ type HTTPContentResponse struct {
 	Title       string `json:"title"`
 	Body        string `json:"body"`
 	Type        string `json:"type"`
+	Genre       string `json:"genre,omitempty"`
 	AuthorID    int64  `json:"author_id"`
 	CategoryID  int64  `json:"category_id,omitempty"`
 	Status      string `json:"status"`
@@ -27,17 +28,6 @@ type HTTPContentResponse struct {
 	PublishedAt string `json:"published_at,omitempty"` // RFC3339形式
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at,omitempty"`
-
-	// 趣味投稿専用フィールド
-	WorkTitle           string   `json:"work_title,omitempty"`
-	Rating              *float64 `json:"rating,omitempty"`
-	RecommendationLevel string   `json:"recommendation_level,omitempty"`
-	Tags                []string `json:"tags,omitempty"`
-	ImageURL            string   `json:"image_url,omitempty"`
-	ExternalURL         string   `json:"external_url,omitempty"`
-	ReleaseYear         *int     `json:"release_year,omitempty"`
-	ArtistName          string   `json:"artist_name,omitempty"`
-	Genre               string   `json:"genre,omitempty"`
 }
 
 // ========== UseCase DTO → HTTP Response DTO変換 ==========
@@ -53,23 +43,13 @@ func (p *ContentPresenter) ToHTTPContentResponse(contentDTO *dto.ContentResponse
 		Title:      contentDTO.Title,
 		Body:       contentDTO.Body,
 		Type:       contentDTO.Type,
+		Genre:      contentDTO.Genre,
 		AuthorID:   contentDTO.AuthorID,
 		CategoryID: contentDTO.CategoryID,
 		Status:     contentDTO.Status,
 		ViewCount:  contentDTO.ViewCount,
 		CreatedAt:  contentDTO.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:  contentDTO.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
-
-		// 趣味投稿専用フィールド
-		WorkTitle:           contentDTO.WorkTitle,
-		Rating:              contentDTO.Rating,
-		RecommendationLevel: contentDTO.RecommendationLevel,
-		Tags:                contentDTO.Tags,
-		ImageURL:            contentDTO.ImageURL,
-		ExternalURL:         contentDTO.ExternalURL,
-		ReleaseYear:         contentDTO.ReleaseYear,
-		ArtistName:          contentDTO.ArtistName,
-		Genre:               contentDTO.Genre,
 	}
 
 	// PublishedAtはnilの可能性があるため条件付き

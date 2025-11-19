@@ -37,6 +37,7 @@ func (s *ContentService) toContentResponse(content *entity.Content) *dto.Content
 		Title:       content.Title,
 		Body:        content.Body,
 		Type:        string(content.Type),
+		Genre:       content.Genre,
 		Status:      string(content.Status),
 		AuthorID:    content.AuthorID,
 		CategoryID:  content.CategoryID,
@@ -44,17 +45,6 @@ func (s *ContentService) toContentResponse(content *entity.Content) *dto.Content
 		CreatedAt:   content.CreatedAt,
 		UpdatedAt:   content.UpdatedAt,
 		PublishedAt: content.PublishedAt,
-
-		// 趣味投稿専用フィールド
-		WorkTitle:           content.WorkTitle,
-		Rating:              content.Rating,
-		RecommendationLevel: string(content.RecommendationLevel),
-		Tags:                content.Tags,
-		ImageURL:            content.ImageURL,
-		ExternalURL:         content.ExternalURL,
-		ReleaseYear:         content.ReleaseYear,
-		ArtistName:          content.ArtistName,
-		Genre:               content.Genre,
 	}
 }
 
@@ -66,7 +56,6 @@ func (s *ContentService) toContentResponseList(contents []*entity.Content) []*dt
 	return responses
 }
 
-// ✅ 修正: GetContents - 条件に応じた検索
 func (s *ContentService) GetContents(ctx context.Context, query *dto.ContentQuery) ([]*dto.ContentResponse, int, error) {
 	// デフォルト値の設定
 	if query.Limit <= 0 {
@@ -79,18 +68,19 @@ func (s *ContentService) GetContents(ctx context.Context, query *dto.ContentQuer
 		query.Offset = 0
 	}
 
-	// ✅ 詳細なログ追加
 	log.Printf("🔍 GetContents called with:")
 	log.Printf("  - Status: %v", query.Status)
 	log.Printf("  - AuthorID: %v", query.AuthorID)
 	log.Printf("  - CategoryID: %v", query.CategoryID)
 	log.Printf("  - SearchQuery: %v", query.SearchQuery)
+	log.Printf("  - Type: %v", query.Type)
+	log.Printf("  - Genre: %v", query.Genre)
 	log.Printf("  - Limit: %d, Offset: %d", query.Limit, query.Offset)
 
 	var contents []*entity.Content
 	var err error
 
-	// ✅ 修正: statusのみで published の場合
+	// statusのみで published の場合
 	if query.Status != nil && *query.Status == "published" && query.AuthorID == nil {
 		log.Printf("🔍 公開コンテンツ一覧取得: FindPublished")
 		contents, err = s.contentRepo.FindPublished(ctx, query.Limit, query.Offset)
@@ -306,34 +296,17 @@ func (s *ContentService) CreateContent(ctx context.Context, authorID int64, req 
 	}
 	log.Printf("✅ カテゴリ確認完了: %s", category.Name)
 
-	// Tagsの初期化
-	tags := req.Tags
-	if tags == nil {
-		tags = []string{}
-	}
-	log.Printf("📝 Tags初期化完了: %v", tags)
-
 	// コンテンツエンティティの作成
 	log.Printf("🔨 エンティティ作成中...")
 	content := &entity.Content{
 		Title:      req.Title,
 		Body:       req.Body,
 		Type:       entity.ContentType(req.Type),
+		Genre:      req.Genre,
 		Status:     entity.ContentStatusDraft,
 		AuthorID:   authorID,
 		CategoryID: req.CategoryID,
 		ViewCount:  0,
-
-		// 趣味投稿専用フィールド
-		WorkTitle:           req.WorkTitle,
-		Rating:              req.Rating,
-		RecommendationLevel: entity.RecommendationLevel(req.RecommendationLevel),
-		Tags:                tags,
-		ImageURL:            req.ImageURL,
-		ExternalURL:         req.ExternalURL,
-		ReleaseYear:         req.ReleaseYear,
-		ArtistName:          req.ArtistName,
-		Genre:               req.Genre,
 	}
 	log.Printf("✅ エンティティ作成完了: %+v", content)
 
@@ -357,6 +330,7 @@ func (s *ContentService) CreateContent(ctx context.Context, authorID int64, req 
 	log.Printf("✅ CreateContent完了: %+v", response)
 	return response, nil
 }
+
 func (s *ContentService) UpdateContent(ctx context.Context, id int64, userID int64, userRole string, req *dto.UpdateContentRequest) (*dto.ContentResponse, error) {
 	// コンテンツの取得
 	content, err := s.contentRepo.Find(ctx, id)
@@ -388,6 +362,9 @@ func (s *ContentService) UpdateContent(ctx context.Context, id int64, userID int
 			return nil, domainErrors.NewValidationError(err.Error())
 		}
 	}
+	if req.Genre != "" {
+		content.SetGenre(req.Genre)
+	}
 	if req.CategoryID != 0 {
 		// カテゴリの存在チェック
 		category, err := s.categoryRepo.FindByID(ctx, req.CategoryID)
@@ -403,39 +380,6 @@ func (s *ContentService) UpdateContent(ctx context.Context, id int64, userID int
 		}
 	}
 
-	// 趣味投稿専用フィールドの更新
-	if req.WorkTitle != "" {
-		content.WorkTitle = req.WorkTitle
-	}
-	if req.Rating != nil {
-		if err := content.SetRating(*req.Rating); err != nil {
-			return nil, domainErrors.NewValidationError(err.Error())
-		}
-	}
-	if req.RecommendationLevel != "" {
-		if err := content.SetRecommendationLevel(entity.RecommendationLevel(req.RecommendationLevel)); err != nil {
-			return nil, domainErrors.NewValidationError(err.Error())
-		}
-	}
-	if len(req.Tags) > 0 {
-		content.SetTags(req.Tags)
-	}
-	if req.ImageURL != "" {
-		content.ImageURL = req.ImageURL
-	}
-	if req.ExternalURL != "" {
-		content.ExternalURL = req.ExternalURL
-	}
-	if req.ReleaseYear != nil {
-		content.ReleaseYear = req.ReleaseYear
-	}
-	if req.ArtistName != "" {
-		content.ArtistName = req.ArtistName
-	}
-	if req.Genre != "" {
-		content.Genre = req.Genre
-	}
-
 	// ドメインルールのバリデーション
 	if err := content.Validate(); err != nil {
 		return nil, domainErrors.NewValidationError(err.Error())
@@ -449,7 +393,6 @@ func (s *ContentService) UpdateContent(ctx context.Context, id int64, userID int
 	return s.toContentResponse(content), nil
 }
 
-// ✅ 追加：UpdateContentStatus
 func (s *ContentService) UpdateContentStatus(ctx context.Context, id int64, userID int64, userRole string, req *dto.UpdateContentStatusRequest) (*dto.ContentResponse, error) {
 	// コンテンツの取得
 	content, err := s.contentRepo.Find(ctx, id)
@@ -503,7 +446,6 @@ func (s *ContentService) DeleteContent(ctx context.Context, id int64, userID int
 
 // ========== ヘルパーメソッド ==========
 
-// searchByKeywordAndCategory はキーワード + カテゴリ検索
 func (s *ContentService) searchByKeywordAndCategory(ctx context.Context, keyword string, categoryID int64, limit, offset int) ([]*entity.Content, error) {
 	// カテゴリ別取得後にキーワードでフィルタリング
 	contents, err := s.contentRepo.FindByCategory(ctx, categoryID, limit*2, offset)
@@ -514,7 +456,6 @@ func (s *ContentService) searchByKeywordAndCategory(ctx context.Context, keyword
 	return s.filterByKeyword(contents, keyword, limit), nil
 }
 
-// searchByKeywordAndAuthor はキーワード + 著者検索
 func (s *ContentService) searchByKeywordAndAuthor(ctx context.Context, keyword string, authorID int64, limit, offset int) ([]*entity.Content, error) {
 	// 著者別取得後にキーワードでフィルタリング
 	contents, err := s.contentRepo.FindByAuthor(ctx, authorID, limit*2, offset)
@@ -525,7 +466,6 @@ func (s *ContentService) searchByKeywordAndAuthor(ctx context.Context, keyword s
 	return s.filterByKeyword(contents, keyword, limit), nil
 }
 
-// filterByKeyword はキーワードでコンテンツをフィルタリング
 func (s *ContentService) filterByKeyword(contents []*entity.Content, keyword string, limit int) []*entity.Content {
 	var filtered []*entity.Content
 	lowerKeyword := strings.ToLower(keyword)

@@ -197,30 +197,7 @@ func (p *FollowPresenter) ToHTTPContentResponse(appDTO *dto.ContentResponse) *HT
 	}
 
 	// Optional fields
-	if appDTO.WorkTitle != "" {
-		response.WorkTitle = appDTO.WorkTitle
-	}
-	if appDTO.Rating != nil {
-		response.Rating = appDTO.Rating
-	}
-	if appDTO.RecommendationLevel != "" {
-		response.RecommendationLevel = appDTO.RecommendationLevel
-	}
-	if len(appDTO.Tags) > 0 {
-		response.Tags = appDTO.Tags
-	}
-	if appDTO.ImageURL != "" {
-		response.ImageURL = appDTO.ImageURL
-	}
-	if appDTO.ExternalURL != "" {
-		response.ExternalURL = appDTO.ExternalURL
-	}
-	if appDTO.ReleaseYear != nil {
-		response.ReleaseYear = appDTO.ReleaseYear
-	}
-	if appDTO.ArtistName != "" {
-		response.ArtistName = appDTO.ArtistName
-	}
+
 	if appDTO.Genre != "" {
 		response.Genre = appDTO.Genre
 	}
