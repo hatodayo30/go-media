@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { Content, ApiResponse } from "../types";
 import Sidebar from "../components/Sidebar";
+import { useAuth } from "../contexts/AuthContext"; // ✅ 追加
 
 const DraftsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -10,6 +11,7 @@ const DraftsPage: React.FC = () => {
   const [drafts, setDrafts] = useState<Content[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const { user } = useAuth();
   const [actionLoading, setActionLoading] = useState<{ [key: number]: string }>(
     {}
   );
@@ -35,11 +37,19 @@ const DraftsPage: React.FC = () => {
       if (!checkAuthentication()) {
         return;
       }
+      if (!user) {
+        console.log("❌ ユーザー情報なし");
+        setError("ユーザー情報の取得に失敗しました");
+        setLoading(false);
+        return;
+      }
 
       console.log("📥 下書き一覧を取得中...");
+      console.log("👤 ユーザーID:", user.id); // ✅ 追加: デバッグログ
 
       const response: ApiResponse<Content[]> = await api.getContents({
         status: "draft",
+        author_id: user.id,
       });
       console.log("📝 下書きレスポンス:", response);
 
@@ -65,7 +75,7 @@ const DraftsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [checkAuthentication, navigate]);
+  }, [checkAuthentication, navigate, user]);
 
   // useCallbackでhandlePublishをメモ化
   const handlePublish = useCallback(

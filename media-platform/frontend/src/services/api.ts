@@ -214,7 +214,10 @@ export const api = {
 
   getPublishedContents: async (): Promise<ApiResponse<Content[]>> => {
     const response = await apiClient.get<ApiResponse<ContentsApiResponse>>(
-      "/api/contents?status=published"
+      "/api/contents",
+      {
+        params: { status: "published" }, // ✅ 修正
+      }
     );
 
     if (response.data.success && response.data.data) {
@@ -230,7 +233,6 @@ export const api = {
       data: [],
     };
   },
-
   getContentById: async (id: string): Promise<ApiResponse<Content>> => {
     const response = await apiClient.get<ApiResponse<Content>>(
       `/api/contents/${id}`
@@ -241,33 +243,84 @@ export const api = {
   createContent: async (
     contentData: CreateContentRequest
   ): Promise<ApiResponse<Content>> => {
-    const response = await apiClient.post<ApiResponse<Content>>(
-      "/api/contents",
-      contentData
-    );
-    return response.data;
+    const response = await apiClient.post<any>("/api/contents", contentData);
+
+    console.log("🔍 createContent raw response:", response.data);
+
+    // バックエンドのレスポンス構造: { status: "success", data: { content: {...} } }
+    if (
+      response.data &&
+      response.data.status === "success" &&
+      response.data.data
+    ) {
+      return {
+        success: true,
+        message: "コンテンツの作成に成功しました",
+        data: response.data.data.content,
+      };
+    }
+
+    // エラーの場合
+    return {
+      success: false,
+      message: response.data?.error || "コンテンツの作成に失敗しました",
+      data: {} as Content,
+    };
   },
 
   updateContent: async (
     id: string,
     contentData: UpdateContentRequest
   ): Promise<ApiResponse<Content>> => {
-    const response = await apiClient.put<ApiResponse<Content>>(
+    const response = await apiClient.put<any>(
       `/api/contents/${id}`,
       contentData
     );
-    return response.data;
+
+    if (
+      response.data &&
+      response.data.status === "success" &&
+      response.data.data
+    ) {
+      return {
+        success: true,
+        message: "コンテンツの更新に成功しました",
+        data: response.data.data.content,
+      };
+    }
+
+    return {
+      success: false,
+      message: response.data?.error || "コンテンツの更新に失敗しました",
+      data: {} as Content,
+    };
   },
 
   updateContentStatus: async (
     id: string,
     status: string
   ): Promise<ApiResponse<Content>> => {
-    const response = await apiClient.patch<ApiResponse<Content>>(
-      `/api/contents/${id}/status`,
-      { status }
-    );
-    return response.data;
+    const response = await apiClient.patch<any>(`/api/contents/${id}/status`, {
+      status,
+    });
+
+    if (
+      response.data &&
+      response.data.status === "success" &&
+      response.data.data
+    ) {
+      return {
+        success: true,
+        message: "ステータスの更新に成功しました",
+        data: response.data.data.content,
+      };
+    }
+
+    return {
+      success: false,
+      message: response.data?.error || "ステータスの更新に失敗しました",
+      data: {} as Content,
+    };
   },
 
   deleteContent: async (id: string): Promise<ApiResponse<void>> => {
@@ -281,7 +334,7 @@ export const api = {
     categoryId: string
   ): Promise<ApiResponse<Content[]>> => {
     const response = await apiClient.get<ApiResponse<ContentsApiResponse>>(
-      `/api/contents?category_id=${categoryId}`
+      `/api/contents/category/${categoryId}` // ✅ 修正後
     );
 
     if (response.data.success && response.data.data) {
