@@ -2,9 +2,11 @@ import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import type { RegisterRequest, AuthResponse } from "../types";
+import { useAuth } from "../contexts/AuthContext"; // ✅ 追加
 
 const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
+  const { login: authLogin } = useAuth(); // ✅ 追加
 
   const [formData, setFormData] = useState<
     RegisterRequest & { confirmPassword: string }
@@ -180,6 +182,7 @@ const RegisterPage: React.FC = () => {
       });
 
       if (token && user) {
+        authLogin(token, user);
         console.log("✅ 登録成功");
         alert("🎉 登録が完了しました！ログインページに移動します。");
         navigate("/login");
@@ -223,7 +226,7 @@ const RegisterPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [formData, validateForm, navigate]);
+  }, [formData, validateForm, navigate, authLogin]);
 
   // useCallbackでフォーム送信をメモ化
   const handleSubmit = useCallback(
