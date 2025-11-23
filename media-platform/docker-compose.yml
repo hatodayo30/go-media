@@ -1,6 +1,4 @@
-# versionを削除（最新のDocker Composeでは不要）
 services:
-  # PostgreSQLデータベース
   postgres:
     image: postgres:15-alpine
     container_name: media-platform-db
@@ -12,18 +10,16 @@ services:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./backend/scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s # 追加
+      start_period: 10s
     networks:
       - media-network
     restart: unless-stopped
 
-  # APIサーバー（バックエンド）
   api:
     build:
       context: ./backend
@@ -39,15 +35,14 @@ services:
       DB_PASSWORD: postgres
       DB_NAME: media_platform
       DB_SSL_MODE: disable
-      DB_MAX_OPEN_CONNS: 25
-      DB_MAX_IDLE_CONNS: 5
-      DB_CONN_MAX_LIFETIME: 5m
-      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+      JWT_SECRET: your-secret-key
       JWT_EXPIRATION: 24h
-      CORS_ORIGIN: "http://localhost:3000"
-      LOG_LEVEL: info
+      LOG_LEVEL: debug
     volumes:
+      - ./backend:/app
+      - /app/tmp
       - ./backend/uploads:/app/uploads
+      - ./backend/migrations:/app/migrations # ✅ マイグレーションをマウント
     depends_on:
       postgres:
         condition: service_healthy
@@ -65,7 +60,28 @@ services:
       - media-network
     restart: unless-stopped
 
-  # Reactフロントエンド
+  # ✅ マイグレーション専用サービス (オプション)
+  migrate:
+    image: migrate/migrate:v4.18.1
+    container_name: media-platform-migrate
+    volumes:
+      - ./backend/migrations:/migrations
+    entrypoint: []
+    command:
+      - sh
+      - -c
+      - |
+        echo "⏳ PostgreSQLの準備を待機中..."
+        sleep 10
+        echo "🚀 マイグレーションを実行中..."
+        migrate -path /migrations -database "postgres://postgres:postgres@postgres:5432/media_platform?sslmode=disable" up
+        echo "✅ マイグレーション完了"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - media-network
+
   frontend:
     build:
       context: ./frontend
@@ -76,7 +92,6 @@ services:
     environment:
       REACT_APP_API_URL: http://localhost:8082
       CHOKIDAR_USEPOLLING: "true"
-      WATCHPACK_POLLING: "true"
       NODE_ENV: development
     volumes:
       - ./frontend:/app
@@ -88,30 +103,8 @@ services:
       - media-network
     restart: unless-stopped
 
-  # pgAdmin（オプション）
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: media-platform-pgadmin
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@example.com
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
-      PGADMIN_CONFIG_SERVER_MODE: "False"
-    ports:
-      - "5050:80"
-    volumes:
-      - pgadmin-data:/var/lib/pgadmin
-    depends_on:
-      - postgres
-    networks:
-      - media-network
-    restart: unless-stopped
-    profiles:
-      - tools
-
 volumes:
   postgres-data:
-    driver: local
-  pgadmin-data:
     driver: local
 
 networks:
