@@ -136,23 +136,27 @@ export const api = {
     return response.data;
   },
 
-  // ユーザー関連 - 修正版
   getCurrentUser: async (): Promise<ApiResponse<User>> => {
-    const response = await apiClient.get<ApiResponse<UserApiResponse>>(
-      "/api/users/me"
-    );
+    const response = await apiClient.get<any>("/api/users/me");
 
-    // レスポンス構造を適切に変換
-    if (response.data.success && response.data.data) {
+    console.log("🔍 getCurrentUser raw response:", response.data);
+
+    // ✅ バックエンドの実際の構造に合わせる
+    if (
+      response.data &&
+      response.data.status === "success" &&
+      response.data.data?.user
+    ) {
       return {
-        success: response.data.success,
-        message: response.data.message,
+        success: true,
+        message: "ユーザー情報の取得に成功しました",
         data: response.data.data.user,
       };
     }
+
     return {
       success: false,
-      message: response.data.message || "ユーザー情報の取得に失敗しました",
+      message: response.data?.error || "ユーザー情報の取得に失敗しました",
       data: {} as User,
     };
   },
@@ -160,25 +164,29 @@ export const api = {
   updateUser: async (
     userData: UpdateUserRequest
   ): Promise<ApiResponse<User>> => {
-    const response = await apiClient.put<ApiResponse<UserApiResponse>>(
-      "/api/users/me",
-      userData
-    );
+    const response = await apiClient.put<any>("/api/users/me", userData);
 
-    if (response.data.success && response.data.data) {
+    console.log("🔍 updateUser raw response:", response.data);
+
+    // ✅ バックエンドの実際の構造に合わせる
+    if (
+      response.data &&
+      response.data.status === "success" &&
+      response.data.data?.user
+    ) {
       return {
-        success: response.data.success,
-        message: response.data.message,
+        success: true,
+        message: "ユーザー情報の更新に成功しました",
         data: response.data.data.user,
       };
     }
+
     return {
       success: false,
-      message: response.data.message || "ユーザー情報の更新に失敗しました",
+      message: response.data?.error || "ユーザー情報の更新に失敗しました",
       data: {} as User,
     };
   },
-
   // 🆕 公開ユーザー一覧を取得
   getPublicUsers: async (): Promise<ApiResponse<User[]>> => {
     const response = await apiClient.get<ApiResponse<User[]>>(
@@ -191,53 +199,85 @@ export const api = {
   getContents: async (
     params?: ContentFilters
   ): Promise<ApiResponse<Content[]>> => {
-    const response = await apiClient.get<ApiResponse<ContentsApiResponse>>(
-      "/api/contents",
-      {
-        params,
-      }
-    );
+    const response = await apiClient.get("/api/contents", {
+      params,
+    });
 
-    if (response.data.success && response.data.data) {
+    console.log("🔍 getContents raw response:", response.data);
+
+    // ✅ バックエンドの実際の構造に合わせる
+    if (
+      response.data &&
+      response.data.status === "success" &&
+      response.data.data
+    ) {
       return {
-        success: response.data.success,
-        message: response.data.message,
-        data: response.data.data.contents,
+        success: true,
+        message: "コンテンツの取得に成功しました",
+        data: response.data.data.contents || [],
       };
     }
+
     return {
       success: false,
-      message: response.data.message || "コンテンツの取得に失敗しました",
+      message: response.data?.error || "コンテンツの取得に失敗しました",
       data: [],
     };
   },
 
   getPublishedContents: async (): Promise<ApiResponse<Content[]>> => {
-    const response = await apiClient.get<ApiResponse<ContentsApiResponse>>(
-      "/api/contents",
-      {
-        params: { status: "published" }, // ✅ 修正
-      }
-    );
+    const response = await apiClient.get("/api/contents", {
+      params: { status: "published" },
+    });
 
-    if (response.data.success && response.data.data) {
+    console.log("🔍 getPublishedContents raw response:", response.data);
+
+    // ✅ 修正
+    if (
+      response.data &&
+      response.data.status === "success" &&
+      response.data.data
+    ) {
       return {
-        success: response.data.success,
-        message: response.data.message,
-        data: response.data.data.contents,
+        success: true,
+        message: "公開コンテンツの取得に成功しました",
+        data: response.data.data.contents || [],
       };
     }
+
     return {
       success: false,
-      message: response.data.message || "公開コンテンツの取得に失敗しました",
+      message: response.data?.error || "公開コンテンツの取得に失敗しました",
       data: [],
     };
   },
+
   getContentById: async (id: string): Promise<ApiResponse<Content>> => {
-    const response = await apiClient.get<ApiResponse<Content>>(
-      `/api/contents/${id}`
-    );
-    return response.data;
+    console.log("🔍 Fetching content with ID:", id);
+
+    const response = await apiClient.get(`/api/contents/${id}`);
+
+    console.log("📦 getContentById raw response:", response.data);
+
+    // ✅ Backend のレスポンス構造: { status: "success", data: { content: {...} } }
+    if (
+      response.data &&
+      response.data.status === "success" &&
+      response.data.data &&
+      response.data.data.content
+    ) {
+      return {
+        success: true,
+        message: "コンテンツの取得に成功しました",
+        data: response.data.data.content, // ✅ data.content を返す
+      };
+    }
+
+    return {
+      success: false,
+      message: response.data?.error || "コンテンツの取得に失敗しました",
+      data: null as any,
+    };
   },
 
   createContent: async (
@@ -333,21 +373,29 @@ export const api = {
   getContentsByCategory: async (
     categoryId: string
   ): Promise<ApiResponse<Content[]>> => {
-    const response = await apiClient.get<ApiResponse<ContentsApiResponse>>(
-      `/api/contents/category/${categoryId}` // ✅ 修正後
+    const response = await apiClient.get(
+      `/api/contents/category/${categoryId}`
     );
 
-    if (response.data.success && response.data.data) {
+    console.log("🔍 getContentsByCategory raw response:", response.data);
+
+    // ✅ 修正
+    if (
+      response.data &&
+      response.data.status === "success" &&
+      response.data.data
+    ) {
       return {
-        success: response.data.success,
-        message: response.data.message,
-        data: response.data.data.contents,
+        success: true,
+        message: "カテゴリ別コンテンツの取得に成功しました",
+        data: response.data.data.contents || [],
       };
     }
+
     return {
       success: false,
       message:
-        response.data.message || "カテゴリ別コンテンツの取得に失敗しました",
+        response.data?.error || "カテゴリ別コンテンツの取得に失敗しました",
       data: [],
     };
   },
@@ -397,24 +445,29 @@ export const api = {
 
   // 評価関連 - 修正版
   getRatingsByUser: async (userId: string): Promise<ApiResponse<Rating[]>> => {
-    const response = await apiClient.get<ApiResponse<RatingsApiResponse>>(
-      `/api/users/${userId}/ratings`
-    );
+    const response = await apiClient.get<any>(`/api/users/${userId}/ratings`);
 
-    if (response.data.success && response.data.data) {
+    console.log("🔍 getRatingsByUser raw response:", response.data);
+
+    // ✅ バックエンドの実際の構造に合わせる
+    if (
+      response.data &&
+      response.data.status === "success" &&
+      response.data.data?.ratings
+    ) {
       return {
-        success: response.data.success,
-        message: response.data.message,
+        success: true,
+        message: "評価の取得に成功しました",
         data: response.data.data.ratings,
       };
     }
+
     return {
       success: false,
-      message: response.data.message || "評価の取得に失敗しました",
+      message: response.data?.error || "評価の取得に失敗しました",
       data: [],
     };
   },
-
   deleteRating: async (ratingId: string): Promise<ApiResponse<void>> => {
     const response = await apiClient.delete<ApiResponse<void>>(
       `/api/ratings/${ratingId}`
@@ -427,28 +480,36 @@ export const api = {
     contentId: string
   ): Promise<ApiResponse<Comment[]>> => {
     try {
-      const response = await apiClient.get<ApiResponse<CommentsApiResponse>>(
+      const response = await apiClient.get<any>(
         `/api/contents/${contentId}/comments`
       );
 
-      if (response.data.success && response.data.data) {
+      console.log("🔍 getCommentsByContentId raw response:", response.data);
+
+      // ✅ バックエンドの実際の構造に合わせる
+      if (
+        response.data &&
+        response.data.status === "success" &&
+        response.data.data?.comments
+      ) {
         return {
-          success: response.data.success,
-          message: response.data.message,
+          success: true,
+          message: "コメントの取得に成功しました",
           data: response.data.data.comments,
         };
       }
-      // 修正: 適切なフォールバック
+
       return {
         success: false,
-        message: response.data.message || "コメントの取得に失敗しました",
+        message: response.data?.error || "コメントの取得に失敗しました",
         data: [],
       };
     } catch (error: any) {
+      console.error("❌ getCommentsByContentId error:", error);
       return {
         data: [],
         success: false,
-        message: error.response?.data?.message || "Failed to get comments",
+        message: error.response?.data?.error || "Failed to get comments",
       };
     }
   },
@@ -457,16 +518,34 @@ export const api = {
     commentData: CreateCommentRequest
   ): Promise<ApiResponse<Comment>> => {
     try {
-      const response = await apiClient.post<ApiResponse<Comment>>(
-        "/api/comments",
-        commentData
-      );
-      return response.data;
+      const response = await apiClient.post<any>("/api/comments", commentData);
+
+      console.log("🔍 createComment raw response:", response.data);
+
+      // ✅ バックエンドの実際の構造に合わせる
+      if (
+        response.data &&
+        response.data.status === "success" &&
+        response.data.data?.comment
+      ) {
+        return {
+          success: true,
+          message: "コメントの作成に成功しました",
+          data: response.data.data.comment,
+        };
+      }
+
+      return {
+        success: false,
+        message: response.data?.error || "コメントの作成に失敗しました",
+        data: {} as Comment,
+      };
     } catch (error: any) {
+      console.error("❌ createComment error:", error);
       return {
         data: {} as Comment,
         success: false,
-        message: error.response?.data?.message || "Failed to create comment",
+        message: error.response?.data?.error || "Failed to create comment",
       };
     }
   },
@@ -476,16 +555,42 @@ export const api = {
     contentId: string
   ): Promise<ApiResponse<AverageRating>> => {
     try {
-      const response = await apiClient.get<ApiResponse<AverageRating>>(
-        `/api/contents/${contentId}/ratings/average`
+      // ✅ エンドポイントを修正
+      const response = await apiClient.get<any>(
+        `/api/contents/${contentId}/ratings/stats`
       );
-      return response.data;
-    } catch (error: any) {
+
+      console.log("🔍 getAverageRating raw response:", response.data);
+
+      // ✅ バックエンドの実際の構造に合わせる
+      if (
+        response.data &&
+        response.data.status === "success" &&
+        response.data.data
+      ) {
+        // バックエンドは { good_count, count, content_id } を返す
+        return {
+          success: true,
+          message: "評価統計の取得に成功しました",
+          data: {
+            average: response.data.data.count > 0 ? 1 : 0, // グッドのみなので常に1または0
+            count: response.data.data.count,
+            like_count: response.data.data.good_count,
+          },
+        };
+      }
+
       return {
         data: { average: 0, count: 0, like_count: 0 },
         success: false,
-        message:
-          error.response?.data?.message || "Failed to get average rating",
+        message: response.data?.error || "評価統計の取得に失敗しました",
+      };
+    } catch (error: any) {
+      console.error("❌ getAverageRating error:", error);
+      return {
+        data: { average: 0, count: 0, like_count: 0 },
+        success: false,
+        message: error.response?.data?.error || "Failed to get average rating",
       };
     }
   },
@@ -495,20 +600,54 @@ export const api = {
     value: number
   ): Promise<ApiResponse<Rating>> => {
     try {
-      const response = await apiClient.post<ApiResponse<Rating>>(
+      const response = await apiClient.post<any>(
         "/api/ratings/create-or-update",
         {
           content_id: contentId,
           value,
         }
       );
-      return response.data;
+
+      console.log("🔍 createOrUpdateRating raw response:", response.data);
+
+      // ✅ バックエンドの実際の構造に合わせる
+      if (
+        response.data &&
+        response.data.status === "success" &&
+        response.data.data
+      ) {
+        // ✅ 削除時と作成時の両方に対応
+        if (response.data.data.action === "removed") {
+          // 評価が削除された場合
+          return {
+            success: true,
+            message: response.data.data.message || "評価を取り消しました",
+            data: null as any, // null を返す
+          };
+        }
+
+        // 評価が作成された場合
+        if (response.data.data.rating) {
+          return {
+            success: true,
+            message: response.data.data.message || "評価を追加しました",
+            data: response.data.data.rating,
+          };
+        }
+      }
+
+      return {
+        success: false,
+        message: response.data?.error || "評価の更新に失敗しました",
+        data: {} as Rating,
+      };
     } catch (error: any) {
+      console.error("❌ createOrUpdateRating error:", error);
       return {
         data: {} as Rating,
         success: false,
         message:
-          error.response?.data?.message || "Failed to create or update rating",
+          error.response?.data?.error || "Failed to create or update rating",
       };
     }
   },
@@ -646,29 +785,39 @@ export const api = {
     params?: FollowingFeedParams
   ): Promise<ApiResponse<Content[]>> => {
     try {
-      const response = await apiClient.get<
-        ApiResponse<FollowingFeedApiResponse>
-      >(`/users/${userId}/following-feed`, { params });
+      // ✅ エンドポイントを修正 - userIdは不要
+      const response = await apiClient.get<any>(
+        "/api/users/following-feed", // ✅ /api を追加、userIdを削除
+        { params }
+      );
 
-      if (response.data.success && response.data.data) {
+      console.log("🔍 getFollowingFeed raw response:", response.data);
+
+      // ✅ バックエンドの実際の構造に合わせる
+      if (
+        response.data &&
+        response.data.status === "success" &&
+        response.data.data?.feed
+      ) {
         return {
-          success: response.data.success,
-          message: response.data.message,
+          success: true,
+          message: "フォローフィードの取得に成功しました",
           data: response.data.data.feed,
         };
       }
+
       return {
         success: false,
         message:
-          response.data.message || "フォロー中ユーザーの取得に失敗しました",
+          response.data?.error || "フォロー中ユーザーの取得に失敗しました",
         data: [],
       };
     } catch (error: any) {
+      console.error("❌ getFollowingFeed error:", error);
       return {
         data: [],
         success: false,
-        message:
-          error.response?.data?.message || "Failed to get following feed",
+        message: error.response?.data?.error || "Failed to get following feed",
       };
     }
   },

@@ -66,12 +66,13 @@ export interface CreateCategoryRequest {
   parent_id?: number;
 }
 
-// コンテンツ関連の型
+// コンテンツ関連の型（シンプル版）
 export interface Content {
   id: number;
   title: string;
   body: string;
   type: string;
+  genre?: string;
   author_id: number;
   author?: User;
   category_id: number;
@@ -81,50 +82,24 @@ export interface Content {
   published_at?: string;
   created_at: string;
   updated_at: string;
-  work_title?: string; // 作品名
-  rating?: number; // 評価（1-5）
-  recommendation_level?: string; // おすすめ度
-  tags?: string[]; // タグ
-  image_url?: string; // 画像URL
-  external_url?: string; // 外部リンク
-  release_year?: number; // リリース年
-  artist_name?: string; // アーティスト名
-  genre?: string; // ジャンル
-  description?: string;
 }
 
 export interface CreateContentRequest {
   title: string;
   body: string;
   type: "音楽" | "アニメ" | "漫画" | "映画" | "ゲーム";
+  genre?: string;
   category_id: number;
   status?: "draft" | "published";
-  work_title?: string;
-  rating?: number;
-  recommendation_level?: "必見" | "おすすめ" | "普通" | "イマイチ" | "";
-  tags?: string[];
-  image_url?: string;
-  external_url?: string;
-  release_year?: number;
-  artist_name?: string;
-  genre?: string;
 }
 
 export interface UpdateContentRequest {
   title?: string;
   body?: string;
   type?: "音楽" | "アニメ" | "漫画" | "映画" | "ゲーム";
+  genre?: string;
   category_id?: number;
   status?: "draft" | "published" | "archived";
-  work_title?: string;
-  rating?: number;
-  recommendation_level?: string;
-  tags?: string[];
-  image_url?: string;
-  external_url?: string;
-  release_year?: number;
-  artist_name?: string;
-  genre?: string;
 }
 
 export interface ContentFilters {
@@ -132,12 +107,13 @@ export interface ContentFilters {
   author_id?: number;
   status?: string;
   type?: string;
+  genre?: string;
   page?: number;
   limit?: number;
   search?: string;
 }
 
-// コメント関連の型（重複削除）
+// コメント関連の型
 export interface Comment {
   id: number;
   body: string;
@@ -162,10 +138,10 @@ export interface UpdateCommentRequest {
   body: string;
 }
 
-// 評価関連の型
+// 評価関連の型（いいね機能）
 export interface Rating {
   id: number;
-  value: number; // 1-5
+  value: number; // 1 = いいね
   user_id: number;
   user?: User;
   content_id: number;
@@ -211,6 +187,7 @@ export interface FollowingFeedParams {
   page?: number;
   limit?: number;
 }
+
 export interface FollowersApiResponse {
   followers: User[];
 }
@@ -246,13 +223,13 @@ export interface SearchParams {
   category_id?: number;
   author_id?: number;
   type?: string;
+  genre?: string;
   page?: number;
   limit?: number;
 }
 
 export interface UserApiResponse {
   user: User;
-  // 他のプロパティがある場合は追加
 }
 
 export interface ContentsApiResponse {
