@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 
@@ -338,6 +339,9 @@ func (ctrl *CommentController) extractPaginationParams(c echo.Context) (limit, o
 
 // handleError はエラーを適切なHTTPステータスコードでレスポンスします
 func (ctrl *CommentController) handleError(c echo.Context, err error) error {
+	// ✅ エラーログを追加
+	log.Printf("❌ Comment Controller Error: %v", err)
+
 	if domainErrors.IsValidationError(err) {
 		return c.JSON(http.StatusBadRequest, map[string]interface{}{
 			"status": "error",

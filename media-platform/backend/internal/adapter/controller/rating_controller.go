@@ -2,6 +2,7 @@ package controller
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -563,6 +564,9 @@ func (ctrl *RatingController) getUserRoleFromClaims(claims jwt.MapClaims) (strin
 
 // handleError はエラーを適切なHTTPステータスコードでレスポンスします
 func (ctrl *RatingController) handleError(c echo.Context, err error) error {
+	// ✅ エラーログを追加
+	log.Printf("❌ Rating Controller Error: %v", err)
+
 	// Domain Errorの種類に応じてステータスコードを決定
 	if domainErrors.IsValidationError(err) {
 		return c.JSON(http.StatusBadRequest, map[string]interface{}{
