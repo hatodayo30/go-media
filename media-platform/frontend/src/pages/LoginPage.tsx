@@ -2,9 +2,11 @@ import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import type { AuthResponse } from "../types";
+import { useAuth } from "../contexts/AuthContext";
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
+  const { login: authLogin } = useAuth();
 
   const [formData, setFormData] = useState({
     email: "",
@@ -65,7 +67,6 @@ const LoginPage: React.FC = () => {
     return true;
   }, [formData]);
 
-  // useCallbackでログイン処理をメモ化
   const handleLogin = useCallback(async () => {
     if (!validateForm()) {
       return;
@@ -134,9 +135,8 @@ const LoginPage: React.FC = () => {
       });
 
       if (token && user) {
-        // トークンとユーザー情報を保存
-        localStorage.setItem("token", token);
-        localStorage.setItem("user", JSON.stringify(user));
+        // ✅ 修正: AuthContext の login を呼ぶ
+        authLogin(token, user);
 
         console.log("💾 認証情報保存完了:", {
           userId: user.id,
@@ -144,22 +144,10 @@ const LoginPage: React.FC = () => {
           role: user.role,
         });
 
-        // 保存確認
-        const savedToken = localStorage.getItem("token");
-        const savedUser = localStorage.getItem("user");
-
-        if (savedToken && savedUser) {
-          console.log("✅ ログイン成功 - ダッシュボードへリダイレクト");
-          navigate("/dashboard");
-        } else {
-          throw new Error("認証情報の保存に失敗しました");
-        }
+        console.log("✅ ログイン成功 - ダッシュボードへリダイレクト");
+        navigate("/dashboard");
       } else {
-        console.error("❌ 認証情報が見つかりません:", {
-          response,
-          extractedToken: token,
-          extractedUser: user,
-        });
+        console.error("❌ 認証情報が見つかりません");
         throw new Error("認証レスポンスが不正です");
       }
     } catch (err: any) {
@@ -196,7 +184,7 @@ const LoginPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [formData, navigate, validateForm]);
+  }, [formData, navigate, validateForm, authLogin]);
 
   // useCallbackでフォーム送信をメモ化
   const handleSubmit = useCallback(
