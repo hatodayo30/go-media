@@ -1,23 +1,37 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { api } from "../services/api";
-import { Content, Category } from "../types";
+import { Content } from "../types";
 import { useAuth } from "../contexts/AuthContext";
 import Sidebar from "../components/Sidebar";
 
 const CategoryPage: React.FC = () => {
-  const { categoryName } = useParams<{ categoryName: string }>();
+  const { categoryName: categorySlug } = useParams<{ categoryName: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
 
   const [contents, setContents] = useState<Content[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  // ✅ スラッグから日本語名への変換
+  const getJapaneseName = useCallback((slug: string): string | null => {
+    const nameMap: Record<string, string> = {
+      music: "音楽",
+      anime: "アニメ",
+      manga: "漫画",
+      movie: "映画",
+      game: "ゲーム",
+    };
+    return nameMap[slug] || null;
+  }, []);
+
+  // ✅ 日本語名を取得
+  const categoryName = categorySlug ? getJapaneseName(categorySlug) : null;
+
   // カテゴリアイコンマッピング
-  const getCategoryIcon = (name: string): string => {
+  const getCategoryIcon = useCallback((name: string): string => {
     const icons: Record<string, string> = {
       音楽: "🎵",
       アニメ: "📺",
@@ -26,65 +40,75 @@ const CategoryPage: React.FC = () => {
       ゲーム: "🎮",
     };
     return icons[name] || "📁";
-  };
+  }, []);
 
-  // カテゴリ情報を取得
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const response = await api.getCategories();
-        if (response.success && response.data) {
-          setCategories(response.data);
-        }
-      } catch (err) {
-        console.error("カテゴリの取得に失敗:", err);
-      }
+  // ✅ カテゴリ名からIDへのマッピング
+  const getCategoryId = useCallback((name: string): number | null => {
+    const categoryMap: Record<string, number> = {
+      音楽: 1,
+      ゲーム: 2,
+      映画: 3,
+      アニメ: 4,
+      漫画: 5,
     };
-    fetchCategories();
+    return categoryMap[name] || null;
+  }, []);
+
+  // 日付フォーマット
+  const formatDate = useCallback((dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString("ja-JP");
   }, []);
 
   // カテゴリに基づいてコンテンツを取得
   useEffect(() => {
     const fetchContents = async () => {
+      if (!categoryName) {
+        setError("指定されたカテゴリが見つかりません");
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       setError(null);
 
       try {
-        const category = categories.find((c) => c.name === categoryName);
+        const categoryId = getCategoryId(categoryName);
 
-        if (!category && categories.length > 0) {
+        if (!categoryId) {
           setError("指定されたカテゴリが見つかりません");
           setLoading(false);
           return;
         }
 
-        if (category) {
-          const response = await api.getContentsByCategory(
-            category.id.toString()
-          );
+        console.log(
+          `📥 カテゴリ "${categoryName}" (ID: ${categoryId}) のコンテンツを取得中...`
+        );
 
-          if (response.success && response.data) {
-            // 公開済みのコンテンツのみフィルタリング
-            const publishedContents = response.data.filter(
-              (content) => content.status === "published"
-            );
-            setContents(publishedContents);
-          } else {
-            setError(response.message || "コンテンツの取得に失敗しました");
-          }
+        const response = await api.getContentsByCategory(categoryId.toString());
+
+        console.log("✅ API レスポンス:", response);
+
+        if (response.success && response.data) {
+          // 公開済みのコンテンツのみフィルタリング
+          const publishedContents = response.data.filter(
+            (content) => content.status === "published"
+          );
+          setContents(publishedContents);
+          console.log(`✅ 公開コンテンツ: ${publishedContents.length}件`);
+        } else {
+          setError(response.message || "コンテンツの取得に失敗しました");
         }
-      } catch (err) {
-        console.error("コンテンツの取得エラー:", err);
+      } catch (err: any) {
+        console.error("❌ コンテンツ取得エラー:", err);
         setError("コンテンツの取得中にエラーが発生しました");
       } finally {
         setLoading(false);
       }
     };
 
-    if (categories.length > 0) {
-      fetchContents();
-    }
-  }, [categoryName, categories]);
+    fetchContents();
+  }, [categoryName, getCategoryId]);
 
   // 検索フィルタリング
   const filteredContents = contents.filter((content) => {
@@ -93,9 +117,7 @@ const CategoryPage: React.FC = () => {
     const query = searchQuery.toLowerCase();
     return (
       content.title?.toLowerCase().includes(query) ||
-      content.work_title?.toLowerCase().includes(query) ||
       content.body?.toLowerCase().includes(query) ||
-      content.artist_name?.toLowerCase().includes(query) ||
       content.genre?.toLowerCase().includes(query)
     );
   });
@@ -114,6 +136,7 @@ const CategoryPage: React.FC = () => {
           }}
         >
           <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>❌</div>
             <p
               style={{
                 fontSize: "1.25rem",
@@ -121,7 +144,7 @@ const CategoryPage: React.FC = () => {
                 marginBottom: "1rem",
               }}
             >
-              カテゴリが指定されていません
+              カテゴリが見つかりません
             </p>
             <button
               onClick={() => navigate("/dashboard")}
@@ -200,7 +223,7 @@ const CategoryPage: React.FC = () => {
           <div style={{ marginTop: "1rem" }}>
             <input
               type="text"
-              placeholder="タイトル、作品名、本文、アーティスト、ジャンルで検索..."
+              placeholder="タイトル、本文、ジャンルで検索..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{
@@ -220,13 +243,10 @@ const CategoryPage: React.FC = () => {
         <main style={{ padding: "2rem" }}>
           {loading ? (
             <div
-              style={{
-                textAlign: "center",
-                padding: "3rem",
-                color: "#6b7280",
-              }}
+              style={{ textAlign: "center", padding: "3rem", color: "#6b7280" }}
             >
-              <p style={{ fontSize: "1.125rem" }}>📥 読み込み中...</p>
+              <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>⏳</div>
+              <p style={{ fontSize: "1.125rem" }}>読み込み中...</p>
             </div>
           ) : error ? (
             <div
@@ -313,7 +333,7 @@ const CategoryPage: React.FC = () => {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
                   gap: "1.5rem",
                 }}
               >
@@ -326,19 +346,20 @@ const CategoryPage: React.FC = () => {
                     <div
                       style={{
                         backgroundColor: "white",
-                        borderRadius: "8px",
+                        borderRadius: "12px",
                         padding: "1.5rem",
                         boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
-                        transition: "all 0.2s",
+                        transition: "all 0.3s ease",
                         cursor: "pointer",
                         height: "100%",
                         display: "flex",
                         flexDirection: "column",
+                        border: "1px solid #e5e7eb",
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.boxShadow =
-                          "0 4px 12px rgba(0, 0, 0, 0.15)";
-                        e.currentTarget.style.transform = "translateY(-2px)";
+                          "0 10px 15px -3px rgba(0, 0, 0, 0.1)";
+                        e.currentTarget.style.transform = "translateY(-4px)";
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.boxShadow =
@@ -346,6 +367,25 @@ const CategoryPage: React.FC = () => {
                         e.currentTarget.style.transform = "translateY(0)";
                       }}
                     >
+                      {/* ✅ ジャンルバッジ追加 */}
+                      {content.genre && (
+                        <div style={{ marginBottom: "0.75rem" }}>
+                          <span
+                            style={{
+                              display: "inline-block",
+                              padding: "0.25rem 0.75rem",
+                              backgroundColor: "#f3f4f6",
+                              color: "#374151",
+                              borderRadius: "9999px",
+                              fontSize: "0.75rem",
+                              fontWeight: "500",
+                            }}
+                          >
+                            🎭 {content.genre}
+                          </span>
+                        </div>
+                      )}
+
                       {/* タイトル */}
                       <h3
                         style={{
@@ -359,27 +399,13 @@ const CategoryPage: React.FC = () => {
                         {content.title}
                       </h3>
 
-                      {/* 作品タイトル */}
-                      {content.work_title && (
-                        <p
-                          style={{
-                            margin: "0 0 0.5rem 0",
-                            fontSize: "0.875rem",
-                            color: "#3b82f6",
-                            fontWeight: "500",
-                          }}
-                        >
-                          📖 {content.work_title}
-                        </p>
-                      )}
-
                       {/* 本文プレビュー */}
                       <p
                         style={{
                           margin: "0 0 1rem 0",
                           color: "#6b7280",
                           fontSize: "0.875rem",
-                          lineHeight: "1.5",
+                          lineHeight: "1.6",
                           overflow: "hidden",
                           display: "-webkit-box",
                           WebkitLineClamp: 3,
@@ -402,8 +428,11 @@ const CategoryPage: React.FC = () => {
                           color: "#9ca3af",
                         }}
                       >
-                        <span>✍️ {content.author?.username || "不明"}</span>
-                        <span>👁️ {content.view_count}</span>
+                        <span>👤 {content.author?.username || "匿名"}</span>
+                        <div style={{ display: "flex", gap: "0.75rem" }}>
+                          <span>👁️ {content.view_count.toLocaleString()}</span>
+                          <span>📅 {formatDate(content.created_at)}</span>
+                        </div>
                       </div>
                     </div>
                   </Link>
