@@ -17,6 +17,7 @@ const ContentDetailPage: React.FC = () => {
   const [commentText, setCommentText] = useState("");
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [userRating, setUserRating] = useState<number | null>(null);
+  const [likeCount, setLikeCount] = useState<number>(0);
 
   // カテゴリアイコン
   const getCategoryIcon = useCallback((categoryName: string) => {
@@ -30,17 +31,30 @@ const ContentDetailPage: React.FC = () => {
     return icons[categoryName] || "📁";
   }, []);
 
-  // おすすめ度のスタイル
-  const getRecommendationStyle = useCallback((level: string) => {
-    const styles: Record<string, { bg: string; color: string; icon: string }> =
-      {
-        必見: { bg: "#ffe4e6", color: "#be123c", icon: "🔥" },
-        おすすめ: { bg: "#e8f4fd", color: "#1e40af", icon: "👍" },
-        普通: { bg: "#f5f6fa", color: "#7f8c8d", icon: "😐" },
-        イマイチ: { bg: "#ecf0f1", color: "#5a6c7d", icon: "👎" },
-      };
-    return styles[level] || styles["普通"];
+  const getCategorySlug = useCallback((categoryName: string): string => {
+    const slugMap: Record<string, string> = {
+      音楽: "music",
+      アニメ: "anime",
+      漫画: "manga",
+      映画: "movie",
+      ゲーム: "game",
+    };
+    return slugMap[categoryName] || categoryName.toLowerCase();
   }, []);
+
+  const fetchLikeCount = useCallback(async () => {
+    if (!id) return;
+
+    try {
+      const response = await api.getAverageRating(id);
+      if (response.success && response.data) {
+        setLikeCount(response.data.like_count);
+      }
+    } catch (err: any) {
+      console.error("❌ いいね数取得エラー:", err);
+      setLikeCount(0);
+    }
+  }, [id]);
 
   // コンテンツ取得
   const fetchContent = useCallback(async () => {
@@ -104,13 +118,18 @@ const ContentDetailPage: React.FC = () => {
     setError("");
 
     try {
-      await Promise.all([fetchContent(), fetchComments(), fetchUserRating()]);
+      await Promise.all([
+        fetchContent(),
+        fetchComments(),
+        fetchUserRating(),
+        fetchLikeCount(),
+      ]);
     } catch (error) {
       console.error("❌ データ読み込みエラー:", error);
     } finally {
       setLoading(false);
     }
-  }, [fetchContent, fetchComments, fetchUserRating]);
+  }, [fetchContent, fetchComments, fetchUserRating, fetchLikeCount]);
 
   useEffect(() => {
     loadData();
@@ -132,7 +151,8 @@ const ContentDetailPage: React.FC = () => {
         });
 
         if (response.success && response.data) {
-          setComments((prev) => [...prev, response.data!]);
+          // 新しいコメントを先頭に追加
+          setComments((prev) => [response.data!, ...prev]);
           setCommentText("");
         } else {
           alert(response.message || "コメントの投稿に失敗しました");
@@ -155,7 +175,13 @@ const ContentDetailPage: React.FC = () => {
       try {
         const response = await api.createOrUpdateRating(parseInt(id), rating);
         if (response.success) {
-          setUserRating(rating);
+          if (response.data === null) {
+            setUserRating(null);
+          } else {
+            setUserRating(rating);
+          }
+          // ✅ いいね数を再取得
+          await fetchLikeCount();
         } else {
           alert(response.message || "評価の更新に失敗しました");
         }
@@ -164,18 +190,34 @@ const ContentDetailPage: React.FC = () => {
         alert("評価の更新中にエラーが発生しました");
       }
     },
-    [id, currentUser]
+    [id, currentUser, fetchLikeCount]
   );
 
-  // 日付フォーマット
+  // 日付フォーマット (相対時間)
   const formatDate = useCallback((dateString: string) => {
     const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return "たった今";
+    if (diffMins < 60) return `${diffMins}分前`;
+    if (diffHours < 24) return `${diffHours}時間前`;
+    if (diffDays < 7) return `${diffDays}日前`;
+
     return date.toLocaleDateString("ja-JP", {
-      year: "numeric",
-      month: "long",
+      month: "numeric",
       day: "numeric",
     });
   }, []);
+
+  // コメントを新しい順にソート
+  const sortedComments = [...comments].sort(
+    (a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
 
   if (loading) {
     return (
@@ -236,10 +278,6 @@ const ContentDetailPage: React.FC = () => {
     );
   }
 
-  const recommendationStyle = content.recommendation_level
-    ? getRecommendationStyle(content.recommendation_level)
-    : null;
-
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
       <Sidebar />
@@ -264,7 +302,11 @@ const ContentDetailPage: React.FC = () => {
             }}
           >
             <Link
-              to="/dashboard"
+              to={
+                content.type
+                  ? `/categories/${getCategorySlug(content.type)}`
+                  : "/dashboard"
+              }
               style={{
                 color: "#5a6c7d",
                 textDecoration: "none",
@@ -275,7 +317,7 @@ const ContentDetailPage: React.FC = () => {
                 gap: "0.5rem",
               }}
             >
-              ← ホームに戻る
+              ← {content.type || "カテゴリ"}に戻る
             </Link>
             {currentUser && content.author_id === currentUser.id && (
               <Link
@@ -295,6 +337,7 @@ const ContentDetailPage: React.FC = () => {
             )}
           </div>
         </header>
+
         <div
           style={{
             maxWidth: "800px",
@@ -330,6 +373,24 @@ const ContentDetailPage: React.FC = () => {
                 {getCategoryIcon(content.type || content.category?.name || "")}
                 {content.type || content.category?.name}
               </span>
+              {content.genre && (
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    padding: "0.5rem 1rem",
+                    backgroundColor: "#f3f4f6",
+                    color: "#374151",
+                    borderRadius: "20px",
+                    fontSize: "0.875rem",
+                    fontWeight: "500",
+                    marginLeft: "0.5rem",
+                  }}
+                >
+                  🎭 {content.genre}
+                </span>
+              )}
             </div>
 
             {/* タイトル */}
@@ -365,137 +426,19 @@ const ContentDetailPage: React.FC = () => {
               <span
                 style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
               >
-                📅 {formatDate(content.created_at)}
+                📅{" "}
+                {new Date(content.created_at).toLocaleDateString("ja-JP", {
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
+              </span>
+              <span
+                style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+              >
+                👁️ {content.view_count.toLocaleString()}
               </span>
             </div>
-
-            {/* おすすめ度 & 評価 */}
-            {(content.recommendation_level || content.rating) && (
-              <div
-                style={{
-                  display: "flex",
-                  gap: "1.5rem",
-                  marginBottom: "2rem",
-                  padding: "1.25rem",
-                  backgroundColor: "#f5f6fa",
-                  borderRadius: "10px",
-                }}
-              >
-                {recommendationStyle && (
-                  <div>
-                    <div
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#7f8c8d",
-                        marginBottom: "0.25rem",
-                        fontWeight: "500",
-                      }}
-                    >
-                      おすすめ度
-                    </div>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        padding: "0.5rem 1rem",
-                        backgroundColor: recommendationStyle.bg,
-                        color: recommendationStyle.color,
-                        borderRadius: "20px",
-                        fontSize: "0.875rem",
-                        fontWeight: "600",
-                      }}
-                    >
-                      {recommendationStyle.icon} {content.recommendation_level}
-                    </span>
-                  </div>
-                )}
-                {content.rating && (
-                  <div>
-                    <div
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#7f8c8d",
-                        marginBottom: "0.25rem",
-                        fontWeight: "500",
-                      }}
-                    >
-                      評価
-                    </div>
-                    <div style={{ fontSize: "1.5rem" }}>
-                      {"⭐".repeat(Math.round(content.rating))}
-                      <span
-                        style={{
-                          fontSize: "1rem",
-                          color: "#7f8c8d",
-                          marginLeft: "0.5rem",
-                        }}
-                      >
-                        {content.rating.toFixed(1)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* 作品情報 */}
-            {(content.work_title ||
-              content.artist_name ||
-              content.genre ||
-              content.release_year) && (
-              <div
-                style={{
-                  marginBottom: "2rem",
-                  padding: "1.25rem",
-                  backgroundColor: "#f5f6fa",
-                  borderRadius: "10px",
-                  fontSize: "0.9375rem",
-                  color: "#5a6c7d",
-                }}
-              >
-                <div
-                  style={{
-                    marginBottom: "0.75rem",
-                    fontSize: "0.875rem",
-                    fontWeight: "600",
-                    color: "#2c3e50",
-                  }}
-                >
-                  📚 作品情報
-                </div>
-                {content.work_title && (
-                  <div style={{ marginBottom: "0.5rem" }}>
-                    🎬 作品名:{" "}
-                    <strong style={{ color: "#2c3e50" }}>
-                      {content.work_title}
-                    </strong>
-                  </div>
-                )}
-                {content.artist_name && (
-                  <div style={{ marginBottom: "0.5rem" }}>
-                    🎨 アーティスト:{" "}
-                    <strong style={{ color: "#2c3e50" }}>
-                      {content.artist_name}
-                    </strong>
-                  </div>
-                )}
-                {content.genre && (
-                  <div style={{ marginBottom: "0.5rem" }}>
-                    🎭 ジャンル:{" "}
-                    <strong style={{ color: "#2c3e50" }}>
-                      {content.genre}
-                    </strong>
-                  </div>
-                )}
-                {content.release_year && (
-                  <div>
-                    📆 リリース年:{" "}
-                    <strong style={{ color: "#2c3e50" }}>
-                      {content.release_year}年
-                    </strong>
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* 本文 */}
             <div
@@ -508,53 +451,6 @@ const ContentDetailPage: React.FC = () => {
             >
               {content.body}
             </div>
-
-            {/* 画像 */}
-            {content.image_url && (
-              <div
-                style={{
-                  marginTop: "2rem",
-                  textAlign: "center",
-                }}
-              >
-                <img
-                  src={content.image_url}
-                  alt={content.work_title || content.title}
-                  style={{
-                    maxWidth: "100%",
-                    borderRadius: "8px",
-                    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
-                  }}
-                />
-              </div>
-            )}
-
-            {/* 外部リンク */}
-            {content.external_url && (
-              <div
-                style={{
-                  marginTop: "2rem",
-                  padding: "1rem",
-                  backgroundColor: "#e8f4fd",
-                  borderRadius: "8px",
-                  textAlign: "center",
-                }}
-              >
-                <a
-                  href={content.external_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    color: "#1e40af",
-                    textDecoration: "none",
-                    fontWeight: "600",
-                    fontSize: "1rem",
-                  }}
-                >
-                  🔗 詳細情報・購入ページへ →
-                </a>
-              </div>
-            )}
           </article>
 
           {/* 評価セクション */}
@@ -568,78 +464,65 @@ const ContentDetailPage: React.FC = () => {
                 marginBottom: "2rem",
               }}
             >
-              <h3
+              <div
                 style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
                   marginBottom: "1rem",
-                  color: "#2c3e50",
-                  fontSize: "1.125rem",
-                  fontWeight: "600",
                 }}
               >
-                👍 この投稿を評価
-              </h3>
-              <div style={{ display: "flex", gap: "0.75rem" }}>
-                <button
-                  onClick={() => handleRating(1)}
+                <h3
                   style={{
-                    flex: 1,
-                    padding: "0.75rem",
-                    backgroundColor: userRating === 1 ? "#27ae60" : "#ecf0f1",
-                    color: userRating === 1 ? "white" : "#2c3e50",
-                    border: "2px solid",
-                    borderColor: userRating === 1 ? "#27ae60" : "#bdc3c7",
-                    borderRadius: "8px",
-                    cursor: "pointer",
+                    margin: 0,
+                    color: "#2c3e50",
+                    fontSize: "1.125rem",
                     fontWeight: "600",
-                    fontSize: "1rem",
-                    transition: "all 0.2s",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (userRating !== 1) {
-                      e.currentTarget.style.borderColor = "#27ae60";
-                      e.currentTarget.style.backgroundColor = "#d5f4e6";
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (userRating !== 1) {
-                      e.currentTarget.style.borderColor = "#bdc3c7";
-                      e.currentTarget.style.backgroundColor = "#ecf0f1";
-                    }
                   }}
                 >
-                  👍 いいね！
-                </button>
-                <button
-                  onClick={() => handleRating(0)}
+                  👍 この投稿を評価
+                </h3>
+                {/* ✅ いいね数を表示 */}
+                <span
                   style={{
-                    flex: 1,
-                    padding: "0.75rem",
-                    backgroundColor: userRating === 0 ? "#e74c3c" : "#ecf0f1",
-                    color: userRating === 0 ? "white" : "#2c3e50",
-                    border: "2px solid",
-                    borderColor: userRating === 0 ? "#e74c3c" : "#bdc3c7",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    fontWeight: "600",
-                    fontSize: "1rem",
-                    transition: "all 0.2s",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (userRating !== 0) {
-                      e.currentTarget.style.borderColor = "#e74c3c";
-                      e.currentTarget.style.backgroundColor = "#fadbd8";
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (userRating !== 0) {
-                      e.currentTarget.style.borderColor = "#bdc3c7";
-                      e.currentTarget.style.backgroundColor = "#ecf0f1";
-                    }
+                    fontSize: "0.875rem",
+                    color: "#7f8c8d",
+                    fontWeight: "500",
                   }}
                 >
-                  👎 うーん...
-                </button>
+                  ❤️ {likeCount} いいね
+                </span>
               </div>
+              <button
+                onClick={() => handleRating(1)}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  backgroundColor: userRating === 1 ? "#27ae60" : "#ecf0f1",
+                  color: userRating === 1 ? "white" : "#2c3e50",
+                  border: "2px solid",
+                  borderColor: userRating === 1 ? "#27ae60" : "#bdc3c7",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "1rem",
+                  transition: "all 0.2s",
+                }}
+                onMouseEnter={(e) => {
+                  if (userRating !== 1) {
+                    e.currentTarget.style.borderColor = "#27ae60";
+                    e.currentTarget.style.backgroundColor = "#d5f4e6";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (userRating !== 1) {
+                    e.currentTarget.style.borderColor = "#bdc3c7";
+                    e.currentTarget.style.backgroundColor = "#ecf0f1";
+                  }
+                }}
+              >
+                👍 いいね!
+              </button>
             </div>
           )}
 
@@ -654,7 +537,7 @@ const ContentDetailPage: React.FC = () => {
           >
             <h3
               style={{
-                marginBottom: "1.5rem",
+                margin: "0 0 1.5rem 0",
                 color: "#2c3e50",
                 fontSize: "1.25rem",
                 fontWeight: "600",
@@ -683,6 +566,7 @@ const ContentDetailPage: React.FC = () => {
                     fontSize: "0.9375rem",
                     fontFamily: "inherit",
                     outline: "none",
+                    boxSizing: "border-box",
                   }}
                   onFocus={(e) => {
                     e.currentTarget.style.borderColor = "#3498db";
@@ -751,8 +635,8 @@ const ContentDetailPage: React.FC = () => {
               </div>
             )}
 
-            {/* コメント一覧 */}
-            {comments.length > 0 ? (
+            {/* コメント一覧 (新しい順) */}
+            {sortedComments.length > 0 ? (
               <div
                 style={{
                   display: "flex",
@@ -760,14 +644,14 @@ const ContentDetailPage: React.FC = () => {
                   gap: "1rem",
                 }}
               >
-                {comments.map((comment) => (
+                {sortedComments.map((comment) => (
                   <div
                     key={comment.id}
                     style={{
                       padding: "1.25rem",
                       border: "1px solid #e8eaed",
                       borderRadius: "8px",
-                      backgroundColor: "#f5f6fa",
+                      backgroundColor: "#fafbfc",
                     }}
                   >
                     <div
@@ -785,7 +669,7 @@ const ContentDetailPage: React.FC = () => {
                           fontSize: "0.9375rem",
                         }}
                       >
-                        {comment.user?.username || "ユーザー"}
+                        👤 {comment.user?.username || "ユーザー"}
                       </span>
                       <span
                         style={{
@@ -818,7 +702,9 @@ const ContentDetailPage: React.FC = () => {
                 }}
               >
                 <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>💭</div>
-                <p style={{ margin: 0 }}>まだコメントがありません</p>
+                <p style={{ margin: 0, fontSize: "1rem", fontWeight: "500" }}>
+                  まだコメントがありません
+                </p>
                 <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.875rem" }}>
                   最初のコメントを投稿しましょう！
                 </p>
