@@ -341,20 +341,6 @@ const LikesPage: React.FC = () => {
                       {content.title}
                     </h3>
 
-                    {/* 作品タイトル */}
-                    {content.work_title && (
-                      <p
-                        style={{
-                          margin: "0 0 0.5rem 0",
-                          fontSize: "0.875rem",
-                          color: "#3b82f6",
-                          fontWeight: "500",
-                        }}
-                      >
-                        📖 {content.work_title}
-                      </p>
-                    )}
-
                     {/* 本文プレビュー */}
                     <p
                       style={{
