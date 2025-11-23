@@ -73,7 +73,7 @@ const App: React.FC = () => {
 
             {/* カテゴリページ */}
             <Route
-              path="/category/:categoryName"
+              path="/categories/:categoryName"
               element={
                 <PrivateRoute>
                   <CategoryPage />
