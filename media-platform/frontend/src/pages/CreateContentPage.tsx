@@ -6,19 +6,38 @@ import Sidebar from "../components/Sidebar";
 
 const CreateContentPage: React.FC = () => {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState<CreateContentRequest>({
+  const [formData, setFormData] = useState<{
+    title: string;
+    body: string;
+    type: "" | "音楽" | "ゲーム" | "映画" | "アニメ" | "漫画";
+    genre: string;
+    category_id: number;
+    status: "draft" | "published";
+  }>({
     title: "",
     body: "",
-    type: "音楽",
-    category_id: 1, // ダミー値（バックエンドが必須の場合のため）
-    status: "draft",
+    type: "",
     genre: "",
+    category_id: 0,
+    status: "draft",
   });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [pageLoading, setPageLoading] = useState(true);
+
+  // ✅ カテゴリ名からIDへのマッピング
+  const getCategoryId = useCallback((categoryName: string): number => {
+    const categoryMap: Record<string, number> = {
+      音楽: 1,
+      ゲーム: 2,
+      映画: 3,
+      アニメ: 4,
+      漫画: 5,
+    };
+    return categoryMap[categoryName] || 1;
+  }, []);
 
   // 認証チェック
   const checkAuthentication = useCallback(() => {
@@ -39,6 +58,10 @@ const CreateContentPage: React.FC = () => {
 
   // バリデーション
   const validateForm = useCallback(() => {
+    if (!formData.type) {
+      setError("カテゴリーを選択してください");
+      return false;
+    }
     if (!formData.title.trim()) {
       setError("投稿タイトルを入力してください");
       return false;
@@ -64,9 +87,18 @@ const CreateContentPage: React.FC = () => {
           return;
         }
 
-        const response: ApiResponse<Content> = await api.createContent(
-          formData
-        );
+        // ✅ デバッグログ追加
+        console.log("📤 送信するデータ:", formData);
+        console.log("📤 ステータス:", formData.status); // ← 追加
+
+        const response: ApiResponse<Content> = await api.createContent({
+          title: formData.title.trim(),
+          body: formData.body.trim(),
+          type: formData.type as CreateContentRequest["type"],
+          genre: formData.genre,
+          category_id: formData.category_id,
+          status: formData.status,
+        });
 
         if (response.success && response.data) {
           const successMessage =
@@ -75,11 +107,20 @@ const CreateContentPage: React.FC = () => {
               : "投稿が下書きとして保存されました！";
 
           setSuccess(successMessage);
-          setTimeout(() => navigate("/dashboard"), 2000);
+
+          // ✅ ステータスに応じてリダイレクト先を変更
+          setTimeout(() => {
+            if (formData.status === "published") {
+              navigate("/dashboard"); // 公開の場合はダッシュボードへ
+            } else {
+              navigate("/drafts"); // 下書きの場合は下書きページへ
+            }
+          }, 2000);
         } else {
           throw new Error(response.message || "投稿の作成に失敗しました");
         }
       } catch (err: any) {
+        console.error("❌ 投稿エラー:", err); // ← 追加
         setError(err.response?.data?.error || "投稿の作成に失敗しました");
       } finally {
         setLoading(false);
@@ -88,7 +129,7 @@ const CreateContentPage: React.FC = () => {
     [formData, validateForm, navigate]
   );
 
-  // フィールド変更
+  // ✅ フィールド変更 - category_idも更新
   const handleChange = useCallback(
     (
       e: React.ChangeEvent<
@@ -96,12 +137,24 @@ const CreateContentPage: React.FC = () => {
       >
     ) => {
       const { name, value } = e.target;
-      setFormData((prev) => ({
-        ...prev,
-        [name]: value,
-      }));
+
+      // ✅ typeが変更されたらcategory_idも更新
+      if (name === "type") {
+        const categoryId = getCategoryId(value);
+        console.log(`🔄 カテゴリ変更: ${value} → ID: ${categoryId}`);
+        setFormData((prev) => ({
+          ...prev,
+          type: value as CreateContentRequest["type"], // ← 型アサーションを追加
+          category_id: categoryId,
+        }));
+      } else {
+        setFormData((prev) => ({
+          ...prev,
+          [name]: value,
+        }));
+      }
     },
-    []
+    [getCategoryId]
   );
 
   // ステータス変更
@@ -112,7 +165,7 @@ const CreateContentPage: React.FC = () => {
   // キャンセル
   const handleCancel = useCallback(() => {
     if (formData.title || formData.body) {
-      if (!window.confirm("入力内容が失われますが、よろしいですか？")) return;
+      if (!window.confirm("入力内容が失われますが、よろしいですか?")) return;
     }
     navigate("/dashboard");
   }, [formData, navigate]);
@@ -180,6 +233,24 @@ const CreateContentPage: React.FC = () => {
               boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
             }}
           >
+            {/* ✅ デバッグ表示（開発時のみ表示） */}
+            {process.env.NODE_ENV === "development" && (
+              <div
+                style={{
+                  padding: "1rem",
+                  backgroundColor: "#f3f4f6",
+                  borderRadius: "8px",
+                  marginBottom: "2rem",
+                  fontSize: "0.875rem",
+                  color: "#374151",
+                }}
+              >
+                <strong>🔍 デバッグ情報:</strong>
+                <br />
+                カテゴリ: {formData.type} (ID: {formData.category_id})
+              </div>
+            )}
+
             {/* エラー表示 */}
             {error && (
               <div
@@ -215,7 +286,7 @@ const CreateContentPage: React.FC = () => {
             )}
 
             <form onSubmit={handleSubmit}>
-              {/* カテゴリー */}
+              {/* カテゴリー選択（カード形式） */}
               <div style={{ marginBottom: "2.5rem" }}>
                 <label
                   style={{
@@ -226,37 +297,112 @@ const CreateContentPage: React.FC = () => {
                     marginBottom: "1rem",
                   }}
                 >
-                  カテゴリー
+                  カテゴリー <span style={{ color: "#ef4444" }}>*</span>
                 </label>
-                <select
-                  name="type"
-                  required
-                  value={formData.type}
-                  onChange={handleChange}
+
+                <div
                   style={{
-                    width: "100%",
-                    padding: "1rem",
-                    border: "2px solid #e5e7eb",
-                    borderRadius: "8px",
-                    fontSize: "1.125rem",
-                    backgroundColor: "white",
-                    cursor: "pointer",
-                    transition: "border-color 0.2s",
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = "#3b82f6";
-                    e.currentTarget.style.outline = "none";
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = "#e5e7eb";
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+                    gap: "1rem",
                   }}
                 >
-                  <option value="音楽">🎵 音楽</option>
-                  <option value="アニメ">📺 アニメ</option>
-                  <option value="漫画">📚 漫画</option>
-                  <option value="映画">🎬 映画</option>
-                  <option value="ゲーム">🎮 ゲーム</option>
-                </select>
+                  {[
+                    { value: "音楽", icon: "🎵", color: "#ec4899" },
+                    { value: "ゲーム", icon: "🎮", color: "#8b5cf6" },
+                    { value: "映画", icon: "🎬", color: "#f59e0b" },
+                    { value: "アニメ", icon: "📺", color: "#10b981" },
+                    { value: "漫画", icon: "📚", color: "#3b82f6" },
+                  ].map((category) => {
+                    const isSelected = formData.type === category.value;
+                    return (
+                      <button
+                        key={category.value}
+                        type="button"
+                        onClick={() => {
+                          const categoryId = getCategoryId(category.value);
+                          console.log(
+                            `🔄 カテゴリ選択: ${category.value} → ID: ${categoryId}`
+                          );
+                          setFormData((prev) => ({
+                            ...prev,
+                            type: category.value as CreateContentRequest["type"],
+                            category_id: categoryId,
+                          }));
+                        }}
+                        style={{
+                          padding: "1.5rem 1rem",
+                          border: isSelected
+                            ? `3px solid ${category.color}`
+                            : "2px solid #e5e7eb",
+                          borderRadius: "12px",
+                          backgroundColor: isSelected
+                            ? `${category.color}20`
+                            : "white",
+                          cursor: "pointer",
+                          transition: "all 0.2s ease",
+                          textAlign: "center",
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                          transform: isSelected ? "scale(1.05)" : "scale(1)",
+                          boxShadow: isSelected
+                            ? `0 4px 12px ${category.color}40`
+                            : "0 1px 3px rgba(0, 0, 0, 0.1)",
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isSelected) {
+                            e.currentTarget.style.borderColor = category.color;
+                            e.currentTarget.style.transform = "scale(1.03)";
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isSelected) {
+                            e.currentTarget.style.borderColor = "#e5e7eb";
+                            e.currentTarget.style.transform = "scale(1)";
+                          }
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "2.5rem",
+                            lineHeight: "1",
+                          }}
+                        >
+                          {category.icon}
+                        </div>
+                        <div
+                          style={{
+                            fontWeight: "600",
+                            fontSize: "0.95rem",
+                            color: isSelected ? category.color : "#6b7280",
+                            transition: "color 0.2s",
+                          }}
+                        >
+                          {category.value}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* 未選択の場合の警告メッセージ */}
+                {!formData.type && (
+                  <p
+                    style={{
+                      marginTop: "0.75rem",
+                      fontSize: "0.875rem",
+                      color: "#ef4444",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                    }}
+                  >
+                    <span>⚠️</span>
+                    <span>カテゴリーを選択してください</span>
+                  </p>
+                )}
               </div>
 
               {/* ジャンル */}
@@ -285,7 +431,7 @@ const CreateContentPage: React.FC = () => {
                     fontSize: "1.125rem",
                     transition: "border-color 0.2s",
                   }}
-                  placeholder="例：アクション、恋愛、コメディ"
+                  placeholder="例:アクション、恋愛、コメディ"
                   onFocus={(e) => {
                     e.currentTarget.style.borderColor = "#3b82f6";
                     e.currentTarget.style.outline = "none";
@@ -323,7 +469,7 @@ const CreateContentPage: React.FC = () => {
                     fontSize: "1.125rem",
                     transition: "border-color 0.2s",
                   }}
-                  placeholder="例：感動の名作！何度見ても泣ける"
+                  placeholder="例:感動の名作!何度見ても泣ける"
                   onFocus={(e) => {
                     e.currentTarget.style.borderColor = "#3b82f6";
                     e.currentTarget.style.outline = "none";
