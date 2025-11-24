@@ -154,11 +154,10 @@ const DraftsPage: React.FC = () => {
   const handleEdit = useCallback(
     (id: number) => {
       console.log(`✏️ 編集ページへ遷移: コンテンツID ${id}`);
-      navigate(`/edit/${id}`);
+      navigate(`/contents/${id}/edit`); // ← ここを修正
     },
     [navigate]
   );
-
   // useCallbackでformatDateをメモ化
   const formatDate = useCallback((dateString: string) => {
     const date = new Date(dateString);
