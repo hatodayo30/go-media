@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"media-platform/internal/domain/entity"
 	domainErrors "media-platform/internal/domain/errors"
@@ -298,15 +299,33 @@ func (s *ContentService) CreateContent(ctx context.Context, authorID int64, req 
 
 	// コンテンツエンティティの作成
 	log.Printf("🔨 エンティティ作成中...")
+
+	// ✅ リクエストのStatusをそのまま使用
+	var status entity.ContentStatus
+	if req.Status == "published" {
+		status = entity.ContentStatusPublished
+	} else if req.Status == "archived" {
+		status = entity.ContentStatusArchived
+	} else {
+		status = entity.ContentStatusDraft
+	}
+
 	content := &entity.Content{
 		Title:      req.Title,
 		Body:       req.Body,
 		Type:       entity.ContentType(req.Type),
 		Genre:      req.Genre,
-		Status:     entity.ContentStatusDraft,
+		Status:     status, // ✅ リクエストのstatusを使用
 		AuthorID:   authorID,
 		CategoryID: req.CategoryID,
 		ViewCount:  0,
+	}
+
+	// ✅ publishedの場合、published_atを設定（これを追加！）
+	if status == entity.ContentStatusPublished {
+		now := time.Now()
+		content.PublishedAt = &now
+		log.Printf("✅ 公開日時設定: %v", now)
 	}
 	log.Printf("✅ エンティティ作成完了: %+v", content)
 
